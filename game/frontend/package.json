@@ -18,6 +18,7 @@
     "less": "^4.4.2",
     "marked": "^17.0.1",
     "pinia": "^2.1.6",
+    "pixi.js": "^8.19.0",
     "reconnecting-websocket": "^4.4.0",
     "tiaoom": "file:../..",
     "vue": "^3.3.4",

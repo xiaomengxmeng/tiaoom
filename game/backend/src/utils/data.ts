@@ -43,7 +43,14 @@ export async function getPlayerStat(username: string, type: string): Promise<Gam
   }
 }
 
-export async function updatePlayerStats(username: string, type: string, result: 'win' | 'draw' | 'loss', score?: number) {  
+export async function updatePlayerStats(username: string, type: string, result: 'win' | 'draw' | 'loss', score?: number) {
+  const repo = StatsRepo();
+  // 数据库不可用时静默跳过（开发环境或无 MySQL 部署）
+  if (typeof repo.findOne !== 'function') {
+    console.warn('[Stats] 数据库不可用，跳过统计更新');
+    return;
+  }
+
   const incrementData = {
     total: 1,
     wins: result === 'win' ? 1 : 0,
@@ -53,7 +60,7 @@ export async function updatePlayerStats(username: string, type: string, result: 
   };
 
   const update = async (id: number) => {
-    await StatsRepo().createQueryBuilder()
+    await repo.createQueryBuilder()
       .update()
       .set({
         total: () => "total + 1",
@@ -67,7 +74,7 @@ export async function updatePlayerStats(username: string, type: string, result: 
   };
 
   // 尝试查找记录
-  const existing = await StatsRepo().findOne({
+  const existing = await repo.findOne({
     where: { player: username, type }
   });
 
@@ -76,14 +83,14 @@ export async function updatePlayerStats(username: string, type: string, result: 
   } else {
     // 尝试插入，如果并发导致插入失败（唯一索引冲突），则回退到更新
     try {
-      await StatsRepo().save({
+      await repo.save({
         player: username,
         type,
         ...incrementData
       });
     } catch (e) {
       // 假设是唯一索引冲突，再次尝试更新
-      const retryExisting = await StatsRepo().findOne({
+      const retryExisting = await repo.findOne({
         where: { player: username, type }
       });
       if (retryExisting) {

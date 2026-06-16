@@ -473,7 +473,13 @@ export class GameRoom {
    * @param score 分数
    */
   async saveRecord(winners: RoomPlayer[] | null | undefined, score?: number) {
-    RecordRepo().save(RecordRepo().create({
+    const repo = RecordRepo();
+    // 数据库不可用时静默跳过（开发环境或无 MySQL 部署）
+    if (typeof repo.create !== 'function' || typeof repo.save !== 'function') {
+      console.warn('[Record] 数据库不可用，跳过游戏记录保存');
+      return;
+    }
+    repo.save(repo.create({
       type: this.room.attrs!.type,
       roomName: this.room.name,
       data: await this.getData(),

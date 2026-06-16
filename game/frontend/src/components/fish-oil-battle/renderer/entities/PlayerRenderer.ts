@@ -40,13 +40,16 @@ export class PlayerRenderer {
   private playerId: string;
 
   // ─── 视觉子元素 ─────────────────────────────────────────
-  private trailGfx: PIXI.Graphics;          // 彗星拖尾图形
+  private trailCanvas!: HTMLCanvasElement;    // 离屏 Canvas — 倒三角拖尾
+  private trailCtx!: CanvasRenderingContext2D;
+  private trailSprite!: PIXI.Sprite;          // Canvas 驱动纹理
   private avatar: PIXI.Sprite;              // 头像
   private idText: PIXI.Text;                // ID 文字
   private idBg: PIXI.Graphics;              // ID 背景胶囊
   private damageTexts: DamageFloat[] = [];   // 浮动掉血数字
 
   // ─── 拖尾 ─────────────────────────────────────────────
+  private readonly TRAIL_CANVAS_SIZE: number;
   private particlePool: ParticlePool;
   private lastX = 0;
   private lastY = 0;
@@ -55,8 +58,8 @@ export class PlayerRenderer {
   private hasRealAvatar = false;
   /** 彗星尾迹历史位置（世界坐标，用于绘制连续尾形） */
   private trailHistory: Array<{ x: number; y: number }> = [];
-  /** 历史位置上限 */
-  private readonly TRAIL_LENGTH = 16;
+  /** 拖尾目标长度（px）—— 小球直径 × 2.5 */
+  private get trailTarget(): number { return this.r * 2 * 2.5; }
 
   // ─── 特效状态 ─────────────────────────────────────────
   private hitFlashTimer = 0;
@@ -83,9 +86,16 @@ export class PlayerRenderer {
     this.container = new PIXI.Container();
     this.parentContainer.addChild(this.container);
 
-    // L0: 彗星拖尾图形（在世界坐标空间绘制，不跟随容器旋转）
-    this.trailGfx = new PIXI.Graphics();
-    this.container.addChild(this.trailGfx);
+    // L0: 倒三角拖尾 — Canvas 离屏渲染驱动 Sprite 纹理
+    this.TRAIL_CANVAS_SIZE = Math.ceil(this.trailTarget + this.r + 40) * 2;
+    this.trailCanvas = document.createElement('canvas');
+    this.trailCanvas.width = this.TRAIL_CANVAS_SIZE;
+    this.trailCanvas.height = this.TRAIL_CANVAS_SIZE;
+    this.trailCtx = this.trailCanvas.getContext('2d')!;
+    this.trailSprite = new PIXI.Sprite(PIXI.Texture.from(this.trailCanvas));
+    this.trailSprite.anchor.set(0.5, 0.5);
+    this.trailSprite.visible = false; // 静止时隐藏
+    this.container.addChild(this.trailSprite);
 
     // L1: 头像
     this.avatar = new PIXI.Sprite();
@@ -126,9 +136,16 @@ export class PlayerRenderer {
 
     // 速度阈值：低速不显示拖尾
     if (speed > 60) {
-      // 记录世界坐标位置历史
+      // 记录世界坐标位置历史，按目标长度（2.5球径）裁剪，最少保留3点
       this.trailHistory.push({ x, y });
-      if (this.trailHistory.length > this.TRAIL_LENGTH) this.trailHistory.shift();
+      while (this.trailHistory.length > 3) {
+        const head = this.trailHistory[0];
+        const dx = head.x - x;
+        const dy = head.y - y;
+        if (Math.sqrt(dx * dx + dy * dy) > this.trailTarget) {
+          this.trailHistory.shift();
+        } else break;
+      }
 
       // 发射拖尾粒子（更高频率，丰富尾迹）
       this.trailTimer += dt;
@@ -141,7 +158,7 @@ export class PlayerRenderer {
       if (this.trailHistory.length > 1) this.trailHistory.shift();
       else if (this.trailHistory.length === 1) {
         this.trailHistory.shift();
-        this.trailGfx.clear();
+        this.trailSprite.visible = false;
       }
       this.trailTimer = 30; // 下次高速立即发射
     }
@@ -238,7 +255,7 @@ export class PlayerRenderer {
       this.avatar.mask = this.createCircleMask();
     }
 
-    this.idText.y = -this.r - 6;
+    this.idText.y = -this.r - 18;
   }
 
   setDisplayName(name: string): void { this.idText.text = name; }
@@ -267,7 +284,8 @@ export class PlayerRenderer {
   destroy(): void {
     for (const d of this.damageTexts) d.text.destroy(true);
     this.damageTexts.length = 0;
-    this.trailGfx.destroy(true);
+    this.trailSprite.texture.destroy(true);
+    this.trailSprite.destroy(true);
     this.idBg.destroy(true);
     this.avatar.destroy(true);
     this.idText.destroy(true);
@@ -280,29 +298,69 @@ export class PlayerRenderer {
   //  视觉绘制
   // ═══════════════════════════════════════════════════
 
-  /** 倒三角拖尾 — 剧烈渐变的圆点串，尾部极细极暗 → 头端宽亮，视觉呈尖楔形 */
+  /** 倒三角拖尾 — Canvas 2D 逐段四边形，尾部收尖，长度 = 2.5 球径 */
   private drawCometTail(): void {
-    const g = this.trailGfx;
-    g.clear();
     const hist = this.trailHistory;
-    if (hist.length < 2) return;
+    if (hist.length < 2) {
+      this.trailSprite.visible = false;
+      return;
+    }
+    this.trailSprite.visible = true;
+
+    const ctx = this.trailCtx;
+    const cw = this.trailCanvas.width;
+    const ch = this.trailCanvas.height;
+    const ccx = cw / 2;
+    const ccy = ch / 2;
+    ctx.clearRect(0, 0, cw, ch);
 
     const r = this.r;
-    const color = this.trailColor;
-    const cx = this.container.x;
-    const cy = this.container.y;
     const n = hist.length;
+    // 颜色转 CSS hex
+    const hex = '#' + this.trailColor.toString(16).padStart(6, '0');
+    const bx = this.container.x;
+    const by = this.container.y;
 
-    for (let i = 0; i < n; i++) {
-      const t = i / (n - 1);                  // 0 (尾尖) → 1 (球体端)
-      const t3 = t * t * t;                   // 三次方 — 尾部极度收窄
-      const alpha = 0.015 + t3 * 0.42;         // 尾 ≈0.015, 头 ≈0.435
-      const radius = r * (0.04 + t3 * 1.15);   // 尾 ≈1.4px, 头 ≈41px
-      const pos = hist[i];
+    // 将世界坐标轨迹点转为 canvas 相对坐标（球心 = canvas 中心）
+    for (let i = 0; i < n - 1; i++) {
+      const t0 = i / (n - 1);   // 尾端参数
+      const t1 = (i + 1) / (n - 1);
+      // 宽度三次方渐收：尾 ≈0 → 头 = r*0.85
+      const w0 = r * t0 * t0 * t0 * 0.85;
+      const w1 = r * t1 * t1 * t1 * 0.85;
+      const alpha0 = 0.03 + t0 * 0.38;
+      const alpha1 = 0.03 + t1 * 0.38;
 
-      g.circle(pos.x - cx, pos.y - cy, radius);
-      g.fill({ color, alpha });
+      const p0 = hist[i];
+      const p1 = hist[i + 1];
+      const r0x = p0.x - bx + ccx;
+      const r0y = p0.y - by + ccy;
+      const r1x = p1.x - bx + ccx;
+      const r1y = p1.y - by + ccy;
+
+      // 段方向 & 法向
+      const segX = p1.x - p0.x;
+      const segY = p1.y - p0.y;
+      const segLen = Math.sqrt(segX * segX + segY * segY) || 1;
+      const nx = -segY / segLen;
+      const ny = segX / segLen;
+
+      // 四边形：左边缘向前 → 右边缘向后
+      ctx.beginPath();
+      ctx.moveTo(r0x - nx * w0, r0y - ny * w0);
+      ctx.lineTo(r1x - nx * w1, r1y - ny * w1);
+      ctx.lineTo(r1x + nx * w1, r1y + ny * w1);
+      ctx.lineTo(r0x + nx * w0, r0y + ny * w0);
+      ctx.closePath();
+
+      ctx.fillStyle = hex;
+      ctx.globalAlpha = (alpha0 + alpha1) / 2;
+      ctx.fill();
     }
+    ctx.globalAlpha = 1;
+
+    // 推纹理到 GPU
+    this.trailSprite.texture.source.update();
   }
 
   /** 粒子拖尾 — 适配倒三角尾形，粒子沿边缘飘散 */

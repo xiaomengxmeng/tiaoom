@@ -272,6 +272,7 @@ export function useFishOilBattle(
             type: 'shockwave',
             x: data.x, y: data.y,
             isBurst: data.isBurst ?? false,
+            playerId: data.playerId,
           });
         }
         break;
@@ -281,6 +282,7 @@ export function useFishOilBattle(
             type: 'firewall',
             x: data.x, y: data.y,
             isBurst: data.isBurst ?? false,
+            playerId: data.playerId,
           });
         }
         break;
@@ -291,13 +293,14 @@ export function useFishOilBattle(
             type: 'hive_sting',
             fromX: data.x, fromY: data.y,
             toX: data.tx, toY: data.ty,
+            playerId: data.playerId,
           });
         }
         break;
       case 'burst_trigger':
         rendererRef.value.triggerSkillEffect({
           type: 'burst_flash',
-          factionColor: 0xFF00FF,
+          playerId: data.playerId,
         });
         if (data.playerId) {
           rendererRef.value.playBurstEffect(data.playerId);

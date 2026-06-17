@@ -52,6 +52,11 @@ export class ParticlePool {
     }
   }
 
+  /** 同步全局缩放（由 CyberFishRenderer.resize 驱动，供外部 emit 时使用） */
+  setScale(_scale: number): void {
+    // 当前缩放由调用方在 emit 时自行应用（如 EffectRenderer 已乘 scale）
+  }
+
   /**
    * 发射一个粒子
    * @returns 粒子对象，若池已满返回 null

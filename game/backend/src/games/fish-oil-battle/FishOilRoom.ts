@@ -126,11 +126,21 @@ export default class FishOilRoom extends GameRoom {
       this.weaponSelections[p.id] = null;
     }
 
-    // 2. 初始化物理引擎（圆形竞技场，两球在圆内左右）
-    // 竞技场圆心=(640,360)，半径=280，spawn 在圆内左右两侧
+    // 2. 初始化物理引擎（圆形竞技场，两球在圆内对侧随机位置）
+    // 竞技场圆心=(640,360)，半径=280
+    // 随机生成对侧 spawn 位置：角度随机，距离圆心 100~180px，避免固定同线永不碰撞
+    const centerX = 640;
+    const centerY = 360;
+    const spawnDist = 100 + Math.random() * 80;          // 100~180 px 离圆心
+    const baseAngle = Math.random() * Math.PI * 2;        // 随机基准角度
+    const spawnPositions = [
+      { x: centerX + Math.cos(baseAngle) * spawnDist, y: centerY + Math.sin(baseAngle) * spawnDist },
+      { x: centerX + Math.cos(baseAngle + Math.PI) * spawnDist, y: centerY + Math.sin(baseAngle + Math.PI) * spawnDist },
+    ];
+
     this.physics = new PhysicsEngine({ canvasWidth: 1280, canvasHeight: 720, arenaRadius: 280 });
-    this.physics.addBall(players[0].id, 520, 360);   // 玩家1: 圆内左侧
-    this.physics.addBall(players[1].id, 760, 360);   // 玩家2: 圆内右侧
+    this.physics.addBall(players[0].id, spawnPositions[0].x, spawnPositions[0].y);
+    this.physics.addBall(players[1].id, spawnPositions[1].x, spawnPositions[1].y);
 
     // 3. 发送武器选择阶段
     this.phase = 'weapon_select';
@@ -144,16 +154,15 @@ export default class FishOilRoom extends GameRoom {
       iconId: w.iconId,
     }));
 
-    // 附带玩家头像和初始位置信息（在圆形竞技场内左右）
-    const spawnX = [520, 760]; // 圆内左右两侧（arenaRadius=280, center=640）
+    // 附带玩家头像和初始位置（与物理引擎一致的对侧随机 spawn）
     const factions: ('aggressor' | 'controller')[] = ['aggressor', 'controller'];
     const playerInfos = players.map((p, i) => ({
       id: p.id,
       name: p.name,
       avatar: this.playerAvatars[p.id] ?? '',
       faction: factions[i] ?? 'aggressor',
-      x: spawnX[i] ?? 640,
-      y: 360,
+      x: spawnPositions[i].x,
+      y: spawnPositions[i].y,
     }));
 
     console.log(`[FishOil] prepareBattle: sending battle_start with ${playerInfos.length} players:`,
@@ -310,6 +319,7 @@ export default class FishOilRoom extends GameRoom {
           type: 'shockwave_trigger',
           x: col.position.x, y: col.position.y,
           isBurst: false,
+          playerId: col.ballIds[0],
         });
       } else if (col.type === 'wall') {
         // 碰墙不再发送视觉事件（前端已移除碰墙闪白）
@@ -340,12 +350,14 @@ export default class FishOilRoom extends GameRoom {
             type: 'shockwave_trigger',
             x: player?.position.x, y: player?.position.y,
             isBurst: true,
+            playerId,
           });
         } else if (skill.id === 'firewall') {
           visualEvents.push({
             type: 'firewall_spawn',
             x: player?.position.x, y: player?.position.y,
             isBurst: true,
+            playerId,
           });
         } else if (skill.id === 'hive_mother' || skill.id === 'hive') {
           const opponent = this.battleState.getOpponent(playerId);
@@ -354,6 +366,7 @@ export default class FishOilRoom extends GameRoom {
               type: 'hive_sting',
               x: player?.position.x, y: player?.position.y,
               tx: opponent.position.x, ty: opponent.position.y,
+              playerId,
             });
           }
         }

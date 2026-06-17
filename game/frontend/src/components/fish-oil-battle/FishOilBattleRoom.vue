@@ -232,11 +232,11 @@ function onCommand(msg: { type: string; data: any }): void {
 }
 
 /** 战斗开始：注册玩家 + 头像 + 显示武器选择 + 重置结算状态 */
-function handleBattleStart(data: {
+async function handleBattleStart(data: {
   weaponPool: SelectableWeapon[];
   countdown: number;
   players?: Array<{ id: string; name: string; avatar?: string; faction?: string; x?: number; y?: number }>;
-}): void {
+}): Promise<void> {
   console.log('[FishOilBattle] handleBattleStart:', JSON.stringify(data.players));
 
   // 重置上一轮的结算状态（修复重启后弹窗不消失）
@@ -249,6 +249,8 @@ function handleBattleStart(data: {
   if (data.players && rendererRef.value) {
     // 停用物理运动（武器选择阶段小球保持静止）
     rendererRef.value.setBattleActive(false);
+
+    const avatarPromises: Promise<void>[] = [];
 
     for (const p of data.players) {
       console.log(`[FishOilBattle] registering player: id=${p.id} name=${p.name} faction=${p.faction} pos=(${p.x},${p.y})`);
@@ -267,12 +269,21 @@ function handleBattleStart(data: {
           energy: 0, maxEnergy: 100,
         });
       }
-      // 异步加载头像
+      // 加载头像并提取主题色（await 确保战斗开始前颜色已就绪）
       if (p.avatar) {
         const pr = rendererRef.value.getPlayerRenderer(p.id);
-        pr?.setAvatar(p.avatar);
+        if (pr) {
+          avatarPromises.push(pr.setAvatar(p.avatar));
+        }
       }
     }
+
+    // 等待所有头像加载和主题色提取完成
+    if (avatarPromises.length > 0) {
+      await Promise.allSettled(avatarPromises);
+      console.log('[FishOilBattle] 所有头像主题色提取完成');
+    }
+
     console.log(`[FishOilBattle] total players registered: ${data.players?.length ?? 0}`);
   }
 }

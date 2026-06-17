@@ -1,5 +1,13 @@
 import * as PIXI from 'pixi.js';
-import { BLEND_MODES } from '../constants';
+import {
+  BLEND_MODES,
+  LOGICAL_W, LOGICAL_H,
+  SHOCKWAVE_MAX_RADIUS,
+  FIREWALL_HEX_RADIUS,
+  STINGER_SPEED,
+  BURST_FLASH_DURATION,
+  HIVE_BURST_SCALE,
+} from '../constants';
 import { ParticlePool } from '../systems/ParticlePool';
 
 /** 活跃特效实例 */
@@ -30,7 +38,13 @@ export class EffectRenderer {
   private hologramContainer: PIXI.Container;
   private particlePool: ParticlePool;
   private activeEffects: ActiveEffect[] = [];
-  private fieldEffects: Map<string, PIXI.Graphics[]> = new Map(); // 场地持续特效
+  private fieldEffects: Map<string, PIXI.Graphics[]> = new Map();
+
+  /** 当前缩放因子（= CyberFishRenderer.uniformScale），所有视觉尺寸 × scale */
+  private scale = 1;
+  /** 当前画布宽高（用于全屏特效 + 边界检测） */
+  private canvasW = LOGICAL_W;
+  private canvasH = LOGICAL_H; // 场地持续特效
 
   // ── 冲击波特效池（对象池化） ───────────────────────────
   private shockwavePool: PIXI.Graphics[] = [];
@@ -62,6 +76,18 @@ export class EffectRenderer {
     this.prepoolStingers(30);
   }
 
+  /**
+   * 同步缩放因子（由 CyberFishRenderer.resize 驱动）
+   * @param s uniformScale = min(canvasW/1280, canvasH/720)
+   * @param w 当前画布宽
+   * @param h 当前画布高
+   */
+  setScale(s: number, w: number, h: number): void {
+    this.scale = s;
+    this.canvasW = w;
+    this.canvasH = h;
+  }
+
   // ══════════════════════════════════════════════════════
   //  公开方法：特效触发接口
   // ══════════════════════════════════════════════════════
@@ -72,10 +98,16 @@ export class EffectRenderer {
    * @param y 碰撞点 Y
    * @param isBurst 是否为爆发（3道波）
    * @param angleOverride 爆发时的角度（度，-1=全方向120°间隔）
+   * @param themeColor 玩家主题色（未提供则用默认品红）
    */
-  triggerShockwave(x: number, y: number, isBurst = false, angleOverride = -1): void {
+  triggerShockwave(x: number, y: number, isBurst = false, angleOverride = -1, themeColor?: number): void {
     const count = isBurst ? 3 : 1;
     const baseAngle = angleOverride >= 0 ? angleOverride : 0;
+    const primary = themeColor ?? 0xFF00FF;
+    const glow = themeColor ? this.lighten(themeColor, 50) : 0xFF66FF;
+    const bounceColor = themeColor ? this.dimColor(themeColor, 0.6) : 0x00BFFF;
+    const maxRadius = SHOCKWAVE_MAX_RADIUS * this.scale;
+    const { canvasW, canvasH } = this;
 
     for (let i = 0; i < count; i++) {
       const angle = isBurst ? (i * 120) : baseAngle; void angle;
@@ -87,29 +119,26 @@ export class EffectRenderer {
         type: 'shockwave',
         container: g as unknown as PIXI.Container,
         life: 0,
-        maxLife: 800, // 800ms 扩散完毕
+        maxLife: 800,
         onUpdate: (ef, _dt) => {
           const t = ef.life / ef.maxLife;
-          const radius = t * 220; // 扩散到 220px
-          const alpha = 1 - t * 0.8; // 渐隐
-          const width = 4 + t * 8;  // 波环宽度渐增
+          const radius = t * maxRadius;
+          const alpha = 1 - t * 0.8;
+          const width = (4 + t * 8) * this.scale;
 
-          // 品红色能量环
           g.clear();
           g.circle(x, y, radius);
-          g.stroke({ color: 0xFF00FF, width, alpha: alpha * 0.9 });
-          // 内发光
+          g.stroke({ color: primary, width, alpha: alpha * 0.9 });
           g.circle(x, y, Math.max(radius - width * 2, 0));
-          g.stroke({ color: 0xFF66FF, width: 2, alpha: alpha * 0.5 });
+          g.stroke({ color: glow, width: 2 * this.scale, alpha: alpha * 0.5 });
 
-          // 碰墙检测（简化：到边界距离）
-          const distToWall = Math.min(x, 1280 - x, y, 720 - y);
+          // 碰墙检测（使用实际画布尺寸）
+          const distToWall = Math.min(x, canvasW - x, y, canvasH - y);
           if (radius >= distToWall && !this.shockwaveBounced.has(g)) {
             this.shockwaveBounced.add(g);
-            // 碰墙后变色（品红→电蓝渐变）
             g.clear();
             g.circle(x, y, radius);
-            g.stroke({ color: 0x00BFFF, width, alpha: alpha * 0.9 });
+            g.stroke({ color: bounceColor, width, alpha: alpha * 0.9 });
           }
 
           g.x = 0; g.y = 0;
@@ -132,18 +161,22 @@ export class EffectRenderer {
    * @param y 受击位置 Y
    * @param isHardened 是否为硬化状态（爆发）
    * @param wallId 唯一 ID（用于更新/移除）
+   * @param themeColor 玩家主题色（未提供则用默认青/红）
    */
-  triggerFirewall(x: number, y: number, isHardened = false, wallId = `fw_${Date.now()}`): string {
+  triggerFirewall(x: number, y: number, isHardened = false, wallId = `fw_${Date.now()}`, themeColor?: number): string {
     const g = this.acquireFirewall();
     if (!g) return wallId;
 
     const maxLife = isHardened ? 4000 : 5000;
     const alpha = isHardened ? 1.0 : 0.4;
-    const color = isHardened ? 0xFF3333 : 0x00BFFF;
+    const color = themeColor ?? (isHardened ? 0xFF3333 : 0x00BFFF);
+    const streamColor = themeColor ? this.lighten(themeColor, 60) : 0x66D9FF;
+    const hexRadius = FIREWALL_HEX_RADIUS * this.scale;
+    const s = this.scale;
 
     // 绘制六边形网格屏障
     g.clear();
-    this.drawHexagon(g, x, y, 100, color, alpha);
+    this.drawHexagon(g, x, y, hexRadius, color, alpha);
 
     const ef: ActiveEffect = {
       type: 'firewall',
@@ -152,15 +185,14 @@ export class EffectRenderer {
       maxLife: maxLife,
       onUpdate: (ef, _dt) => {
         const t = ef.life / ef.maxLife;
-        // 持续期间脉动
         const pulse = 0.8 + 0.2 * Math.sin(ef.life / 200);
         g.clear();
-        this.drawHexagon(g, x, y, 100 * pulse, color, alpha * (1 - t * 0.3));
+        this.drawHexagon(g, x, y, hexRadius * pulse, color, alpha * (1 - t * 0.3));
         // 数据流纹理（扫描线）
         for (let i = 0; i < 6; i++) {
           const a = (i * Math.PI) / 3 + ef.life / 500;
-          g.circle(x + Math.cos(a) * 90, y + Math.sin(a) * 90, 2);
-          g.fill({ color: 0x66D9FF, alpha: 0.5 * (1 - t) });
+          g.circle(x + Math.cos(a) * 90 * s, y + Math.sin(a) * 90 * s, 2 * s);
+          g.fill({ color: streamColor, alpha: 0.5 * (1 - t) });
         }
       },
       onDecay: (_ef) => {
@@ -182,17 +214,21 @@ export class EffectRenderer {
    * @param fromY 发射位置 Y
    * @param toX 目标位置 X
    * @param toY 目标位置 Y
+   * @param themeColor 玩家主题色（未提供则用默认绿色）
    */
-  triggerHiveSting(fromX: number, fromY: number, toX: number, toY: number): void {
+  triggerHiveSting(fromX: number, fromY: number, toX: number, toY: number, themeColor?: number): void {
     const g = this.acquireStinger();
     if (!g) return;
 
     const dx = toX - fromX;
     const dy = toY - fromY;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const vx = (dx / dist) * 300; // 300px/s
-    const vy = (dy / dist) * 300;
-    const maxLife = (dist / 300) * 1000 + 500; // 飞行时间 + 500ms 残留
+    const speed = STINGER_SPEED * this.scale;
+    const vx = (dx / dist) * speed;
+    const vy = (dy / dist) * speed;
+    const maxLife = (dist / speed) * 1000 + 500;
+    const primary = themeColor ?? 0x39FF14;
+    const trail = themeColor ? this.lighten(themeColor, 50) : 0x7FFF66;
 
     g.x = fromX;
     g.y = fromY;
@@ -207,17 +243,16 @@ export class EffectRenderer {
         g.x += vx * _dt / 1000;
         g.y += vy * _dt / 1000;
 
-        // 绿色细光线
         g.clear();
-        g.circle(g.x, g.y, 3);
-        g.fill({ color: 0x39FF14, alpha: 0.9 });
+        g.circle(g.x, g.y, 3 * this.scale);
+        g.fill({ color: primary, alpha: 0.9 });
         // 尾迹粒子
         this.particlePool.emit({
           x: g.x, y: g.y,
           vx: -vx * 0.3, vy: -vy * 0.3,
-          life: 150, radius: 2,
+          life: 150, radius: 2 * this.scale,
           alphaStart: 0.5, alphaEnd: 0,
-          tint: 0x7FFF66,
+          tint: trail,
         });
       },
       onDecay: (_ef) => {
@@ -234,12 +269,12 @@ export class EffectRenderer {
    * @param factionColor 流派主色
    * @param duration 持续时间（ms）
    */
-  triggerBurstFlash(factionColor: number, duration = 400): void {
+  triggerBurstFlash(factionColor: number, duration = BURST_FLASH_DURATION): void {
     const g = new PIXI.Graphics();
     this.hologramContainer.addChild(g);
 
-    // 全屏覆盖闪光
-    g.rect(0, 0, 1280, 720);
+    // 全屏覆盖闪光（使用实际画布尺寸）
+    g.rect(0, 0, this.canvasW, this.canvasH);
     g.fill({ color: factionColor, alpha: 0.4 });
 
     const ef: ActiveEffect = {
@@ -249,7 +284,6 @@ export class EffectRenderer {
       maxLife: duration,
       onUpdate: (ef, _dt) => {
         const t = ef.life / ef.maxLife;
-        // 闪屏淡出 + 色差效果
         g.alpha = 0.4 * (1 - t);
         if (t > 0.5) g.visible = false;
       },
@@ -263,18 +297,19 @@ export class EffectRenderer {
   /**
    * 触发蜂群狂暴视觉效果（蜂巢母体爆发）
    * @param hives 蜂群容器数组
+   * @param themeColor 玩家主题色（未提供则用默认绿色）
    */
-  triggerHiveBurst(hives: PIXI.Container[]): void {
+  triggerHiveBurst(hives: PIXI.Container[], themeColor?: number): void {
+    const primary = themeColor ?? 0x39FF14;
     // 所有蜂变大 + 白热
     for (const h of hives) {
-      h.scale.set(1.5);
+      h.scale.set(HIVE_BURST_SCALE);
       if (h instanceof PIXI.Graphics) {
-        // 重绘为白热状态
         h.clear();
         h.circle(0, 0, 10);
         h.fill({ color: 0xFFFFFF, alpha: 0.9 });
         h.circle(0, 0, 6);
-        h.fill({ color: 0x39FF14, alpha: 0.6 });
+        h.fill({ color: primary, alpha: 0.6 });
       }
     }
     // 3 秒后恢复
@@ -284,7 +319,7 @@ export class EffectRenderer {
         if (h instanceof PIXI.Graphics) {
           h.clear();
           h.circle(0, 0, 7);
-          h.fill({ color: 0x39FF14, alpha: 0.8 });
+          h.fill({ color: primary, alpha: 0.8 });
         }
       }
     }, 3000);
@@ -427,6 +462,22 @@ export class EffectRenderer {
   // ══════════════════════════════════════════════════════
   //  绘图辅助
   // ══════════════════════════════════════════════════════
+
+  /** 提亮颜色（保持色相，增加亮度） */
+  private lighten(color: number, amount: number): number {
+    const r = Math.min(255, ((color >> 16) & 0xff) + amount);
+    const g = Math.min(255, ((color >> 8) & 0xff) + amount);
+    const b = Math.min(255, (color & 0xff) + amount);
+    return (r << 16) | (g << 8) | b;
+  }
+
+  /** 降低颜色亮度（保持色相） */
+  private dimColor(color: number, factor: number): number {
+    const r = Math.round(((color >> 16) & 0xff) * factor);
+    const g = Math.round(((color >> 8) & 0xff) * factor);
+    const b = Math.round((color & 0xff) * factor);
+    return (r << 16) | (g << 8) | b;
+  }
 
   /** 绘制六边形 */
   private drawHexagon(

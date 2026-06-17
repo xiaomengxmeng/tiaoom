@@ -1,4 +1,5 @@
 import * as PIXI from 'pixi.js';
+import { LOGICAL_W, LOGICAL_H } from './constants';
 import { PhysicsSystem, type InterpolatedState, type PhysicsState } from './systems/PhysicsSystem';
 import { ParticlePool } from './systems/ParticlePool';
 import { ArenaRenderer } from './systems/ArenaRenderer';
@@ -12,14 +13,12 @@ import { EffectRenderer } from './entities/EffectRenderer';
  * - 后端物理引擎使用固定 1280×720 逻辑坐标
  * - 前端 Pixi 画布尺寸 = 容器实际像素（响应式）
  * - 本类负责逻辑坐标 → 画布像素的映射（mapX / mapY）
+ * - 所有视觉尺寸 = 逻辑尺寸 × uniformScale
  *
  * 视觉分层（从后到前）：
  * L5 全息舞台层 → L3 场地印记 → L2 实体投射 → L1 玩家本体
  * L4 DOM Overlay 层（Vue 管理，不在 Pixi 内）
  */
-/** 后端物理引擎的固定逻辑坐标系 */
-const LOGICAL_W = 1280;
-const LOGICAL_H = 720;
 
 export class CyberFishRenderer {
   // ─── Pixi 核心 ─────────────────────────────────────
@@ -132,6 +131,7 @@ export class CyberFishRenderer {
 
   /**
    * 触发技能特效（坐标为后端 LOGICAL，自动映射）
+   * @param config.playerId 发起技能的玩家 ID（用于获取头像主题色）
    */
   triggerSkillEffect(config: {
     type: 'shockwave' | 'firewall' | 'hive_sting' | 'burst_flash';
@@ -140,6 +140,7 @@ export class CyberFishRenderer {
     fromX?: number; fromY?: number;
     toX?: number; toY?: number;
     factionColor?: number;
+    playerId?: string;
   }): void {
     // 映射所有坐标参数
     const mapCfg: typeof config & Record<string, any> = { ...config };
@@ -150,15 +151,20 @@ export class CyberFishRenderer {
     if (config.toX !== undefined) mapCfg.toX = this.mapX(config.toX);
     if (config.toY !== undefined) mapCfg.toY = this.mapY(config.toY);
 
+    // 根据 playerId 获取头像主题色
+    const themeColor = config.playerId
+      ? this.playerRenderers.get(config.playerId)?.getTrailColor()
+      : undefined;
+
     switch (config.type) {
       case 'shockwave':
         if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
-          this.effectRenderer.triggerShockwave(mapCfg.x, mapCfg.y, config.isBurst ?? false);
+          this.effectRenderer.triggerShockwave(mapCfg.x, mapCfg.y, config.isBurst ?? false, -1, themeColor);
         }
         break;
       case 'firewall':
         if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
-          this.effectRenderer.triggerFirewall(mapCfg.x, mapCfg.y, config.isBurst ?? false);
+          this.effectRenderer.triggerFirewall(mapCfg.x, mapCfg.y, config.isBurst ?? false, undefined, themeColor);
         }
         break;
       case 'hive_sting':
@@ -166,20 +172,23 @@ export class CyberFishRenderer {
             mapCfg.toX !== undefined && mapCfg.toY !== undefined) {
           this.effectRenderer.triggerHiveSting(
             mapCfg.fromX, mapCfg.fromY, mapCfg.toX, mapCfg.toY,
+            themeColor,
           );
         }
         break;
       case 'burst_flash':
-        this.effectRenderer.triggerBurstFlash(config.factionColor ?? 0xFF00FF);
+        this.effectRenderer.triggerBurstFlash(themeColor ?? config.factionColor ?? 0xFF00FF);
         break;
     }
   }
 
   /**
-   * 触发玩家受击效果
+   * 触发玩家受击效果（含拖尾截断防翻折）
    */
   playHitEffect(playerId: string): void {
-    this.playerRenderers.get(playerId)?.playHitEffect();
+    const pr = this.playerRenderers.get(playerId);
+    pr?.playHitEffect();
+    // pr?.onCollision(); // 碰撞时截断旧拖尾，避免方向突变导致翻折
   }
 
   /**
@@ -274,11 +283,12 @@ export class CyberFishRenderer {
       this.physics.rescaleWithOffset(oldOX, oldOY, scaleRatio, newOX, newOY);
     }
 
-    // 竞技场背景（内部用 uniformScale 算边界，现在和坐标映射一致）
+    // 同步缩放：竞技场 → 特效 → 粒子池 → 玩家
     this.arenaRenderer.resize(w, h);
+    this.effectRenderer.setScale(newScale, w, h);
+    this.particlePool.setScale(newScale);
 
-    // 同步所有已注册玩家的小球尺寸
-    const uniformScale = this.getUniformScale();
+    const uniformScale = newScale;
     for (const [, pr] of this.playerRenderers) {
       pr.setScale(uniformScale);
     }

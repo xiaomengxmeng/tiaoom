@@ -13,12 +13,7 @@
  */
 
 import * as PIXI from 'pixi.js';
-
-/** 后端逻辑坐标系常量（必须与后端 PhysicsEngine 一致） */
-const LOGICAL_W = 1280;
-const LOGICAL_H = 720;
-/** 后端竞技场半径（逻辑单位） */
-const ARENA_RADIUS_LOGICAL = 280;
+import { LOGICAL_W, LOGICAL_H, ARENA_RADIUS_LOGICAL } from '../constants';
 
 // ── daisyUI 色彩体系 ────────────────────────────────
 const DAISY = {

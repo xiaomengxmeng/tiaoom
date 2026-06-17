@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js';
-import { BLEND_MODES } from '../constants';
+import { BLEND_MODES, PLAYER_BASE_RADIUS } from '../constants';
 import type { InterpolatedState } from '../systems/PhysicsSystem';
 import { ParticlePool } from '../systems/ParticlePool';
 
@@ -49,17 +49,22 @@ export class PlayerRenderer {
   private damageTexts: DamageFloat[] = [];   // 浮动掉血数字
 
   // ─── 拖尾 ─────────────────────────────────────────────
-  private readonly TRAIL_CANVAS_SIZE: number;
   private particlePool: ParticlePool;
   private lastX = 0;
   private lastY = 0;
   private trailTimer = 0;
   private trailColor: number;
   private hasRealAvatar = false;
-  /** 彗星尾迹历史位置（世界坐标，用于绘制连续尾形） */
-  private trailHistory: Array<{ x: number; y: number }> = [];
-  /** 拖尾目标长度（px）—— 小球直径 × 2.5 */
-  private get trailTarget(): number { return this.r * 2 * 2.5; }
+
+  // ─── 拖尾系统 v2（年龄衰减） ─────────────────
+  /** 拖尾采样点（[0] = 最新/球端, [last] = 最老/尾端） */
+  private trailPoints: Array<{ x: number; y: number; age: number }> = [];
+  /** 两点间最小采样距离（逻辑坐标，会随 scale 更新） */
+  private trailSampleDist: number;
+  /** 最大保留点数 */
+  private readonly MAX_TRAIL_POINTS = 20;
+  /** 拖尾能量 0~1：高速积累，低速衰减 */
+  private trailEnergy = 0;
 
   // ─── 特效状态 ─────────────────────────────────────────
   private hitFlashTimer = 0;
@@ -67,9 +72,8 @@ export class PlayerRenderer {
   private currentFaction: Faction = 'aggressor';
 
   // ─── 尺寸 ─────────────────────────────────────────────
-  private readonly BASE_RADIUS = 36;
   private radiusScale = 1.0;
-  private get r(): number { return this.BASE_RADIUS * this.radiusScale; }
+  private get r(): number { return PLAYER_BASE_RADIUS * this.radiusScale; }
 
   constructor(
     parentContainer: PIXI.Container,
@@ -82,20 +86,17 @@ export class PlayerRenderer {
     this.currentFaction = faction;
     this.particlePool = particlePool;
     this.trailColor = FACTION_COLORS[faction].primary;
+    this.trailSampleDist = PLAYER_BASE_RADIUS * 0.45;
 
     this.container = new PIXI.Container();
     this.parentContainer.addChild(this.container);
 
-    // L0: 倒三角拖尾 — Canvas 离屏渲染驱动 Sprite 纹理
-    this.TRAIL_CANVAS_SIZE = Math.ceil(this.trailTarget + this.r + 40) * 2;
-    this.trailCanvas = document.createElement('canvas');
-    this.trailCanvas.width = this.TRAIL_CANVAS_SIZE;
-    this.trailCanvas.height = this.TRAIL_CANVAS_SIZE;
-    this.trailCtx = this.trailCanvas.getContext('2d')!;
-    this.trailSprite = new PIXI.Sprite(PIXI.Texture.from(this.trailCanvas));
+    // L0: 倒三角拖尾 — Canvas 离屏渲染驱动 Sprite 纹理（动态尺寸）
+    this.trailSprite = new PIXI.Sprite();
     this.trailSprite.anchor.set(0.5, 0.5);
-    this.trailSprite.visible = false; // 静止时隐藏
+    this.trailSprite.visible = false;
     this.container.addChild(this.trailSprite);
+    this.resizeTrailCanvas();
 
     // L1: 头像
     this.avatar = new PIXI.Sprite();
@@ -134,33 +135,39 @@ export class PlayerRenderer {
     this.container.x = x;
     this.container.y = y;
 
-    // 速度阈值：低速不显示拖尾
-    if (speed > 60) {
-      // 记录世界坐标位置历史，按目标长度（2.5球径）裁剪，最少保留3点
-      this.trailHistory.push({ x, y });
-      while (this.trailHistory.length > 3) {
-        const head = this.trailHistory[0];
-        const dx = head.x - x;
-        const dy = head.y - y;
-        if (Math.sqrt(dx * dx + dy * dy) > this.trailTarget) {
-          this.trailHistory.shift();
-        } else break;
-      }
+    // ═══ 拖尾系统：距离采样 + 年龄衰减 ═══
 
-      // 发射拖尾粒子（更高频率，丰富尾迹）
-      this.trailTimer += dt;
-      if (this.trailTimer > 30) {
-        this.trailTimer = 0;
-        this.emitTrailParticle(x, y, speed);
-      }
+    // 能量平滑：高速积累，低速衰减（避免突然消失）
+    if (speed > 30) {
+      this.trailEnergy = Math.min(1, this.trailEnergy + dt / 180);
     } else {
-      // 减速/静止：逐渐清空
-      if (this.trailHistory.length > 1) this.trailHistory.shift();
-      else if (this.trailHistory.length === 1) {
-        this.trailHistory.shift();
-        this.trailSprite.visible = false;
-      }
-      this.trailTimer = 30; // 下次高速立即发射
+      this.trailEnergy = Math.max(0, this.trailEnergy - dt / 350);
+    }
+
+    // 距离采样：仅当位移超过阈值才加入新点，保证密度恒定
+    const lastPt = this.trailPoints[0];
+    if (!lastPt || Math.hypot(x - lastPt.x, y - lastPt.y) >= this.trailSampleDist) {
+      this.trailPoints.unshift({ x, y, age: 0 });
+    }
+
+    // 年龄推移 + 过期清理
+    const maxAge = 200 + this.trailEnergy * 500; // 静止 200ms → 高速 700ms
+    for (const p of this.trailPoints) p.age += dt;
+    while (this.trailPoints.length > 0) {
+      const oldest = this.trailPoints[this.trailPoints.length - 1];
+      if (oldest.age > maxAge) this.trailPoints.pop();
+      else break;
+    }
+    // 数量上限
+    while (this.trailPoints.length > this.MAX_TRAIL_POINTS) {
+      this.trailPoints.pop();
+    }
+
+    // 拖尾粒子（基于能量，非纯时间驱动）
+    this.trailTimer += dt * (0.5 + 0.5 * this.trailEnergy);
+    if (this.trailTimer > 40 && this.trailEnergy > 0.25) {
+      this.trailTimer = 0;
+      this.emitTrailParticle(x, y, speed);
     }
 
     // 绘制彗星尾形
@@ -242,6 +249,10 @@ export class PlayerRenderer {
     if (this.radiusScale === scale) return;
     this.radiusScale = scale;
 
+    // 同步拖尾尺寸（采样距离 + Canvas 纹理大小）
+    this.trailSampleDist = PLAYER_BASE_RADIUS * 0.45 * scale;
+    this.resizeTrailCanvas();
+
     if (!this.hasRealAvatar) {
       this.avatar.texture.destroy(true);
       this.avatar.texture = this.graphicsToTexture(this.currentFaction);
@@ -262,6 +273,15 @@ export class PlayerRenderer {
 
   async setAvatar(avatarUrl: string): Promise<void> {
     if (!avatarUrl) return;
+
+    // 优先：直接用 Image() 从 URL 提取主色（不依赖 PixiJS 内部纹理 API）
+    const colorFromUrl = await this.extractColorFromUrl(avatarUrl);
+    if (colorFromUrl !== undefined) {
+      this.trailColor = colorFromUrl;
+      console.log(`[PlayerRenderer] ${this.playerId} 头像主题色(直接提取): #${colorFromUrl.toString(16).padStart(6, '0')}`);
+    }
+
+    // 然后加载 PixiJS 纹理渲染头像
     try {
       const texture = await PIXI.Assets.load({
         src: avatarUrl,
@@ -274,10 +294,14 @@ export class PlayerRenderer {
         this.avatar.height = this.r * 2;
         this.avatar.mask = this.createCircleMask();
         this.hasRealAvatar = true;
-        await this.extractDominantColor(texture as PIXI.Texture);
+
+        // 如果直接提取失败，回退到 PixiJS 纹理方式重试
+        if (colorFromUrl === undefined) {
+          await this.extractDominantColor(texture as PIXI.Texture);
+        }
       }
     } catch {
-      console.warn(`[PlayerRenderer] 头像加载失败: ${avatarUrl}`);
+      console.warn(`[PlayerRenderer] 头像纹理加载失败: ${avatarUrl}`);
     }
   }
 
@@ -294,14 +318,42 @@ export class PlayerRenderer {
 
   getContainer(): PIXI.Container { return this.container; }
 
+  /** 获取当前拖尾颜色（头像提取的主色或流派默认色） */
+  getTrailColor(): number { return this.trailColor; }
+
   // ═══════════════════════════════════════════════════
   //  视觉绘制
   // ═══════════════════════════════════════════════════
 
-  /** 倒三角拖尾 — Canvas 2D 逐段四边形，尾部收尖，长度 = 2.5 球径 */
+  /**
+   * 按当前 r 重建离屏拖尾 Canvas 及 PIXI 纹理（setScale / resize 时调用）
+   */
+  private resizeTrailCanvas(): void {
+    const r = this.r;
+    const maxTrailExtent = r * 2 + this.trailSampleDist * this.MAX_TRAIL_POINTS + 40;
+    const size = Math.ceil(maxTrailExtent * 2);
+
+    // 销毁旧纹理
+    if (this.trailSprite.texture) {
+      this.trailSprite.texture.destroy(true);
+    }
+
+    // 创建新 Canvas
+    this.trailCanvas = document.createElement('canvas');
+    this.trailCanvas.width = size;
+    this.trailCanvas.height = size;
+    this.trailCtx = this.trailCanvas.getContext('2d')!;
+
+    this.trailSprite.texture = PIXI.Texture.from(this.trailCanvas);
+  }
+
+  /**
+   * 倒三角拖尾 — 构建单一连续外轮廓路径，一次 fill() 消除段间接缝
+   * 宽度二次方衰减（比三次方更饱满），alpha 随能量缩放
+   */
   private drawCometTail(): void {
-    const hist = this.trailHistory;
-    if (hist.length < 2) {
+    const pts = this.trailPoints;
+    if (pts.length < 2) {
       this.trailSprite.visible = false;
       return;
     }
@@ -315,48 +367,61 @@ export class PlayerRenderer {
     ctx.clearRect(0, 0, cw, ch);
 
     const r = this.r;
-    const n = hist.length;
-    // 颜色转 CSS hex
-    const hex = '#' + this.trailColor.toString(16).padStart(6, '0');
+    const n = pts.length;
     const bx = this.container.x;
     const by = this.container.y;
 
-    // 将世界坐标轨迹点转为 canvas 相对坐标（球心 = canvas 中心）
-    for (let i = 0; i < n - 1; i++) {
-      const t0 = i / (n - 1);   // 尾端参数
-      const t1 = (i + 1) / (n - 1);
-      // 宽度三次方渐收：尾 ≈0 → 头 = r*0.85
-      const w0 = r * t0 * t0 * t0 * 0.85;
-      const w1 = r * t1 * t1 * t1 * 0.85;
-      const alpha0 = 0.03 + t0 * 0.38;
-      const alpha1 = 0.03 + t1 * 0.38;
-
-      const p0 = hist[i];
-      const p1 = hist[i + 1];
-      const r0x = p0.x - bx + ccx;
-      const r0y = p0.y - by + ccy;
-      const r1x = p1.x - bx + ccx;
-      const r1y = p1.y - by + ccy;
-
-      // 段方向 & 法向
-      const segX = p1.x - p0.x;
-      const segY = p1.y - p0.y;
-      const segLen = Math.sqrt(segX * segX + segY * segY) || 1;
-      const nx = -segY / segLen;
-      const ny = segX / segLen;
-
-      // 四边形：左边缘向前 → 右边缘向后
-      ctx.beginPath();
-      ctx.moveTo(r0x - nx * w0, r0y - ny * w0);
-      ctx.lineTo(r1x - nx * w1, r1y - ny * w1);
-      ctx.lineTo(r1x + nx * w1, r1y + ny * w1);
-      ctx.lineTo(r0x + nx * w0, r0y + ny * w0);
-      ctx.closePath();
-
-      ctx.fillStyle = hex;
-      ctx.globalAlpha = (alpha0 + alpha1) / 2;
-      ctx.fill();
+    // 计算每个采样点的法向（前后平均方向，过渡平滑）
+    const normals: Array<{ nx: number; ny: number }> = [];
+    for (let i = 0; i < n; i++) {
+      let dx = 0, dy = 0;
+      if (i === 0 && n > 1) {
+        dx = pts[i].x - pts[i + 1].x;
+        dy = pts[i].y - pts[i + 1].y;
+      } else if (i === n - 1 && n > 1) {
+        dx = pts[i - 1].x - pts[i].x;
+        dy = pts[i - 1].y - pts[i].y;
+      } else if (n > 2) {
+        dx = pts[i - 1].x - pts[i + 1].x;
+        dy = pts[i - 1].y - pts[i + 1].y;
+      }
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      normals.push({ nx: -dy / len, ny: dx / len });
     }
+
+    // 构建连续外轮廓：先走右侧（球端→尾端），再走左侧（尾端→球端）
+    ctx.beginPath();
+
+    // 右边缘
+    for (let i = 0; i < n; i++) {
+      const t = 1 - i / (n - 1); // 球端=1, 尾端=0
+      const w = r * t * t * 1.0; // 二次方衰减，比三次方更饱满
+      const pt = pts[i];
+      const px = pt.x - bx + ccx;
+      const py = pt.y - by + ccy;
+      const { nx, ny } = normals[i];
+      if (i === 0) ctx.moveTo(px + nx * w, py + ny * w);
+      else ctx.lineTo(px + nx * w, py + ny * w);
+    }
+
+    // 左边缘（逆序）
+    for (let i = n - 1; i >= 0; i--) {
+      const t = 1 - i / (n - 1);
+      const w = r * t * t * 1.0;
+      const pt = pts[i];
+      const px = pt.x - bx + ccx;
+      const py = pt.y - by + ccy;
+      const { nx, ny } = normals[i];
+      ctx.lineTo(px - nx * w, py - ny * w);
+    }
+
+    ctx.closePath();
+
+    // 整体半透明填充（宽度收尖自带渐隐，alpha 随能量变化）
+    const energyFade = 0.3 + 0.7 * this.trailEnergy;
+    ctx.globalAlpha = 0.45 * energyFade;
+    ctx.fillStyle = '#' + this.trailColor.toString(16).padStart(6, '0');
+    ctx.fill();
     ctx.globalAlpha = 1;
 
     // 推纹理到 GPU
@@ -509,18 +574,66 @@ export class PlayerRenderer {
   //  头像主色提取
   // ═══════════════════════════════════════════════════
 
+  /**
+   * 直接用 Image() 加载头像 URL 并提取主色
+   * 不依赖 PixiJS 内部纹理 API，兼容性更好，且可在战斗开始前就绪
+   * @returns 提取到的颜色，失败时返回 undefined
+   */
+  private extractColorFromUrl(avatarUrl: string): Promise<number | undefined> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+
+      const cleanup = () => {
+        img.onload = null;
+        img.onerror = null;
+      };
+
+      img.onload = () => {
+        cleanup();
+        try {
+          const canvas = document.createElement('canvas');
+          const sampleSize = 64;
+          canvas.width = sampleSize;
+          canvas.height = sampleSize;
+          const ctx = canvas.getContext('2d')!;
+          ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
+          const raw = this.sampleDominantColor(ctx, sampleSize, sampleSize);
+          // 对提取色做饱和度+亮度增强，使特效色更鲜艳
+          resolve(this.vibrantize(raw));
+        } catch {
+          resolve(undefined);
+        }
+      };
+
+      img.onerror = () => {
+        cleanup();
+        resolve(undefined);
+      };
+
+      // 超时 3 秒
+      setTimeout(() => {
+        cleanup();
+        resolve(undefined);
+      }, 3000);
+
+      img.src = avatarUrl;
+    });
+  }
+
   private async extractDominantColor(texture: PIXI.Texture): Promise<void> {
     try {
       const baseTex = texture.baseTexture || texture.source;
       const img = (baseTex as any)?.resource?.source ?? (baseTex as any)?.source;
       const canvas = document.createElement('canvas');
-      const sampleSize = 16;
+      const sampleSize = 64;
       canvas.width = sampleSize;
       canvas.height = sampleSize;
       const ctx = canvas.getContext('2d')!;
       if (img instanceof HTMLImageElement) {
         ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
-        this.trailColor = this.sampleDominantColor(ctx, sampleSize, sampleSize);
+        const raw = this.sampleDominantColor(ctx, sampleSize, sampleSize);
+        this.trailColor = this.vibrantize(raw);
       }
     } catch {
       // 保持默认
@@ -529,21 +642,87 @@ export class PlayerRenderer {
 
   private sampleDominantColor(ctx: CanvasRenderingContext2D, w: number, h: number): number {
     const data = ctx.getImageData(0, 0, w, h).data;
-    const buckets = new Map<string, { r: number; g: number; b: number; count: number }>();
+    type Bucket = { r: number; g: number; b: number; weight: number };
+    const buckets = new Map<string, Bucket>();
+
     for (let i = 0; i < data.length; i += 4) {
-      if (data[i + 3] < 128) continue;
+      if (data[i + 3] < 128) continue; // 跳过透明像素
       const r = data[i], g = data[i + 1], b = data[i + 2];
       const bri = (r + g + b) / 3;
-      if (bri < 25 || bri > 235) continue;
-      const key = `${r >> 3},${g >> 3},${b >> 3}`;
+      // 放宽亮度范围，只排除极端黑白
+      if (bri < 15 || bri > 245) continue;
+
+      // 饱和度加权：颜色越鲜艳，权重越高（最大值 1.0 → 权重倍增）
+      const maxC = Math.max(r, g, b);
+      const minC = Math.min(r, g, b);
+      const saturation = maxC > 0 ? (maxC - minC) / maxC : 0;
+      const weight = 1 + saturation * 2; // 鲜艳色权重最高 3 倍
+
+      const key = `${r >> 4},${g >> 4},${b >> 4}`; // 16 级/通道 → 4096 桶
       const bucket = buckets.get(key);
-      if (bucket) { bucket.r += r; bucket.g += g; bucket.b += b; bucket.count++; }
-      else buckets.set(key, { r, g, b, count: 1 });
+      if (bucket) {
+        bucket.r += r * weight;
+        bucket.g += g * weight;
+        bucket.b += b * weight;
+        bucket.weight += weight;
+      } else {
+        buckets.set(key, { r: r * weight, g: g * weight, b: b * weight, weight });
+      }
     }
-    let best: { r: number; g: number; b: number; count: number } | null = null;
-    let max = 0;
-    for (const [, b] of buckets) { if (b.count > max) { max = b.count; best = b; } }
-    if (best) return (Math.round(best.r / best.count) << 16) | (Math.round(best.g / best.count) << 8) | Math.round(best.b / best.count);
+
+    if (buckets.size === 0) return FACTION_COLORS[this.currentFaction].primary;
+
+    let best: Bucket | null = null;
+    let maxW = 0;
+    for (const [, b] of buckets) {
+      if (b.weight > maxW) { maxW = b.weight; best = b; }
+    }
+    if (best && best.weight > 0) {
+      return (Math.round(best.r / best.weight) << 16)
+           | (Math.round(best.g / best.weight) << 8)
+           | Math.round(best.b / best.weight);
+    }
     return FACTION_COLORS[this.currentFaction].primary;
+  }
+
+  /**
+   * 增强颜色鲜艳度：提升饱和度 + 亮度，使特效更醒目
+   * 对低饱和色（如灰紫灰蓝）效果显著
+   */
+  private vibrantize(color: number): number {
+    let r = (color >> 16) & 0xff;
+    let g = (color >> 8) & 0xff;
+    let b = color & 0xff;
+
+    // 转 HSL，提升饱和度 + 亮度
+    const maxC = Math.max(r, g, b);
+    const minC = Math.min(r, g, b);
+    const l = (maxC + minC) / 2 / 255; // 亮度 0~1
+
+    // 饱和度增强因子：原低饱和度时增强更多
+    const origSat = maxC > minC ? (maxC - minC) / (255 - Math.abs(maxC + minC - 255)) : 0;
+    const satBoost = 1 - origSat; // 越灰增强越多
+    const targetSat = Math.min(1, origSat + satBoost * 0.7);
+
+    // 亮度提升 20%，确保特效可见
+    const targetLight = Math.min(0.85, l * 1.2 + 0.1);
+
+    // 计算灰值
+    const gray = (r + g + b) / 3;
+
+    // 向饱和方向推动
+    const blend = targetSat / Math.max(0.01, origSat || 1);
+    r = Math.round(gray + (r - gray) * Math.min(blend, 2.5));
+    g = Math.round(gray + (g - gray) * Math.min(blend, 2.5));
+    b = Math.round(gray + (b - gray) * Math.min(blend, 2.5));
+
+    // 亮度调整
+    const curLight = (r + g + b) / 3 / 255;
+    const lightScale = targetLight / Math.max(0.01, curLight);
+    r = Math.min(255, Math.round(r * lightScale));
+    g = Math.min(255, Math.round(g * lightScale));
+    b = Math.min(255, Math.round(b * lightScale));
+
+    return (r << 16) | (g << 8) | b;
   }
 }

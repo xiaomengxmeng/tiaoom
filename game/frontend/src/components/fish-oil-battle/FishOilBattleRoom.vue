@@ -10,52 +10,62 @@
         @resize="onResize"
       />
 
-      <!-- 战斗 HUD：左下角面板（己方）── 在地图外部 -->
+      <!-- 战斗 HUD：动态多玩家布局（统一缩放适配容器） -->
       <template v-if="battleHudVisible">
-        <BattleHudPanel
-          side="left"
-          :name="selfHud.name"
-          :current-hp="selfHud.currentHp"
-          :max-hp="selfHud.maxHp"
-          :current-en="selfHud.currentEn"
-          :max-en="selfHud.maxEn"
-          :weapon-name="selfHud.weaponName"
-          :weapon-icon="selfHud.weaponIcon"
-          :weapon-cd="selfHud.weaponCd"
-          :overheated="selfHud.overheated"
-          class="absolute left-4 bottom-4 z-10"
-        />
-
-        <!-- 战斗 HUD：右下角面板（对手）── 在地图外部 -->
-        <BattleHudPanel
-          side="right"
-          :name="opponentHud.name"
-          :current-hp="opponentHud.currentHp"
-          :max-hp="opponentHud.maxHp"
-          :current-en="opponentHud.currentEn"
-          :max-en="opponentHud.maxEn"
-          :weapon-name="opponentHud.weaponName"
-          :weapon-icon="opponentHud.weaponIcon"
-          :weapon-cd="opponentHud.weaponCd"
-          class="absolute right-4 bottom-4 z-10"
-        />
-
-        <!-- 顶部中央：回合倒计时 -->
         <div
-          class="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3"
+          class="absolute inset-0 z-10 pointer-events-none"
+          :style="{ transform: `scale(${hudScale})`, transformOrigin: 'center center' }"
         >
-          <span
-            class="badge badge-lg font-mono font-bold shadow-sm"
-            :class="roundTimer <= 10 ? 'badge-error animate-pulse' : 'badge-neutral'"
+          <!-- 己方 HUD：固定左下 -->
+          <BattleHudPanel
+            side="left"
+            :name="selfHud.name"
+            :current-hp="selfHud.currentHp"
+            :max-hp="selfHud.maxHp"
+            :current-en="selfHud.currentEn"
+            :max-en="selfHud.maxEn"
+            :weapon-name="selfHud.weaponName"
+            :weapon-icon="selfHud.weaponIcon"
+            :weapon-cd="selfHud.weaponCd"
+            :overheated="selfHud.overheated"
+            :dead="!selfHud.alive"
+            class="pointer-events-auto absolute left-4 bottom-4"
+          />
+
+          <!-- 其他玩家 HUD：右上 / 右下 / 左上 按人数动态摆放 -->
+          <BattleHudPanel
+            v-for="(hud, idx) in otherPlayerHuds"
+            :key="idx"
+            :name="hud.name"
+            :current-hp="hud.currentHp"
+            :max-hp="hud.maxHp"
+            :current-en="hud.currentEn"
+            :max-en="hud.maxEn"
+            :weapon-name="hud.weaponName"
+            :weapon-icon="hud.weaponIcon"
+            :weapon-cd="hud.weaponCd"
+            :dead="!hud.alive"
+            class="pointer-events-auto"
+            :class="getOtherHudClass(idx)"
+          />
+
+          <!-- 顶部中央：回合倒计时 -->
+          <div
+            class="pointer-events-auto absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-3"
           >
-            {{ formattedRoundTime }}
-          </span>
-          <span
-            v-if="selfHud.overheated"
-            class="badge badge-lg badge-error animate-pulse font-bold shadow-sm"
-          >
-            过热
-          </span>
+            <span
+              class="badge badge-lg font-mono font-bold shadow-sm"
+              :class="roundTimer <= 10 ? 'badge-error animate-pulse' : 'badge-neutral'"
+            >
+              {{ formattedRoundTime }}
+            </span>
+            <span
+              v-if="selfHud.overheated"
+              class="badge badge-lg badge-error animate-pulse font-bold shadow-sm"
+            >
+              过热
+            </span>
+          </div>
         </div>
       </template>
 
@@ -93,10 +103,10 @@
     <!-- 规则说明 -->
     <template #rules>
       <ul class="space-y-1 text-sm">
-        <li>1. 从 3 把武器中选择 1 把，15 秒内选完即开战。</li>
-        <li>2. 小球自动弹跳不可操控，通过碰撞对手造成伤害。</li>
+        <li>1. 2-4 人大逃杀，从 3 把武器中选择 1 把，15 秒内选完即开战。</li>
+        <li>2. 小球自动弹跳不可操控，通过碰撞造成伤害。</li>
         <li>3. 武器能量充满后可触发爆发技能。</li>
-        <li>4. 每回合 90 秒，超时则 HP 多者获胜。</li>
+        <li>4. 每回合 90 秒，最后存活的玩家获胜。</li>
       </ul>
     </template>
   </GameView>
@@ -131,6 +141,9 @@ const emit = defineEmits<{
 const canvasRef = ref<InstanceType<typeof FishOilBattleCanvas>>();
 const rendererRef = shallowRef<CyberFishRenderer | null>(null);
 
+/** HUD 缩放因子（跟随 canvas uniformScale，最小 0.5，最大 1.0） */
+const hudScale = ref(1);
+
 function onPixiReady(app: any, stage: any): void {
   void stage; // 消除未使用警告
   if (!canvasRef.value) return;
@@ -138,6 +151,9 @@ function onPixiReady(app: any, stage: any): void {
   if (!appInstance) return;
   rendererRef.value = new CyberFishRenderer(appInstance);
   rendererRef.value.start();
+
+  // 初始化 HUD 缩放
+  hudScale.value = Math.max(0.5, Math.min(1, rendererRef.value.getUniformScale()));
 
   // 演示模式：添加模拟玩家
   if (props.demo) {
@@ -151,6 +167,8 @@ function onResize(w: number, h: number): void {
   console.log(`[CyberFish] canvas resized: ${w}x${h}`);
   if (rendererRef.value) {
     rendererRef.value.resize(w, h);
+    // 同步 HUD 缩放因子（限制范围防止过小/过大）
+    hudScale.value = Math.max(0.5, Math.min(1, rendererRef.value.getUniformScale()));
   }
 }
 
@@ -170,7 +188,7 @@ const selectedWeaponId = computed(() => battleState.selectedWeaponId.value);
 const selectCountdown = computed(() => battleState.selectCountdown.value);
 const battleHudVisible = computed(() => battleState.battleHudVisible.value);
 const selfHud = computed(() => battleState.selfHud.value);
-const opponentHud = computed(() => battleState.opponentHud.value);
+const otherPlayerHuds = computed(() => battleState.otherPlayerHuds.value);
 const roundTimer = computed(() => battleState.roundTimer.value);
 const roundDuration = computed(() => battleState.roundDuration.value);
 const winnerName = computed(() => battleState.winnerName.value as string | null);
@@ -200,6 +218,16 @@ function watcherStatusTpl(p: RoomPlayer): string | undefined {
 // ── 武器选择处理 ──────────────────────────────────────
 function onWeaponSelect(weaponId: string): void {
   battleState.selectWeapon(weaponId);
+}
+
+/** 按索引动态分配其他玩家 HUD 位置：右上 / 右下 / 左上 */
+function getOtherHudClass(index: number): string {
+  const positions = [
+    'absolute right-4 top-4 z-10',       // 第1个对手：右上
+    'absolute right-4 bottom-4 z-10',     // 第2个对手：右下
+    'absolute left-4 top-4 z-10',         // 第3个对手：左上
+  ];
+  return positions[index] ?? positions[0];
 }
 
 // ── 后端指令处理 ──────────────────────────────────────

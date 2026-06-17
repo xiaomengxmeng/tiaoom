@@ -59,6 +59,9 @@ export class EffectRenderer {
   private stingerPool: PIXI.Graphics[] = [];
   private stingerActive: Set<PIXI.Graphics> = new Set();
 
+  /** 防重复销毁标记 */
+  private _destroyed = false;
+
   constructor(
     entityContainer: PIXI.Container,
     fieldContainer: PIXI.Container,
@@ -357,6 +360,8 @@ export class EffectRenderer {
   }
 
   destroy(): void {
+    if (this._destroyed) return;
+    this._destroyed = true;
     this.clear();
     // 释放池资源（防御 null 引用）
     for (let i = this.shockwavePool.length - 1; i >= 0; i--) {

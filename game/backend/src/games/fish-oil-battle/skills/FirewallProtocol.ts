@@ -46,7 +46,7 @@ export class FirewallProtocol implements ISkill {
 
   onTick(state: IBattleState): SkillEffect[] {
     const effects: SkillEffect[] = [];
-    const opponent = state.getOpponent(this.playerId);
+    const opponent = state.getRandomAliveOpponent(this.playerId);
 
     // 防火墙生命周期管理
     if (this.activeFirewallCount > 0) {
@@ -142,7 +142,7 @@ export class FirewallProtocol implements ISkill {
   }
 
   burst(state: IBattleState): SkillEffect[] {
-    const opponent = state.getOpponent(this.playerId);
+    const opponent = state.getRandomAliveOpponent(this.playerId);
     const effects: SkillEffect[] = [];
 
     this.isHardened = true;

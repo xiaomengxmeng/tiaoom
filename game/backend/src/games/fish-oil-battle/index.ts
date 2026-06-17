@@ -8,10 +8,10 @@
  * Controller 会在 room 创建时 new FishOilRoom(room) 并调用 init()。
  */
 
-export const name = 'fish-oil-battle';
+export const name = '赛博鱼油大逃杀';
 export const minSize = 2;
-export const maxSize = 2;
-export const description = '赛博鱼油 · 1v1 自动弹球对战';
+export const maxSize = 4;
+export const description = '2-4 人大逃杀，选择武器，最后存活者获胜！';
 export const points = {
   '我就玩玩': 0,
   '小博一下': 100,

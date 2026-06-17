@@ -57,6 +57,8 @@ export interface IBattleState {
 
   getPlayer(id: string): PlayerState | undefined;
   getOpponent(id: string): PlayerState | undefined;
+  /** 随机选取一个存活对手（大逃杀模式），返回 undefined 表示无存活对手 */
+  getRandomAliveOpponent(id: string): PlayerState | undefined;
   /** 对目标造成伤害，自动更新 totalDamageTaken */
   applyDamage(targetId: string, amount: number, sourceId?: string): void;
 }

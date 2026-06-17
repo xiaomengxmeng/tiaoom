@@ -86,10 +86,14 @@ export class CyberFishRenderer {
   // ═══════════════════════════════════════════════════
 
   /**
-   * 注册一个玩家（创建 PlayerRenderer）
+   * 注册一个玩家（创建 PlayerRenderer）。
+   * 如果该玩家已存在（如重新开局），先销毁旧渲染器再创建新的。
    */
   addPlayer(playerId: string, faction: Faction, displayName: string): void {
-    if (this.playerRenderers.has(playerId)) return;
+    if (this.playerRenderers.has(playerId)) {
+      console.log(`[CyberFish] addPlayer: id=${playerId} 已存在，先移除再重建`);
+      this.removePlayer(playerId);
+    }
     console.log(`[CyberFish] addPlayer: id=${playerId} faction=${faction} name=${displayName}`);
     const pr = new PlayerRenderer(this.l1Player, playerId, faction, this.particlePool);
     pr.setDisplayName(displayName);
@@ -213,6 +217,19 @@ export class CyberFishRenderer {
   }
 
   /**
+   * 设置玩家存活状态（大逃杀模式，死亡后隐藏球体）
+   */
+  setPlayerAlive(playerId: string, alive: boolean): void {
+    const pr = this.playerRenderers.get(playerId);
+    if (pr) {
+      pr.setVisible(alive);
+    }
+    if (!alive) {
+      this.physics.removePlayer(playerId);
+    }
+  }
+
+  /**
    * 启动渲染循环
    */
   start(): void {
@@ -299,8 +316,8 @@ export class CyberFishRenderer {
   //  使用 uniformScale + 居中偏移，保证竞技场边界和玩家位置在同一坐标空间
   // ═══════════════════════════════════════════════════
 
-  /** 统一缩放因子（等比缩放，X/Y 取小保证不超出边界） */
-  private getUniformScale(): number { return Math.min(this.canvasW / LOGICAL_W, this.canvasH / LOGICAL_H); }
+  /** 统一缩放因子（等比缩放，X/Y 取小保证不超出边界），暴露给 HUD 适配用 */
+  getUniformScale(): number { return Math.min(this.canvasW / LOGICAL_W, this.canvasH / LOGICAL_H); }
   /** X 轴居中偏移（pillarbox/letterbox） */
   private get offsetX(): number { return (this.canvasW - LOGICAL_W * this.getUniformScale()) / 2; }
   /** Y 轴居中偏移 */

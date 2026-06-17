@@ -13,6 +13,11 @@
  * - 处理武器选择指令
  */
 
+export const name = '赛博鱼油大逃杀';
+export const minSize = 2;
+export const maxSize = 4;
+export const description = '2-4 人大逃杀，选择武器，最后存活者获胜！';
+
 import { RoomPlayer, RoomStatus } from 'tiaoom';
 import { GameRoom, IGameCommand } from '../index';
 import { BattleState, SkillScheduler, PlayerSkillBinding } from './core/SkillScheduler';
@@ -24,7 +29,15 @@ import { ShockwaveGenerator } from './skills/ShockwaveGenerator';
 import { FirewallProtocol } from './skills/FirewallProtocol';
 import { HiveMother } from './skills/HiveMother';
 
-// ─── 武器元信息 ────────────────────────────────────────────────
+// 共享协议类型
+import type {
+  GameStatePlayer,
+  VisualEventData,
+  PlayerSpawnInfo,
+  PlayerStats,
+} from '@/shared/protocol';
+
+// ─── 武器元信息（后端扩展了 factory）────────────────────────────
 interface WeaponMeta {
   id: string;
   name: string;
@@ -55,28 +68,6 @@ const WEAPON_POOL: WeaponMeta[] = [
   },
 ];
 
-// ─── 消息类型 ──────────────────────────────────────────────────
-interface GameStatePlayer {
-  id: string;
-  name: string;
-  x: number; y: number;
-  vx: number; vy: number;
-  hp: number; maxHp: number;
-  energy: number; maxEnergy: number;
-  weapon: { name: string; iconId: string; cd: number };
-  overheated: boolean;
-  avatar?: string;
-}
-
-interface VisualEvent {
-  type: string;
-  playerId?: string;
-  weaponId?: string;
-  x?: number; y?: number;
-  isBurst?: boolean;
-  tx?: number; ty?: number;
-}
-
 // ─── 房间类 ────────────────────────────────────────────────────
 export default class FishOilRoom extends GameRoom {
   // 子系统
@@ -97,12 +88,32 @@ export default class FishOilRoom extends GameRoom {
   private roundTimer: ReturnType<typeof setInterval> | null = null;
   private roundSecondsRemaining = 90;
   private battleTick = 0;
+  /** 大逃杀：已死亡的玩家 ID 集合 */
+  private deadPlayers = new Set<string>();
+
+  /** 按人数生成 spawn 位置（2人=对侧，3人=正三角，4人=正方顶点，随机旋转） */
+  private computeSpawnPositions(count: number): { x: number; y: number }[] {
+    const centerX = 640;
+    const centerY = 360;
+    const spawnDist = 100 + Math.random() * 80;          // 100~180 px 离圆心
+    const baseAngle = Math.random() * Math.PI * 2;        // 随机基准角度
+    const positions: { x: number; y: number }[] = [];
+    for (let i = 0; i < count; i++) {
+      const angle = baseAngle + (Math.PI * 2 / count) * i;
+      positions.push({
+        x: centerX + Math.cos(angle) * spawnDist,
+        y: centerY + Math.sin(angle) * spawnDist,
+      });
+    }
+    return positions;
+  }
 
   // ─── 覆盖 onStart ────────────────────────────────────
   onStart() {
     const players = this.room.validPlayers;
-    if (players.length < 2) {
-      this.say('至少需要 2 名玩家');
+    const playerCount = players.length;
+    if (playerCount < 2 || playerCount > 4) {
+      this.say('需要 2-4 名玩家（大逃杀模式）');
       return;
     }
 
@@ -126,21 +137,14 @@ export default class FishOilRoom extends GameRoom {
       this.weaponSelections[p.id] = null;
     }
 
-    // 2. 初始化物理引擎（圆形竞技场，两球在圆内对侧随机位置）
-    // 竞技场圆心=(640,360)，半径=280
-    // 随机生成对侧 spawn 位置：角度随机，距离圆心 100~180px，避免固定同线永不碰撞
-    const centerX = 640;
-    const centerY = 360;
-    const spawnDist = 100 + Math.random() * 80;          // 100~180 px 离圆心
-    const baseAngle = Math.random() * Math.PI * 2;        // 随机基准角度
-    const spawnPositions = [
-      { x: centerX + Math.cos(baseAngle) * spawnDist, y: centerY + Math.sin(baseAngle) * spawnDist },
-      { x: centerX + Math.cos(baseAngle + Math.PI) * spawnDist, y: centerY + Math.sin(baseAngle + Math.PI) * spawnDist },
-    ];
+    // 2. 初始化物理引擎（圆形竞技场，N 人均匀分布在圆上）
+    // 按人数生成 spawn 位置：2人=对侧，3人=正三角，4人=正方
+    const spawnPositions = this.computeSpawnPositions(playerCount);
 
     this.physics = new PhysicsEngine({ canvasWidth: 1280, canvasHeight: 720, arenaRadius: 280 });
-    this.physics.addBall(players[0].id, spawnPositions[0].x, spawnPositions[0].y);
-    this.physics.addBall(players[1].id, spawnPositions[1].x, spawnPositions[1].y);
+    for (let i = 0; i < playerCount; i++) {
+      this.physics.addBall(players[i].id, spawnPositions[i].x, spawnPositions[i].y);
+    }
 
     // 3. 发送武器选择阶段
     this.phase = 'weapon_select';
@@ -154,19 +158,20 @@ export default class FishOilRoom extends GameRoom {
       iconId: w.iconId,
     }));
 
-    // 附带玩家头像和初始位置（与物理引擎一致的对侧随机 spawn）
-    const factions: ('aggressor' | 'controller')[] = ['aggressor', 'controller'];
-    const playerInfos = players.map((p, i) => ({
+    // 按人数分配 faction 颜色（轮转）
+    const allFactions: ('aggressor' | 'controller' | 'engineer' | 'wildcard')[] =
+      ['aggressor', 'controller', 'engineer', 'wildcard'];
+    const playerInfos: PlayerSpawnInfo[] = players.map((p, i) => ({
       id: p.id,
       name: p.name,
       avatar: this.playerAvatars[p.id] ?? '',
-      faction: factions[i] ?? 'aggressor',
+      faction: allFactions[i % allFactions.length],
       x: spawnPositions[i].x,
       y: spawnPositions[i].y,
     }));
 
     console.log(`[FishOil] prepareBattle: sending battle_start with ${playerInfos.length} players:`,
-      playerInfos.map(p => `${p.name}(${p.id.substring(0,4)}) faction=${p.faction} spawn=(${p.x},${p.y})`).join(' | '));
+      playerInfos.map(p => `${p.name}(${p.id.substring(0, 4)}) faction=${p.faction} spawn=(${p.x},${p.y})`).join(' | '));
 
     this.command('battle_start', {
       weaponPool: weaponPoolForClient,
@@ -174,7 +179,7 @@ export default class FishOilRoom extends GameRoom {
       players: playerInfos,
     });
 
-    this.say('选择你的武器！15 秒内做出决定。');
+    this.say(`大逃杀模式！${playerCount} 名玩家，选择你的武器！15 秒内做出决定。`);
 
     // 4. 启动武器选择倒计时（15s）
     this.startTimer(() => {
@@ -244,6 +249,7 @@ export default class FishOilRoom extends GameRoom {
     this.phase = 'battle';
     this.battleTick = 0;
     this.roundSecondsRemaining = 90;
+    this.deadPlayers.clear();
     this.scheduler = new SkillScheduler();
 
     // 注册武器技能
@@ -307,13 +313,13 @@ export default class FishOilRoom extends GameRoom {
     }
 
     // 2. 处理碰撞 → 技能系统
-    const visualEvents: VisualEvent[] = [];
+    const visualEvents: VisualEventData[] = [];
     for (const col of collisions) {
       if (col.type === 'ball') {
-        // 两球碰撞：双方触发 onHitTarget
+        // N 人碰撞：双方触发 onHitTarget
         const [a, b] = col.ballIds;
         this.scheduler.processHit(a, b, this.battleState);
-        this.scheduler.processHit(b, a, this.battleState); // 双向碰撞
+        this.scheduler.processHit(b, a, this.battleState);
 
         visualEvents.push({
           type: 'shockwave_trigger',
@@ -322,7 +328,7 @@ export default class FishOilRoom extends GameRoom {
           playerId: col.ballIds[0],
         });
       } else if (col.type === 'wall') {
-        // 碰墙不再发送视觉事件（前端已移除碰墙闪白）
+        // 碰墙不再发送视觉事件
       }
     }
 
@@ -360,7 +366,8 @@ export default class FishOilRoom extends GameRoom {
             playerId,
           });
         } else if (skill.id === 'hive_mother' || skill.id === 'hive') {
-          const opponent = this.battleState.getOpponent(playerId);
+          // 大逃杀：随机选一个存活对手作为蜂刺目标
+          const opponent = this.battleState.getRandomAliveOpponent(playerId);
           if (opponent) {
             visualEvents.push({
               type: 'hive_sting',
@@ -373,52 +380,70 @@ export default class FishOilRoom extends GameRoom {
       }
     }
 
-    // 5. 构建 game_state 消息
+    // 5. 大逃杀：检查死亡，移除死球
+    for (const [pid, pstate] of this.battleState.players) {
+      if (pstate.hp <= 0 && !this.deadPlayers.has(pid)) {
+        this.deadPlayers.add(pid);
+        this.physics.removeBall(pid);
+        console.log(`[FishOil] 玩家死亡: ${pstate.name} (tick=${this.battleTick})`);
+      }
+    }
+
+    // 6. 广播 game_state
     this.broadcastGameState();
 
-    // 6. 发送 visual_event
+    // 7. 发送 visual_event
     for (const evt of visualEvents) {
       this.command('visual_event', evt);
     }
 
-    // 7. 检查胜负
-    for (const [pid, pstate] of this.battleState.players) {
-      if (pstate.hp <= 0) {
-        const winner = this.battleState.getOpponent(pid);
-        const winnerPlayer = winner ? this.room.validPlayers.find(p => p.id === winner.id) : null;
-        console.log(`[FishOil] 战斗结束: ${pstate.name} HP=0 (tick=${this.battleTick}), 胜者=${winnerPlayer?.name ?? '无'}`);
+    // 8. 大逃杀胜负判定：存活人数 ≤ 1 → 结束
+    const aliveCount = Array.from(this.battleState.players.values())
+      .filter(p => p.hp > 0).length;
+
+    if (aliveCount <= 1) {
+      if (aliveCount === 1) {
+        const survivor = Array.from(this.battleState.players.values())
+          .find(p => p.hp > 0)!;
+        const winnerPlayer = this.room.validPlayers.find(p => p.id === survivor.id);
+        console.log(`[FishOil] 大逃杀结束: 胜者=${winnerPlayer?.name ?? survivor.name} (tick=${this.battleTick})`);
         this.endBattle(winnerPlayer ? [winnerPlayer] : null);
-        return;
+      } else {
+        console.log(`[FishOil] 大逃杀结束: 全体阵亡 (tick=${this.battleTick})`);
+        this.endBattle(null); // 全灭 → 平局
       }
+      return;
     }
 
     // 每 20 tick（1秒）打印一次 HP 快照
     if (this.battleTick % 20 === 0) {
       const status: string[] = [];
       for (const [, ps] of this.battleState.players) {
-        status.push(`${ps.name}: ${ps.hp}/${ps.maxHp}HP`);
+        const deadTag = this.deadPlayers.has(ps.id) ? '[DEAD]' : '';
+        status.push(`${ps.name}${deadTag}: ${ps.hp}/${ps.maxHp}HP`);
       }
-      console.log(`[FishOil] tick=${this.battleTick} | ${status.join(' | ')}`);
+      console.log(`[FishOil] tick=${this.battleTick} alive=${aliveCount} | ${status.join(' | ')}`);
     }
   }
 
   private broadcastGameState(): void {
     const players: GameStatePlayer[] = [];
     for (const p of this.room.validPlayers) {
-      const ball = this.physics.getBall(p.id);
       const state = this.battleState.getPlayer(p.id);
-      if (!ball || !state) continue;
+      if (!state) continue;
 
+      const isDead = this.deadPlayers.has(p.id);
+      const ball = this.physics.getBall(p.id);
       const skill = this.scheduler.getSkill(p.id);
       const weaponMeta = WEAPON_POOL.find(w => w.id === this.weaponSelections[p.id]);
 
       players.push({
         id: p.id,
         name: p.name,
-        x: Math.round(ball.x),
-        y: Math.round(ball.y),
-        vx: Math.round(ball.vx),
-        vy: Math.round(ball.vy),
+        x: Math.round(ball?.x ?? state.position.x),
+        y: Math.round(ball?.y ?? state.position.y),
+        vx: isDead ? 0 : Math.round(ball?.vx ?? 0),
+        vy: isDead ? 0 : Math.round(ball?.vy ?? 0),
         hp: state.hp,
         maxHp: state.maxHp,
         energy: skill?.getEnergy() ?? 0,
@@ -430,6 +455,7 @@ export default class FishOilRoom extends GameRoom {
         },
         overheated: state.isOverheated,
         avatar: this.playerAvatars[p.id] ?? '',
+        alive: !isDead,
       });
     }
 
@@ -454,14 +480,15 @@ export default class FishOilRoom extends GameRoom {
     this.stopBattleLoop();
 
     // 构建对战统计
-    const stats: Record<string, { remainingHp: number; totalDamage: number; maxHit: number; weaponTriggers: number; bursts: number }> = {};
+    const stats: Record<string, PlayerStats> = {};
     for (const [pid, pstate] of this.battleState.players) {
       stats[pid] = {
         remainingHp: pstate.hp,
         totalDamage: pstate.totalDamageTaken,
-        maxHit: 0, // 当前未跟踪最大单次伤害
+        maxHit: 0,
         weaponTriggers: 0,
         bursts: 0,
+        survived: !this.deadPlayers.has(pid),
       };
     }
 
@@ -471,15 +498,16 @@ export default class FishOilRoom extends GameRoom {
       this.command('game_end', {
         winnerId: winner.id,
         winnerName: winner.name,
-        reason: 'hp_zero',
+        reason: 'last_stand',
         stats,
       });
     } else {
-      this.say('⌛ 时间到，平局！');
+      const msg = this.roundSecondsRemaining <= 0 ? '⌛ 时间到，平局！' : '💀 全体阵亡！';
+      this.say(msg);
       this.command('game_end', {
         winnerId: '',
         winnerName: '',
-        reason: 'timeout',
+        reason: this.roundSecondsRemaining <= 0 ? 'timeout' : 'last_stand',
         stats,
       });
     }
@@ -550,6 +578,22 @@ export default class FishOilRoom extends GameRoom {
   init() {
     const room = super.init();
     this.room.on('close', () => this.stopBattleLoop());
+    // 玩家离开时：战斗中则标记死亡并检查是否结束，武器选择阶段则清除确认状态
+    this.room.on('leave', (player: any) => {
+      const pid = player.id;
+      if (this.phase === 'battle' && this.battleState) {
+        this.deadPlayers.add(pid);
+        this.physics?.removeBall(pid);
+        const aliveCount = Array.from(this.battleState.players.values())
+          .filter(p => p.hp > 0 && !this.deadPlayers.has(p.id)).length;
+        if (aliveCount <= 1) {
+          this.endBattle(null);
+        }
+      }
+      if (this.phase === 'weapon_select') {
+        this.weaponConfirmed.delete(pid);
+      }
+    });
     return room;
   }
 }

@@ -2,6 +2,13 @@ import { ref, onUnmounted, type Ref } from 'vue';
 import type { RoomPlayer, Room } from 'tiaoom/client';
 import type { CyberFishRenderer } from './renderer/CyberFishRenderer';
 
+// 共享协议类型
+import type {
+  GameStatePlayer,
+  VisualEventData,
+} from '$/backend/src/shared/protocol';
+
+// ─── 前端扩展的 HUD 类型 ──────────────────────────────
 export interface HudPlayerInfo {
   name: string;
   currentHp: number;
@@ -10,42 +17,29 @@ export interface HudPlayerInfo {
   maxEn: number;
   weaponName: string;
   weaponIcon: string;
-  weaponCd: number;    // 秒，0=就绪
+  weaponCd: number;
   overheated: boolean;
+  /** 该玩家是否存活（false 则 HUD 灰掉） */
+  alive: boolean;
 }
 
 export interface FishOilBattleState {
-  /** 是否显示武器选择页 */
   showWeaponSelect: Ref<boolean>;
-  /** 当前玩家的武器池 */
   weaponPool: Ref<SelectableWeapon[]>;
-  /** 已选武器 ID */
   selectedWeaponId: Ref<string | null>;
-  /** 选择倒计时（秒） */
   selectCountdown: Ref<number>;
-  /** 已确认选择 */
   isWeaponConfirmed: Ref<boolean>;
-
-  /** 战斗 HUD 是否可见 */
   battleHudVisible: Ref<boolean>;
-  /** 己方 HUD 数据 */
+  /** 己方 HUD（固定左下） */
   selfHud: Ref<HudPlayerInfo>;
-  /** 对手 HUD 数据 */
-  opponentHud: Ref<HudPlayerInfo>;
-  /** 回合剩余秒数 */
+  /** 其他玩家 HUD 列表（动态右上/右下/左上摆放） */
+  otherPlayerHuds: Ref<HudPlayerInfo[]>;
   roundTimer: Ref<number>;
-  /** 回合总秒数 */
   roundDuration: Ref<number>;
-
-  /** 胜者昵称，非空时显示结算遮罩 */
   winnerName: Ref<string | null>;
-  /** 胜者 ID */
   winnerPlayerId: Ref<string>;
-  /** 是否平局 */
   isDraw: Ref<boolean>;
-  /** 结束原因 */
   endReason: Ref<string>;
-  /** 当前玩家是否为观战者 */
   isWatcher: Ref<boolean>;
 }
 
@@ -79,6 +73,9 @@ export function useFishOilBattle(
   sendCommand?: SendCommandFn,
 ): FishOilBattleState & FishOilBattleActions {
 
+  const selfId = (roomPlayer as any).id ?? '';
+  const selfName = (roomPlayer as any).name ?? '我';
+
   // ── 武器选择阶段状态 ───────────────────────────────
   const showWeaponSelect = ref(true);
   const weaponPool = ref<SelectableWeapon[]>([]);
@@ -89,23 +86,22 @@ export function useFishOilBattle(
   // ── 战斗阶段状态 ───────────────────────────────────
   const battleHudVisible = ref(false);
 
+  // 所有玩家 HUD（Map: playerId → Hud）
+  const playerHudMap = ref<Map<string, HudPlayerInfo>>(new Map());
+
+  // 己方 HUD（始终从 Map 中取）
   const selfHud = ref<HudPlayerInfo>({
-    name: (roomPlayer as any).name ?? '我',
+    name: selfName,
     currentHp: 100, maxHp: 100,
     currentEn: 0, maxEn: 100,
     weaponName: '未选择',
     weaponIcon: 'game-icons:help',
     weaponCd: 0, overheated: false,
+    alive: true,
   });
 
-  const opponentHud = ref<HudPlayerInfo>({
-    name: '对手',
-    currentHp: 100, maxHp: 100,
-    currentEn: 0, maxEn: 100,
-    weaponName: '未知',
-    weaponIcon: 'game-icons:help',
-    weaponCd: 0, overheated: false,
-  });
+  // 其他玩家 HUD 列表（动态排序）
+  const otherPlayerHuds = ref<HudPlayerInfo[]>([]);
 
   const roundTimer = ref(90);
   const roundDuration = ref(90);
@@ -113,8 +109,8 @@ export function useFishOilBattle(
   // ── 结算状态 ────────────────────────────────────
   const winnerName = ref<string | null>(null);
   const winnerPlayerId = ref('');
-  const isDraw = ref(false);        // 是否平局
-  const endReason = ref('');        // 结束原因（hp_zero / timeout）
+  const isDraw = ref(false);
+  const endReason = ref('');
   const isWatcher = ref((roomPlayer as any).role !== 'player');
 
   // ── 内部倒计时 timer ───────────────────────────────
@@ -122,28 +118,23 @@ export function useFishOilBattle(
 
   // ── 方法 ───────────────────────────────────────────
 
-  /** 选择武器 */
   function selectWeapon(weaponId: string): void {
     if (isWeaponConfirmed.value || !weaponPool.value.length) return;
     selectedWeaponId.value = weaponId;
     isWeaponConfirmed.value = true;
-
-    // 通过回调发送选择指令到后端
     console.log('[FishOilBattle] 发送 select_weapon:', weaponId);
     sendCommand?.('select_weapon', { weaponId });
   }
 
-  /** 开始武器选择倒计时 */
   function startCountdown(): void {
     selectCountdown.value = 15;
     isWeaponConfirmed.value = false;
     selectedWeaponId.value = null;
 
-    stopCountdown(); // 清除旧 timer
+    stopCountdown();
     countdownTimer = setInterval(() => {
       selectCountdown.value--;
       if (selectCountdown.value <= 0) {
-        // 超时自动随机
         if (!isWeaponConfirmed.value && weaponPool.value.length > 0) {
           const random = weaponPool.value[Math.floor(Math.random() * weaponPool.value.length)];
           selectedWeaponId.value = random.id;
@@ -164,9 +155,7 @@ export function useFishOilBattle(
 
   // ── WebSocket 事件处理 ───────────────────────────────
 
-  /** 处理 battle_start 事件（新一轮开始，重置所有状态） */
   function onBattleStart(data: { weaponPool: SelectableWeapon[]; countdown: number }): void {
-    // 重置结算状态（修复重启后结算弹窗不消失）
     winnerName.value = null;
     winnerPlayerId.value = '';
     isDraw.value = false;
@@ -179,38 +168,30 @@ export function useFishOilBattle(
     console.log('[FishOilBattle] onBattleStart: reset, weapons=', data.weaponPool.map(w => w.name));
   }
 
-  /** 记录上一帧各玩家的 HP（用于检测掉血） */
+  /** 记录上一帧各玩家的 HP */
   const prevHp = new Map<string, number>();
 
   /** 处理 game_state 事件（高频，20fps） */
   function onGameState(data: {
-    players: Array<{
-      id: string;
-      name: string;
-      x: number; y: number;
-      vx: number; vy: number;
-      hp: number; maxHp: number;
-      energy: number; maxEnergy: number;
-      weapon?: { name: string; iconId: string; cd: number };
-      overheated?: boolean;
-    }>;
+    players: GameStatePlayer[];
     tick: number;
     timestamp: number;
   }): void {
     if (!rendererRef.value) return;
 
-    // 日志：每 100 帧输出一次位置（避免刷屏）
     if (data.tick % 100 === 0 || data.tick < 5) {
       console.log(
         `[FishOilBattle] game_state tick=${data.tick}:`,
-        data.players.map(p => `${p.id}=(${p.x.toFixed(0)},${p.y.toFixed(0)})`).join(' | '),
+        data.players.map(p => `${p.id.substring(0, 4)}=(${p.x.toFixed(0)},${p.y.toFixed(0)}) alive=${p.alive}`).join(' | '),
       );
     }
+
+    const newOtherHuds: HudPlayerInfo[] = [];
 
     for (const p of data.players) {
       // 检测掉血
       const prev = prevHp.get(p.id);
-      if (prev !== undefined && prev > p.hp) {
+      if (prev !== undefined && prev > p.hp && p.alive) {
         const dmg = prev - p.hp;
         rendererRef.value.playHitEffect(p.id);
         rendererRef.value.showDamageNumber(p.id, dmg);
@@ -226,43 +207,44 @@ export function useFishOilBattle(
         energy: p.energy, maxEnergy: p.maxEnergy,
       });
 
-      // 更新 HUD 数据
-      const selfName = (roomPlayer as any).name ?? '';
-      if (p.name === selfName || p.id === (roomPlayer as any).id) {
-        selfHud.value.currentHp = p.hp;
-        selfHud.value.maxHp = p.maxHp;
-        selfHud.value.currentEn = p.energy;
-        selfHud.value.maxEn = p.maxEnergy;
-        if (p.weapon) {
-          selfHud.value.weaponName = p.weapon.name;
-          selfHud.value.weaponIcon = p.weapon.iconId;
-          selfHud.value.weaponCd = p.weapon.cd;
-        }
-        selfHud.value.overheated = p.overheated ?? false;
+      // 构建 HUD 信息
+      const hudInfo: HudPlayerInfo = {
+        name: p.name,
+        currentHp: p.hp,
+        maxHp: p.maxHp,
+        currentEn: p.energy,
+        maxEn: p.maxEnergy,
+        weaponName: p.weapon?.name ?? '未知',
+        weaponIcon: p.weapon?.iconId ?? 'game-icons:help',
+        weaponCd: p.weapon?.cd ?? 0,
+        overheated: p.overheated ?? false,
+        alive: p.alive,
+      };
+
+      // 更新到 Map
+      playerHudMap.value.set(p.id, hudInfo);
+
+      // 分类：自己 vs 其他玩家
+      if (p.id === selfId || p.name === selfName) {
+        selfHud.value = hudInfo;
       } else {
-        opponentHud.value.name = p.name;
-        opponentHud.value.currentHp = p.hp;
-        opponentHud.value.maxHp = p.maxHp;
-        opponentHud.value.currentEn = p.energy;
-        opponentHud.value.maxEn = p.maxEnergy;
-        if (p.weapon) {
-          opponentHud.value.weaponName = p.weapon.name;
-          opponentHud.value.weaponIcon = p.weapon.iconId;
-          opponentHud.value.weaponCd = p.weapon.cd;
-        }
+        newOtherHuds.push(hudInfo);
+      }
+    }
+
+    // 更新其他玩家列表
+    otherPlayerHuds.value = newOtherHuds;
+
+    // 处理死亡：通知渲染器玩家不可见
+    for (const p of data.players) {
+      if (!p.alive && rendererRef.value) {
+        rendererRef.value.setPlayerAlive(p.id, false);
       }
     }
   }
 
-  /** 处理 visual_event 事件（特效触发） */
-  function onVisualEvent(data: {
-    type: string;
-    playerId?: string;
-    weaponId?: string;
-    x?: number; y?: number;
-    isBurst?: boolean;
-    tx?: number; ty?: number;
-  }): void {
+  /** 处理 visual_event 事件 */
+  function onVisualEvent(data: VisualEventData): void {
     if (!rendererRef.value) return;
 
     switch (data.type) {
@@ -307,12 +289,10 @@ export function useFishOilBattle(
         }
         break;
       case 'hit':
-        // 碰墙不再闪白，仅保留受伤时的闪白反馈（在 game_state 中检测 HP 变化触发）
         break;
     }
   }
 
-  /** 处理 round_start 事件（真正开始战斗） */
   function onRoundStart(data: { duration: number }): void {
     console.log('[FishOilBattle] onRoundStart: 进入战斗阶段, duration=', data.duration);
     showWeaponSelect.value = false;
@@ -322,18 +302,15 @@ export function useFishOilBattle(
     stopCountdown();
   }
 
-  /** 处理 round_timer 事件 */
   function onRoundTimer(data: { remaining: number }): void {
     roundTimer.value = data.remaining;
   }
 
-  /** 处理 weapon_confirmed 事件（后端确认已选） */
   function onWeaponConfirmed(data: { weaponId: string; weaponName: string }): void {
     selfHud.value.weaponName = data.weaponName;
     selfHud.value.weaponIcon = `game-icons:${data.weaponId}`;
   }
 
-  /** 处理 game_end 事件 */
   function onGameEnd(data: { winnerId?: string; winnerName?: string; reason?: string }): void {
     battleHudVisible.value = false;
     stopCountdown();
@@ -344,7 +321,6 @@ export function useFishOilBattle(
       isDraw.value = false;
       endReason.value = data.reason ?? '';
     } else {
-      // 平局：无胜者，显示平局结算
       winnerName.value = null;
       winnerPlayerId.value = '';
       isDraw.value = true;
@@ -352,8 +328,10 @@ export function useFishOilBattle(
     }
 
     showWeaponSelect.value = false;
-
-    console.log('[FishOilBattle] 游戏结束', { winnerName: data.winnerName, winnerId: data.winnerId, reason: data.reason, isDraw: isDraw.value });
+    console.log('[FishOilBattle] 游戏结束', {
+      winnerName: data.winnerName, winnerId: data.winnerId,
+      reason: data.reason, isDraw: isDraw.value,
+    });
   }
 
   // ── 生命周期清理 ───────────────────────────────────
@@ -362,7 +340,6 @@ export function useFishOilBattle(
   });
 
   return {
-    // 状态
     showWeaponSelect: showWeaponSelect as any,
     weaponPool: weaponPool as any,
     selectedWeaponId: selectedWeaponId as any,
@@ -370,7 +347,7 @@ export function useFishOilBattle(
     isWeaponConfirmed: isWeaponConfirmed as any,
     battleHudVisible: battleHudVisible as any,
     selfHud: selfHud as any,
-    opponentHud: opponentHud as any,
+    otherPlayerHuds: otherPlayerHuds as any,
     roundTimer: roundTimer as any,
     roundDuration: roundDuration as any,
     winnerName: winnerName as any,
@@ -378,7 +355,6 @@ export function useFishOilBattle(
     isDraw: isDraw as any,
     endReason: endReason as any,
     isWatcher: isWatcher as any,
-    // 方法
     selectWeapon,
     onBattleStart,
     onRoundStart,

@@ -48,7 +48,7 @@ export class HiveMother implements ISkill {
     const effects: SkillEffect[] = [];
     this.tickCounter++;
 
-    const opponent = state.getOpponent(this.playerId);
+    const opponent = state.getRandomAliveOpponent(this.playerId);
     if (!opponent) return effects;
 
     const beeCount = this.isBurstActive() ? BURST_BEE_COUNT : BASE_BEE_COUNT;
@@ -108,7 +108,7 @@ export class HiveMother implements ISkill {
   }
 
   burst(state: IBattleState): SkillEffect[] {
-    const opponent = state.getOpponent(this.playerId);
+    const opponent = state.getRandomAliveOpponent(this.playerId);
     const effects: SkillEffect[] = [];
 
     this.burstTicksLeft = BURST_DURATION;

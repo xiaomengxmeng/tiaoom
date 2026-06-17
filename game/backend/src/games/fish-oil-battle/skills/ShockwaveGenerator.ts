@@ -35,7 +35,7 @@ export class ShockwaveGenerator implements ISkill {
   }
 
   onHitTarget(state: IBattleState): SkillEffect[] {
-    const opponent = state.getOpponent(this.playerId);
+    const opponent = state.getRandomAliveOpponent(this.playerId);
     if (!opponent) return [];
 
     const effects: SkillEffect[] = [];
@@ -74,7 +74,7 @@ export class ShockwaveGenerator implements ISkill {
   }
 
   burst(state: IBattleState): SkillEffect[] {
-    const opponent = state.getOpponent(this.playerId);
+    const opponent = state.getRandomAliveOpponent(this.playerId);
     if (!opponent) return [];
 
     const effects: SkillEffect[] = [];

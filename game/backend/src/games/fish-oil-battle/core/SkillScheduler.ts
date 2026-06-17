@@ -43,6 +43,15 @@ export class BattleState implements IBattleState {
     return undefined;
   }
 
+  /** 随机选取一个存活对手（大逃杀模式） */
+  getRandomAliveOpponent(id: string): PlayerState | undefined {
+    const alive = Array.from(this.players.values()).filter(
+      p => p.id !== id && p.hp > 0,
+    );
+    if (alive.length === 0) return undefined;
+    return alive[Math.floor(Math.random() * alive.length)];
+  }
+
   applyDamage(targetId: string, amount: number, sourceId?: string): void {
     const target = this.players.get(targetId);
     if (!target || target.hp <= 0) return;

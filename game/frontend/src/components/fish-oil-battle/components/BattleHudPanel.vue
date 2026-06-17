@@ -5,8 +5,8 @@
     - 名字 + HP条 + 技能圆球（5个）
   -->
   <div
-    :class="containerClass"
-    class="bg-base-100/80 backdrop-blur-sm rounded-lg border shadow-lg px-4 py-3 flex items-center gap-3"
+    :class="[containerClass, dead ? 'opacity-40 grayscale' : '']"
+    class="bg-base-100/80 backdrop-blur-sm rounded-lg border shadow-lg px-4 py-3 flex items-center gap-3 transition-all duration-500"
   >
     <!-- 左侧：名字 + HP -->
     <div class="flex flex-col gap-1 min-w-0">
@@ -43,7 +43,7 @@
 import { computed } from 'vue';
 
 const props = withDefaults(defineProps<{
-  side: 'left' | 'right';
+  side?: 'left' | 'right';
   name: string;
   currentHp: number;
   maxHp: number;
@@ -53,8 +53,12 @@ const props = withDefaults(defineProps<{
   weaponIcon: string;
   weaponCd: number;       // 秒，0=就绪
   overheated?: boolean;
+  /** 玩家是否已死亡（灰掉 HUD） */
+  dead?: boolean;
 }>(), {
+  side: 'right',
   overheated: false,
+  dead: false,
 });
 
 const isLeft = computed(() => props.side === 'left');

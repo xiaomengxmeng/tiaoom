@@ -271,6 +271,11 @@ export class PlayerRenderer {
 
   setDisplayName(name: string): void { this.idText.text = name; }
 
+  /** 设置可见性（大逃杀：死亡后隐藏球体） */
+  setVisible(visible: boolean): void {
+    this.container.visible = visible;
+  }
+
   async setAvatar(avatarUrl: string): Promise<void> {
     if (!avatarUrl) return;
 

@@ -10,8 +10,8 @@
 
 export const name = '赛博鱼油大逃杀';
 export const minSize = 2;
-export const maxSize = 4;
-export const description = '2-4 人大逃杀，选择武器，最后存活者获胜！';
+export const maxSize = 8;
+export const description = '2-8 人大逃杀，选择武器，最后存活者获胜！';
 export const points = {
   '我就玩玩': 0,
   '小博一下': 100,
@@ -33,6 +33,6 @@ export { ShockwaveGeneratorWeapon } from './skills/weapons/ShockwaveGeneratorWea
 export { FirewallProtocolWeapon } from './skills/weapons/FirewallProtocolWeapon';
 export { HiveMotherWeapon } from './skills/weapons/HiveMotherWeapon';
 export { PhysicsEngine } from './physics/PhysicsEngine';
-export { School, WeaponId, WeaponEffectType, VisualEventType, GameEndReason } from './config/GameEnums';
+export { School, WeaponId, WeaponEffectType, VisualEventType, GameEndReason, ArenaShape } from './config/GameEnums';
 export { WEAPON_RANGE_CONFIG } from './config/WeaponRangeConfig';
 export type { WeaponRangeConfig, WeaponProjectileConfig, WeaponFieldConfig } from './config/WeaponRangeConfig';

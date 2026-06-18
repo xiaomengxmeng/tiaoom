@@ -4,7 +4,7 @@
  * 职责：
  * - 管理双方小球的位置/速度
  * - 每 tick 按 dt 推进位移
- * - 圆形竞技场边界反弹（弹性碰撞）
+ * - 圆形/矩形/六边形竞技场边界反弹（弹性碰撞）
  * - 两球碰撞检测与响应
  *
  * 参数（来自设计文档）：
@@ -13,6 +13,8 @@
  * - 球半径：36px（视觉）→ 碰撞半径 40px（含光环）
  * - 竞技场半径：280（逻辑单位，圆心在画布中心）
  */
+
+import { ArenaShape } from '../config/GameEnums';
 
 export interface BallPhysics {
   id: string;
@@ -44,8 +46,14 @@ export interface PhysicsConfig {
   baseSpeed: number;    // 基准速率 px/s
   restitution: number;  // 弹性系数
   ballRadius: number;
-  /** 圆形竞技场半径（逻辑单位），圆心固定在 (canvasWidth/2, canvasHeight/2） */
+  /** 竞技场形状 */
+  arenaShape: ArenaShape;
+  /** 圆形/六边形：竞技场半径（逻辑单位），圆心固定在 (canvasWidth/2, canvasHeight/2） */
   arenaRadius: number;
+  /** 矩形：半宽（逻辑单位） */
+  arenaHalfW?: number;
+  /** 矩形：半高（逻辑单位） */
+  arenaHalfH?: number;
 }
 
 const DEFAULT_CONFIG: PhysicsConfig = {
@@ -54,6 +62,7 @@ const DEFAULT_CONFIG: PhysicsConfig = {
   baseSpeed: 200,
   restitution: 0.9,
   ballRadius: 40,
+  arenaShape: ArenaShape.CIRCLE,
   arenaRadius: 280,   // 直径 560 ≈ 占 1280×720 的中心圆形区域
 };
 
@@ -195,35 +204,19 @@ export class PhysicsEngine {
       }
     }
 
-    // 2. 圆形竞技场边界反弹（球在圆内弹跳）
-    const cx = canvasWidth / 2;   // 圆心 X
-    const cy = canvasHeight / 2;  // 圆心 Y
-    const arenaR = this.config.arenaRadius;
-    for (const [, ball] of this.balls) {
-      // 球心到竞技场圆心的距离
-      const dx = ball.x - cx;
-      const dy = ball.y - cy;
-      const distFromCenter = Math.sqrt(dx * dx + dy * dy);
-      // 球碰到圆边界
-      if (distFromCenter + ballRadius > arenaR) {
-        // 法向量（从圆心指向球）
-        const nx = dx / distFromCenter;
-        const ny = dy / distFromCenter;
-        // 将球推回圆内
-        ball.x = cx + nx * (arenaR - ballRadius);
-        ball.y = cy + ny * (arenaR - ballRadius);
-        // 反射速度（v' = v - 2(v·n)n），只改方向不改速率
-        const dot = ball.vx * nx + ball.vy * ny;
-        ball.vx -= 2 * dot * nx;
-        ball.vy -= 2 * dot * ny;
-        // 碰撞只反射方向，速度大小仅由技能改变
+    // 2. 竞技场边界反弹（根据形状分派） */
+    const cx = canvasWidth / 2;
+    const cy = canvasHeight / 2;
+    const shape = this.config.arenaShape;
 
-        events.push({
-          type: 'wall',
-          ballIds: [ball.id],
-          position: { x: ball.x, y: ball.y },
-        });
-      }
+    for (const [, ball] of this.balls) {
+      const collided = shape === ArenaShape.RECT
+        ? this.resolveRectWall(ball, cx, cy, ballRadius, events)
+        : shape === ArenaShape.HEXAGON
+          ? this.resolveHexagonWall(ball, cx, cy, ballRadius, events)
+          : this.resolveCircleWall(ball, cx, cy, ballRadius, events);
+      // collided 已经通过 resolve* 方法 push 了事件
+      void collided;
     }
 
     // 3. 球球碰撞检测
@@ -293,6 +286,116 @@ export class PhysicsEngine {
     }
 
     return events;
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  边界碰撞子方法（按形状分派）
+  // ═══════════════════════════════════════════════════
+
+  /** 圆形边界反弹 */
+  private resolveCircleWall(
+    ball: BallPhysics, cx: number, cy: number,
+    ballRadius: number, events: CollisionEvent[],
+  ): boolean {
+    const arenaR = this.config.arenaRadius;
+    const dx = ball.x - cx;
+    const dy = ball.y - cy;
+    const distFromCenter = Math.sqrt(dx * dx + dy * dy);
+    if (distFromCenter + ballRadius > arenaR) {
+      const nx = dx / distFromCenter;
+      const ny = dy / distFromCenter;
+      ball.x = cx + nx * (arenaR - ballRadius);
+      ball.y = cy + ny * (arenaR - ballRadius);
+      const dot = ball.vx * nx + ball.vy * ny;
+      ball.vx -= 2 * dot * nx;
+      ball.vy -= 2 * dot * ny;
+      events.push({ type: 'wall', ballIds: [ball.id], position: { x: ball.x, y: ball.y } });
+      return true;
+    }
+    return false;
+  }
+
+  /** 矩形边界反弹（AABB 边界，法线沿坐标轴） */
+  private resolveRectWall(
+    ball: BallPhysics, cx: number, cy: number,
+    ballRadius: number, events: CollisionEvent[],
+  ): boolean {
+    const hw = this.config.arenaHalfW ?? this.config.arenaRadius;
+    const hh = this.config.arenaHalfH ?? this.config.arenaRadius;
+    const left = cx - hw + ballRadius;
+    const right = cx + hw - ballRadius;
+    const top = cy - hh + ballRadius;
+    const bottom = cy + hh - ballRadius;
+
+    let hit = false;
+    if (ball.x < left) { ball.x = left; ball.vx = Math.abs(ball.vx); hit = true; }
+    if (ball.x > right) { ball.x = right; ball.vx = -Math.abs(ball.vx); hit = true; }
+    if (ball.y < top) { ball.y = top; ball.vy = Math.abs(ball.vy); hit = true; }
+    if (ball.y > bottom) { ball.y = bottom; ball.vy = -Math.abs(ball.vy); hit = true; }
+
+    if (hit) {
+      events.push({ type: 'wall', ballIds: [ball.id], position: { x: ball.x, y: ball.y } });
+    }
+    return hit;
+  }
+
+  /** 正六边形边界反弹（6 条边，法向量分别为 0°/60°/120°/180°/240°/300°） */
+  private resolveHexagonWall(
+    ball: BallPhysics, cx: number, cy: number,
+    ballRadius: number, events: CollisionEvent[],
+  ): boolean {
+    const r = this.config.arenaRadius;
+    // 六边形内切圆半径 = r * cos(30°) = r * sqrt(3)/2
+    const innerR = r * Math.sqrt(3) / 2;
+
+    // 六边形 6 条边的外法线（从中心指向外，30° 间隔，起始 0° 即右侧）
+    const edgeNormals = [
+      { nx: 1, ny: 0 },                           // 0°   右
+      { nx: 0.5, ny: Math.sqrt(3) / 2 },           // 60°  右下
+      { nx: -0.5, ny: Math.sqrt(3) / 2 },          // 120° 左下
+      { nx: -1, ny: 0 },                           // 180° 左
+      { nx: -0.5, ny: -Math.sqrt(3) / 2 },         // 240° 左上
+      { nx: 0.5, ny: -Math.sqrt(3) / 2 },          // 300° 右上
+    ];
+    // 每条边到中心的距离 = innerR（正六边形的边到中心垂直距离）
+    const edgeDist = innerR - ballRadius;
+
+    // 将球心转换到中心坐标系
+    const dx = ball.x - cx;
+    const dy = ball.y - cy;
+
+    let hit = false;
+    let deepestIdx = -1;
+    let deepestPenetration = -Infinity;
+
+    // 检查每条边：球心沿法线方向的投影超过边距即越界
+    for (let i = 0; i < 6; i++) {
+      const { nx, ny } = edgeNormals[i];
+      const proj = dx * nx + dy * ny; // 球心沿法线的投影距离
+      if (proj > edgeDist) {
+        const pen = proj - edgeDist;
+        if (pen > deepestPenetration) {
+          deepestPenetration = pen;
+          deepestIdx = i;
+        }
+        hit = true;
+      }
+    }
+
+    if (hit && deepestIdx >= 0) {
+      // 沿最深穿透边的法线推回
+      const { nx, ny } = edgeNormals[deepestIdx];
+      ball.x -= nx * deepestPenetration;
+      ball.y -= ny * deepestPenetration;
+      // 反射速度
+      const dot = ball.vx * nx + ball.vy * ny;
+      if (dot > 0) {
+        ball.vx -= 2 * dot * nx;
+        ball.vy -= 2 * dot * ny;
+      }
+      events.push({ type: 'wall', ballIds: [ball.id], position: { x: ball.x, y: ball.y } });
+    }
+    return hit;
   }
 
   /** 清理所有小球 */

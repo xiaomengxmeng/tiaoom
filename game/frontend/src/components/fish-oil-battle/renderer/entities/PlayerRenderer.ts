@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js';
-import { BLEND_MODES, PLAYER_BASE_RADIUS } from '../constants';
+import { BLEND_MODES, getPlayerBaseRadius } from '../constants';
 import type { InterpolatedState } from '../systems/PhysicsSystem';
 import { ParticlePool } from '../systems/ParticlePool';
 
@@ -77,7 +77,7 @@ export class PlayerRenderer {
 
   // ─── 尺寸 ─────────────────────────────────────────────
   private radiusScale = 1.0;
-  private get r(): number { return PLAYER_BASE_RADIUS * this.radiusScale; }
+  private get r(): number { return getPlayerBaseRadius() * this.radiusScale; }
 
   constructor(
     parentContainer: PIXI.Container,
@@ -90,7 +90,7 @@ export class PlayerRenderer {
     this.currentFaction = faction;
     this.particlePool = particlePool;
     this.trailColor = FACTION_COLORS[faction].primary;
-    this.trailSampleDist = PLAYER_BASE_RADIUS * 0.45;
+    this.trailSampleDist = getPlayerBaseRadius() * 0.45;
 
     this.container = new PIXI.Container();
     this.parentContainer.addChild(this.container);
@@ -278,7 +278,7 @@ export class PlayerRenderer {
     this.radiusScale = scale;
 
     // 同步拖尾尺寸（采样距离 + Canvas 纹理大小）
-    this.trailSampleDist = PLAYER_BASE_RADIUS * 0.45 * scale;
+    this.trailSampleDist = getPlayerBaseRadius() * 0.45 * scale;
     this.resizeTrailCanvas();
 
     if (!this.hasRealAvatar) {

@@ -5,35 +5,35 @@
     - 名字 + HP条 + 技能圆球（5个）
   -->
   <div
-    :class="[containerClass, dead ? 'opacity-40 grayscale' : '']"
-    class="bg-base-100/80 backdrop-blur-sm rounded-lg border shadow-lg px-4 py-3 flex items-center gap-3 transition-all duration-500"
+    :class="[containerClass, dead ? 'opacity-40 grayscale' : '', compact ? 'px-2 py-1.5 gap-1.5' : 'px-4 py-3 gap-3']"
+    class="bg-base-100/80 backdrop-blur-sm rounded-lg border shadow-lg transition-all duration-500"
   >
     <!-- 左侧：名字 + HP -->
-    <div class="flex flex-col gap-1 min-w-0">
-      <div :class="nameClass" class="font-bold text-sm truncate">
+    <div :class="['flex flex-col min-w-0', compact ? 'gap-0.5' : 'gap-1']">
+      <div :class="[nameClass, 'font-bold truncate', compact ? 'text-xs' : 'text-sm']">
         {{ name }}
       </div>
       <div class="flex items-center gap-2">
-        <span class="text-[10px] text-base-content/50 font-mono">HP</span>
+        <span :class="['text-base-content/50 font-mono', compact ? 'text-[8px]' : 'text-[10px]']">HP</span>
         <progress
-          class="progress w-24 h-2"
-          :class="hpProgressClass"
+          class="progress"
+          :class="[hpProgressClass, compact ? 'w-16 h-1.5' : 'w-24 h-2']"
           :value="currentHp"
           :max="maxHp"
         />
-        <span class="text-[10px] font-mono text-base-content/60">
+        <span :class="['font-mono text-base-content/60', compact ? 'text-[8px]' : 'text-[10px]']">
           {{ Math.ceil(currentHp) }} / {{ maxHp }}
         </span>
       </div>
     </div>
 
     <!-- 右侧：技能圆球（5个） -->
-    <div class="flex gap-1.5">
+    <div :class="['flex', compact ? 'gap-0.5' : 'gap-1.5']">
       <div
         v-for="i in 5"
         :key="i"
-        class="w-6 h-6 rounded-full ring-2 transition-all duration-300"
-        :class="skillOrbClass(i)"
+        class="rounded-full ring-2 transition-all duration-300"
+        :class="[compact ? 'w-4 h-4' : 'w-6 h-6', skillOrbClass(i)]"
       />
     </div>
   </div>
@@ -55,10 +55,13 @@ const props = withDefaults(defineProps<{
   overheated?: boolean;
   /** 玩家是否已死亡（灰掉 HUD） */
   dead?: boolean;
+  /** 紧凑模式（5+ 人时缩小 HUD） */
+  compact?: boolean;
 }>(), {
   side: 'right',
   overheated: false,
   dead: false,
+  compact: false,
 });
 
 const isLeft = computed(() => props.side === 'left');

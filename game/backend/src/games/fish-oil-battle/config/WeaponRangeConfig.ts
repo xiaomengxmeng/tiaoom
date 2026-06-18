@@ -76,6 +76,12 @@ export interface HiveMotherConfig {
   ballRadius?: number;
 }
 
+/** 冲击波视觉参数（数据驱动，前后端共享） */
+export interface ShockwaveVisualParams {
+  /** 主环描边宽度（逻辑 px） */
+  strokeWidth: number;
+}
+
 export interface WeaponRangeConfig {
   /** 主要伤害/效果作用半径（逻辑 px） */
   damageRadius?: number;
@@ -100,6 +106,9 @@ export interface WeaponRangeConfig {
   /** 蜂巢母体专用配置 */
   hiveMother?: HiveMotherConfig;
 
+  /** 冲击波视觉参数（数据驱动） */
+  shockwaveVisual?: ShockwaveVisualParams;
+
   /** 普通伤害（冲击波等） */
   damage?: number;
   /** 爆发伤害 */
@@ -108,12 +117,8 @@ export interface WeaponRangeConfig {
   maxEnergy?: number;
   /** 爆发持续时间（秒） */
   burstDurationSec?: number;
-  /** 普通反弹次数（冲击波） */
-  baseBounces?: number;
   /** 爆发波数（冲击波） */
   burstWaves?: number;
-  /** 爆发反弹次数（冲击波） */
-  burstBounces?: number;
   /** 单波最大命中数（冲击波） */
   maxHitsPerWave?: number;
 }
@@ -125,17 +130,18 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
 
   /** 冲击波发生器 */
   [WeaponId.SHOCKWAVE_GENERATOR]: {
-    damageRadius: 350,
-    aoeMaxRadius: 350,
-    visualRadius: 350,
-    visualSpeed: 500,
-    visualDurationMs: 1000,
+    damageRadius: 180,
+    aoeMaxRadius: 180,
+    visualRadius: 180,
+    visualSpeed: 300,
+    visualDurationMs: 1500,
+    shockwaveVisual: {
+      strokeWidth: 15,
+    },
     damage: 6,
     burstDamage: 10,
     maxEnergy: 4,
-    baseBounces: 1,
     burstWaves: 3,
-    burstBounces: 2,
     maxHitsPerWave: 2,
   },
 
@@ -151,11 +157,11 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
       maxCount: 3,
       durationSec: 18,
       radius: 80,
-      hexRadius: 80,
-      width: 100,
-      height: 40,
-      visualWidth: 100,
-      visualHeight: 40,
+      hexRadius: 16,
+      width: 130,
+      height: 45,
+      visualWidth: 130,
+      visualHeight: 45,
       contactDamage: 3,
       slowPercent: 40,
       damagePerEnergy: 15,

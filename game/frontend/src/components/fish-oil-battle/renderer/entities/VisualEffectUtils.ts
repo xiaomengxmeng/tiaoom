@@ -127,7 +127,7 @@ export interface ShockwaveVisualConfig {
   expandDurationMs?: number;
   /** 最大扩散半径（逻辑 px） */
   maxRadius?: number;
-  /** 描边宽度（px） */
+  /** 主环描边宽度（逻辑 px） */
   strokeWidth?: number;
 }
 
@@ -147,6 +147,10 @@ export interface FirewallVisualConfig {
   maxLifeMs?: number;
   /** 六边形半径（逻辑 px） */
   hexRadius?: number;
+  /** 六边形线宽（逻辑 px） */
+  hexLineWidth?: number;
+  /** 六边形线不透明度（0-1） */
+  hexLineAlpha?: number;
   /** 出生生长时间（ms） */
   growDurationMs?: number;
 }

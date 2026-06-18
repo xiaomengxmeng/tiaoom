@@ -1,8 +1,10 @@
 import * as PIXI from 'pixi.js';
 import {
-  LOGICAL_W, LOGICAL_H,
+  getLogicalW, getLogicalH,
   HIVE_BURST_SCALE,
 } from '../constants';
+import { WEAPON_RANGE_CONFIG } from '$/backend/src/games/fish-oil-battle/config/WeaponRangeConfig';
+import { WeaponId } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
 import { ParticlePool } from '../systems/ParticlePool';
 import { ShapeEffectPool } from '../systems/ShapeEffectPool';
 import type { ShapeDescriptor } from '../systems/ShapeRenderer';
@@ -21,10 +23,6 @@ import type {
   ShockwaveVisualConfig,
   FirewallVisualConfig,
   HiveVisualConfig,
-} from './VisualEffectUtils';
-import {
-  lighten,
-  dimColor,
 } from './VisualEffectUtils';
 
 /**
@@ -57,8 +55,8 @@ export class EffectRenderer {
 
   /** 缩放 + 画布 */
   private scale = 1;
-  private canvasW = LOGICAL_W;
-  private canvasH = LOGICAL_H;
+  private canvasW = getLogicalW();
+  private canvasH = getLogicalH();
 
   /** 防重复销毁 */
   private _destroyed = false;
@@ -106,85 +104,15 @@ export class EffectRenderer {
     radiusOverride?: number,
     visualCfg?: ShockwaveVisualConfig,
   ): void {
+    const dataCfg = this.buildShockwaveVisualCfg(themeColor);
     const cfg: ShockwaveVisualConfig = {
+      ...dataCfg,
       ...visualCfg,
-      maxRadius: radiusOverride ?? visualCfg?.maxRadius,
+      maxRadius: radiusOverride ?? visualCfg?.maxRadius ?? dataCfg.maxRadius,
     };
     const effects = this.shockwaveRenderer.trigger(x, y, isBurst, themeColor, cfg);
     for (const ef of effects) {
       this.activeEffects.push(ef);
-    }
-  }
-
-  /** 触发冲击波反弹特效（在反弹点创建向内传播的反射波，使用反弹色） */
-  triggerShockwaveBounce(
-    x: number, y: number,
-    themeColor?: number,
-    radiusOverride?: number,
-  ): void {
-    const bounceClr = themeColor ? dimColor(themeColor, 0.6) : 0x00BFFF;
-    const cfg: ShockwaveVisualConfig = {
-      maxRadius: radiusOverride,
-      primaryColor: bounceClr,
-      glowColor: lighten(bounceClr, 50),
-      bounceColor: bounceClr,
-    };
-    const effects = this.shockwaveRenderer.trigger(x, y, false, themeColor, cfg);
-    for (const ef of effects) {
-      this.activeEffects.push(ef);
-    }
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  方案 B：射线追踪波前 API
-  // ══════════════════════════════════════════════════════
-
-  /** 波前 ActiveEffect 追踪：waveId → ActiveEffect */
-  private wavefrontEffects = new Map<string, ActiveEffect>();
-
-  /**
-   * 创建波前（收到 SHOCKWAVE_WAVEFRONT_TRIGGER）
-   */
-  triggerWavefront(
-    waveId: string,
-    x: number, y: number,
-    isBurst: boolean,
-    themeColor?: number,
-    initialEndpoints?: Array<{ x: number; y: number }>,
-    initialAlpha?: number,
-  ): void {
-    // 先移除旧波前（如果有）
-    this.removeWavefront(waveId);
-
-    const ef = this.shockwaveRenderer.addWavefront(
-      waveId, x, y, isBurst, themeColor, initialEndpoints, initialAlpha,
-    );
-    if (ef) {
-      this.wavefrontEffects.set(waveId, ef);
-      this.activeEffects.push(ef);
-    }
-  }
-
-  /**
-   * 更新波前端点（收到 SHOCKWAVE_WAVEFRONT_UPDATE）
-   */
-  updateWavefront(
-    waveId: string,
-    endpoints: Array<{ x: number; y: number }>,
-    alpha?: number,
-  ): void {
-    this.shockwaveRenderer.updateWavefrontData(waveId, endpoints, alpha);
-  }
-
-  /**
-   * 移除波前（收到 SHOCKWAVE_WAVEFRONT_REMOVE）
-   */
-  removeWavefront(waveId: string): void {
-    const ef = this.wavefrontEffects.get(waveId);
-    if (ef) {
-      // 标记为即将过期（下一帧会触发 onDecay）
-      ef.life = ef.maxLife;
-      this.wavefrontEffects.delete(waveId);
     }
   }
 
@@ -381,6 +309,26 @@ export class EffectRenderer {
       },
       s,
     );
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  数据驱动视觉配置构建
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * 从 WeaponRangeConfig 构建 ShockwaveVisualConfig
+   * 所有视觉参数由后端配置驱动，无硬编码常量
+   */
+  private buildShockwaveVisualCfg(themeColor?: number): ShockwaveVisualConfig {
+    const rangeCfg = WEAPON_RANGE_CONFIG[WeaponId.SHOCKWAVE_GENERATOR];
+    const swv = rangeCfg?.shockwaveVisual;
+
+    return {
+      primaryColor: themeColor,
+      strokeWidth: swv?.strokeWidth ?? 15,
+      expandDurationMs: rangeCfg?.visualDurationMs ?? 1500,
+      maxRadius: rangeCfg?.aoeMaxRadius ?? rangeCfg?.visualRadius ?? 350,
+    };
   }
 
   // ══════════════════════════════════════════════════════

@@ -6,6 +6,12 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     {
+      path: '/test/effects',
+      name: 'test-effects',
+      component: () => import('@/components/fish-oil-battle/EffectTestPage.vue'),
+      meta: { requiresAuth: false },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/Login.vue')

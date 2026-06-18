@@ -7,7 +7,25 @@
  * 前后端都 import 这份类型，确保消息结构编译期一致。
  */
 
-import { School, VisualEventType, GameEndReason, WeaponId } from '../config/GameEnums';
+import { School, VisualEventType, GameEndReason, WeaponId, ArenaShape } from '../config/GameEnums';
+
+// ─── 竞技场配置（数据驱动，根据玩家数量动态调整）────────
+export interface ArenaConfig {
+  /** 逻辑坐标宽度 */
+  width: number;
+  /** 逻辑坐标高度 */
+  height: number;
+  /** 竞技场形状 */
+  shape: ArenaShape;
+  /** 圆形/六边形：外接圆半径（逻辑单位）；矩形时保留为参考值 */
+  arenaRadius: number;
+  /** 矩形：半宽（逻辑单位），圆形/六边形时等于 arenaRadius */
+  arenaHalfW?: number;
+  /** 矩形：半高（逻辑单位），圆形/六边形时等于 arenaRadius */
+  arenaHalfH?: number;
+  /** 小球碰撞半径（逻辑单位） */
+  ballRadius: number;
+}
 
 // ─── 武器元信息 ────────────────────────────────────────────────
 export interface WeaponMeta {
@@ -61,12 +79,6 @@ export interface VisualEventData {
   durationSec?: number;
   /** 蜂巢母体：当前蜂数（受击减少 / 爆发增加时同步前端） */
   beeCount?: number;
-  /** 射线追踪波前：唯一 ID */
-  waveId?: string;
-  /** 射线追踪波前：射线端点数组（逻辑坐标，前端用于绘制波前多边形） */
-  rayEndpoints?: Array<{ x: number; y: number }>;
-  /** 射线追踪波前：透明度（0-1） */
-  waveAlpha?: number;
   /** 特效视觉配置（颜色、持续时间等，由后端 WeaponRangeConfig 驱动） */
   effectConfig?: {
     /** 主色（覆盖主题色） */
@@ -97,6 +109,8 @@ export interface ServerToClientMessages {
     weaponPool: WeaponMeta[];
     countdown: number;
     players: PlayerSpawnInfo[];
+    /** 竞技场配置（根据人数动态计算） */
+    arenaConfig: ArenaConfig;
   };
   weapon_confirmed: {
     weaponId: string;

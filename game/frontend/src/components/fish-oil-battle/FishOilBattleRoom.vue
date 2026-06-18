@@ -16,8 +16,9 @@
           class="absolute inset-0 z-10 pointer-events-none"
           :style="{ transform: `scale(${hudScale})`, transformOrigin: 'center center' }"
         >
-          <!-- 己方 HUD：固定左下 -->
+          <!-- 己方 HUD：动态位置 -->
           <BattleHudPanel
+            v-if="selfHudPosition"
             side="left"
             :name="selfHud.name"
             :current-hp="selfHud.currentHp"
@@ -29,10 +30,12 @@
             :weapon-cd="selfHud.weaponCd"
             :overheated="selfHud.overheated"
             :dead="!selfHud.alive"
-            class="pointer-events-auto absolute left-4 bottom-4"
+            :compact="isCompactMode"
+            class="pointer-events-auto absolute"
+            :style="selfHudPosition"
           />
 
-          <!-- 其他玩家 HUD：右上 / 右下 / 左上 按人数动态摆放 -->
+          <!-- 其他玩家 HUD：径向布局 -->
           <BattleHudPanel
             v-for="(hud, idx) in otherPlayerHuds"
             :key="idx"
@@ -45,8 +48,9 @@
             :weapon-icon="hud.weaponIcon"
             :weapon-cd="hud.weaponCd"
             :dead="!hud.alive"
-            class="pointer-events-auto"
-            :class="getOtherHudClass(idx)"
+            :compact="isCompactMode"
+            class="pointer-events-auto absolute"
+            :style="getOtherHudStyle(idx)"
           />
 
           <!-- 顶部中央：回合倒计时 -->
@@ -103,7 +107,7 @@
     <!-- 规则说明 -->
     <template #rules>
       <ul class="space-y-1 text-sm">
-        <li>1. 2-4 人大逃杀，从 3 把武器中选择 1 把，15 秒内选完即开战。</li>
+        <li>1. 2-8 人大逃杀，从 3 把武器中选择 1 把，15 秒内选完即开战。</li>
         <li>2. 小球自动弹跳不可操控，通过碰撞造成伤害。</li>
         <li>3. 武器能量充满后可触发爆发技能。</li>
         <li>4. 每回合 90 秒，最后存活的玩家获胜。</li>
@@ -123,6 +127,7 @@ import BattleResultOverlay from './components/BattleResultOverlay.vue';
 import type { GameCore } from '@/core/game';
 import { CyberFishRenderer } from './renderer/CyberFishRenderer';
 import { useFishOilBattle, type HudPlayerInfo, type SelectableWeapon } from './useFishOilBattle';
+import { computeRadialHudLayout, hudPositionToStyle, type HudPosition } from './utils/hudLayout';
 
 const props = withDefaults(defineProps<{
   roomPlayer: RoomPlayer & { room: Room };
@@ -220,14 +225,58 @@ function onWeaponSelect(weaponId: string): void {
   battleState.selectWeapon(weaponId);
 }
 
-/** 按索引动态分配其他玩家 HUD 位置：右上 / 右下 / 左上 */
-function getOtherHudClass(index: number): string {
-  const positions = [
-    'absolute right-4 top-4 z-10',       // 第1个对手：右上
-    'absolute right-4 bottom-4 z-10',     // 第2个对手：右下
-    'absolute left-4 top-4 z-10',         // 第3个对手：左上
-  ];
-  return positions[index] ?? positions[0];
+// ── 动态 HUD 布局 ──────────────────────────────────────
+const isCompactMode = computed(() => otherPlayerHuds.value.length >= 4);
+
+/** 画布尺寸引用（用于计算 HUD 位置） */
+function getCanvasSize(): { w: number; h: number } {
+  if (rendererRef.value) {
+    const app = (canvasRef.value as any)?.getApp();
+    if (app) {
+      return { w: app.screen.width, h: app.screen.height };
+    }
+  }
+  return { w: 1280, h: 720 };
+}
+
+/** 己方 HUD 位置 */
+const selfHudPosition = computed(() => {
+  const total = otherPlayerHuds.value.length + 1;
+  const { w, h } = getCanvasSize();
+
+  if (total <= 4) {
+    return { left: '16px', bottom: '16px' };
+  }
+
+  // 径向布局：底部中央
+  return {
+    left: '50%',
+    bottom: '16px',
+    transform: 'translateX(-50%)',
+  };
+});
+
+/** 计算其他玩家 HUD 位置（支持角落布局和径向布局） */
+function getOtherHudStyle(index: number): Record<string, string> {
+  const total = otherPlayerHuds.value.length + 1;
+  const { w, h } = getCanvasSize();
+
+  if (total <= 4) {
+    // 角落布局
+    const positions = [
+      { right: '16px', top: '16px' },
+      { right: '16px', bottom: '16px' },
+      { left: '16px', top: '16px' },
+    ];
+    return positions[index] ?? positions[0];
+  }
+
+  // 径向布局
+  const layout = computeRadialHudLayout(total, w, h);
+  const pos = layout.others[index];
+  if (!pos) return { right: '16px', top: '16px' };
+
+  return hudPositionToStyle(pos, w, h);
 }
 
 // ── 后端指令处理 ──────────────────────────────────────
@@ -264,13 +313,15 @@ async function handleBattleStart(data: {
   weaponPool: SelectableWeapon[];
   countdown: number;
   players?: Array<{ id: string; name: string; avatar?: string; faction?: string; x?: number; y?: number }>;
+  arenaConfig?: { width: number; height: number; arenaRadius: number; ballRadius: number };
 }): Promise<void> {
-  console.log('[FishOilBattle] handleBattleStart:', JSON.stringify(data.players));
+  console.log('[FishOilBattle] handleBattleStart:', JSON.stringify(data.players), 'arenaConfig=', data.arenaConfig);
 
   // 重置上一轮的结算状态（修复重启后弹窗不消失）
   battleState.onBattleStart({
     weaponPool: data.weaponPool,
     countdown: data.countdown,
+    arenaConfig: data.arenaConfig,
   });
 
   // 注册玩家到渲染器

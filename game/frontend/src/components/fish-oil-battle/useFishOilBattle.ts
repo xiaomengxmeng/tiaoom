@@ -6,6 +6,7 @@ import type { CyberFishRenderer } from './renderer/CyberFishRenderer';
 import type {
   GameStatePlayer,
   VisualEventData,
+  ArenaConfig,
 } from '$/backend/src/games/fish-oil-battle/shared/protocol';
 import { VisualEventType, WeaponId } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
 
@@ -156,7 +157,7 @@ export function useFishOilBattle(
 
   // ── WebSocket 事件处理 ───────────────────────────────
 
-  function onBattleStart(data: { weaponPool: SelectableWeapon[]; countdown: number }): void {
+  function onBattleStart(data: { weaponPool: SelectableWeapon[]; countdown: number; arenaConfig?: ArenaConfig }): void {
     winnerName.value = null;
     winnerPlayerId.value = '';
     isDraw.value = false;
@@ -165,8 +166,14 @@ export function useFishOilBattle(
     weaponPool.value = data.weaponPool;
     showWeaponSelect.value = true;
     battleHudVisible.value = false;
+
+    // 设置竞技场配置
+    if (data.arenaConfig && rendererRef.value) {
+      rendererRef.value.setArenaConfig(data.arenaConfig);
+    }
+
     startCountdown();
-    console.log('[FishOilBattle] onBattleStart: reset, weapons=', data.weaponPool.map(w => w.name));
+    console.log('[FishOilBattle] onBattleStart: reset, weapons=', data.weaponPool.map(w => w.name), 'arenaConfig=', data.arenaConfig);
   }
 
   /** 记录上一帧各玩家的 HP */
@@ -290,49 +297,6 @@ export function useFishOilBattle(
           rendererRef.value.triggerSkillEffect({
             type: 'hive_sting_bounce',
             x: data.x, y: data.y,
-            playerId: data.playerId,
-          });
-        }
-        break;
-      case VisualEventType.SHOCKWAVE_BOUNCE:
-        if (data.x !== undefined && data.y !== undefined) {
-          rendererRef.value.triggerSkillEffect({
-            type: 'shockwave_bounce',
-            x: data.x, y: data.y,
-            radius: data.radius,
-            playerId: data.playerId,
-          });
-        }
-        break;
-      case VisualEventType.SHOCKWAVE_WAVEFRONT_TRIGGER:
-        if (data.x !== undefined && data.y !== undefined && data.waveId) {
-          rendererRef.value.triggerSkillEffect({
-            type: 'shockwave_wavefront_trigger',
-            waveId: data.waveId,
-            x: data.x, y: data.y,
-            isBurst: data.isBurst ?? false,
-            rayEndpoints: data.rayEndpoints,
-            waveAlpha: data.waveAlpha,
-            playerId: data.playerId,
-          });
-        }
-        break;
-      case VisualEventType.SHOCKWAVE_WAVEFRONT_UPDATE:
-        if (data.waveId && data.rayEndpoints) {
-          rendererRef.value.triggerSkillEffect({
-            type: 'shockwave_wavefront_update',
-            waveId: data.waveId,
-            rayEndpoints: data.rayEndpoints,
-            waveAlpha: data.waveAlpha,
-            playerId: data.playerId,
-          });
-        }
-        break;
-      case VisualEventType.SHOCKWAVE_WAVEFRONT_REMOVE:
-        if (data.waveId) {
-          rendererRef.value.triggerSkillEffect({
-            type: 'shockwave_wavefront_remove',
-            waveId: data.waveId,
             playerId: data.playerId,
           });
         }

@@ -1,5 +1,8 @@
 import * as PIXI from 'pixi.js';
-import { LOGICAL_W, LOGICAL_H, SHOCKWAVE_MAX_RADIUS, FIREWALL_HEX_RADIUS } from './constants';
+import {
+  updateArenaConfig, getLogicalW, getLogicalH,
+  SHOCKWAVE_MAX_RADIUS, FIREWALL_HEX_RADIUS,
+} from './constants';
 import { PhysicsSystem, type InterpolatedState, type PhysicsState } from './systems/PhysicsSystem';
 import { ParticlePool } from './systems/ParticlePool';
 import { ArenaRenderer } from './systems/ArenaRenderer';
@@ -57,8 +60,8 @@ export class CyberFishRenderer {
   private lastTime = 0;
 
   /** 当前画布尺寸（用于坐标映射） */
-  private canvasW = LOGICAL_W;
-  private canvasH = LOGICAL_H;
+  private canvasW = getLogicalW();
+  private canvasH = getLogicalH();
 
   constructor(app: PIXI.Application) {
     this.app = app;
@@ -152,7 +155,7 @@ export class CyberFishRenderer {
    * @param config.radius 后端传入的技能生效范围（逻辑 px），前端用此值绘特效
    */
   triggerSkillEffect(config: {
-    type: 'shockwave' | 'shockwave_bounce' | 'shockwave_wavefront_trigger' | 'shockwave_wavefront_update' | 'shockwave_wavefront_remove' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'shape' | 'sustained_shape';
+    type: 'shockwave' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'shape' | 'sustained_shape';
     x?: number; y?: number;
     isBurst?: boolean;
     radius?: number;
@@ -163,12 +166,6 @@ export class CyberFishRenderer {
     toX?: number; toY?: number;
     factionColor?: number;
     playerId?: string;
-    /** 波前专用：唯一 ID */
-    waveId?: string;
-    /** 波前专用：射线端点数组 */
-    rayEndpoints?: Array<{ x: number; y: number }>;
-    /** 波前专用：透明度 */
-    waveAlpha?: number;
     /** shape/sustained_shape 专用：形状描述 */
     shapeDesc?: ShapeDescriptor;
     /** shape 专用：动画配置 */
@@ -211,38 +208,6 @@ export class CyberFishRenderer {
         if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
           const shockRadius = config.radius ?? SHOCKWAVE_MAX_RADIUS;
           this.effectRenderer.triggerShockwave(mapCfg.x, mapCfg.y, config.isBurst ?? false, -1, themeColor, shockRadius);
-        }
-        break;
-      case 'shockwave_bounce':
-        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
-          const shockRadius = config.radius ?? SHOCKWAVE_MAX_RADIUS;
-          this.effectRenderer.triggerShockwaveBounce(mapCfg.x, mapCfg.y, themeColor, shockRadius);
-        }
-        break;
-      case 'shockwave_wavefront_trigger':
-        if (config.waveId && mapCfg.x !== undefined && mapCfg.y !== undefined) {
-          this.effectRenderer.triggerWavefront(
-            config.waveId,
-            mapCfg.x, mapCfg.y,
-            config.isBurst ?? false,
-            themeColor,
-            config.rayEndpoints,
-            config.waveAlpha,
-          );
-        }
-        break;
-      case 'shockwave_wavefront_update':
-        if (config.waveId && config.rayEndpoints) {
-          this.effectRenderer.updateWavefront(
-            config.waveId,
-            config.rayEndpoints,
-            config.waveAlpha,
-          );
-        }
-        break;
-      case 'shockwave_wavefront_remove':
-        if (config.waveId) {
-          this.effectRenderer.removeWavefront(config.waveId);
         }
         break;
       case 'firewall':
@@ -403,6 +368,41 @@ export class CyberFishRenderer {
   }
 
   /**
+   * 设置竞技场配置（由后端 battle_start 消息驱动）
+   */
+  setArenaConfig(config: { width: number; height: number; arenaRadius: number; ballRadius: number; shape?: string; arenaHalfW?: number; arenaHalfH?: number }): void {
+    // 更新 constants.ts 中的动态配置（传递 shape）
+    updateArenaConfig({
+      width: config.width,
+      height: config.height,
+      arenaRadius: config.arenaRadius,
+      ballRadius: config.ballRadius,
+      shape: config.shape as any,
+      arenaHalfW: config.arenaHalfW,
+      arenaHalfH: config.arenaHalfH,
+    });
+
+    // 更新画布尺寸
+    this.canvasW = this.app.screen.width;
+    this.canvasH = this.app.screen.height;
+
+    // 重新调整竞技场渲染器
+    this.arenaRenderer.resize(this.canvasW, this.canvasH);
+
+    // 同步特效缩放
+    const scale = this.getUniformScale();
+    this.effectRenderer.setScale(scale, this.canvasW, this.canvasH);
+    this.particlePool.setScale(scale);
+
+    // 同步玩家缩放
+    for (const [, pr] of this.playerRenderers) {
+      pr.setScale(scale);
+    }
+
+    console.log(`[CyberFish] setArenaConfig: ${config.width}x${config.height}, radius=${config.arenaRadius}, ballRadius=${config.ballRadius}, uniformScale=${scale.toFixed(3)}`);
+  }
+
+  /**
    * 销毁（释放所有资源）
    */
   private _destroyed = false;
@@ -466,11 +466,15 @@ export class CyberFishRenderer {
   // ═══════════════════════════════════════════════════
 
   /** 统一缩放因子（等比缩放，X/Y 取小保证不超出边界），暴露给 HUD 适配用 */
-  getUniformScale(): number { return Math.min(this.canvasW / LOGICAL_W, this.canvasH / LOGICAL_H); }
+  getUniformScale(): number {
+    const logicalW = getLogicalW();
+    const logicalH = getLogicalH();
+    return Math.min(this.canvasW / logicalW, this.canvasH / logicalH);
+  }
   /** X 轴居中偏移（pillarbox/letterbox） */
-  private get offsetX(): number { return (this.canvasW - LOGICAL_W * this.getUniformScale()) / 2; }
+  private get offsetX(): number { return (this.canvasW - getLogicalW() * this.getUniformScale()) / 2; }
   /** Y 轴居中偏移 */
-  private get offsetY(): number { return (this.canvasH - LOGICAL_H * this.getUniformScale()) / 2; }
+  private get offsetY(): number { return (this.canvasH - getLogicalH() * this.getUniformScale()) / 2; }
 
   /** 逻辑 X → 画布 X（等比 + 居中） */
   private mapX(logicalX: number): number { return logicalX * this.getUniformScale() + this.offsetX; }

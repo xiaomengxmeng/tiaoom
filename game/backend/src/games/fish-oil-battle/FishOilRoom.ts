@@ -17,8 +17,8 @@
 
 export const name = '赛博鱼油大逃杀';
 export const minSize = 2;
-export const maxSize = 4;
-export const description = '2-4 人大逃杀，选择武器，最后存活者获胜！';
+export const maxSize = 8;
+export const description = '2-8 人大逃杀，选择武器，最后存活者获胜！';
 
 import { RoomPlayer } from 'tiaoom';
 import { GameRoom, IGameCommand } from '../index';
@@ -36,7 +36,7 @@ import type {
   PlayerStats,
 } from './shared/protocol';
 
-import { School, VisualEventType, GameEndReason } from './config/GameEnums';
+import { School, VisualEventType, GameEndReason, ArenaShape } from './config/GameEnums';
 
 // ─── 武器元信息 ────────────────────────────────────────────────────
 interface WeaponMeta {
@@ -90,11 +90,58 @@ export default class FishOilRoom extends GameRoom {
   /** 大逃杀：已死亡的玩家 ID 集合 */
   private deadPlayers = new Set<string>();
 
-  /** 按人数生成 spawn 位置（2人=对侧，3人=正三角，4人=正方顶点，随机旋转） */
-  private computeSpawnPositions(count: number): { x: number; y: number }[] {
-    const centerX = 640;
-    const centerY = 360;
-    const spawnDist = 100 + Math.random() * 80;
+  /**
+   * 根据玩家数量计算竞技场配置
+   * 设计原则：人数越多 → 竞技场越大 → 保持游戏体验
+   * 形状随机选择：circle / rect / hexagon
+   */
+  private computeArenaConfig(playerCount: number): { width: number; height: number; arenaRadius: number; ballRadius: number; shape: ArenaShape; arenaHalfW?: number; arenaHalfH?: number } {
+    // 基础配置（2人）
+    const baseWidth = 1280;
+    const baseHeight = 720;
+    const baseRadius = 280;
+    const baseBallRadius = 40;
+
+    // 人数缩放因子（线性增长）
+    // 2人: 1.0x, 4人: 1.2x, 6人: 1.4x, 8人: 1.6x
+    const scaleFactor = 1.0 + (playerCount - 2) * 0.1;
+
+    const newWidth = Math.round(baseWidth * scaleFactor);
+    const newHeight = Math.round(baseHeight * scaleFactor);
+    const newRadius = Math.round(baseRadius * scaleFactor);
+    // 小球半径也相应增大（但增长较慢）
+    const ballScale = 1.0 + (playerCount - 2) * 0.05;
+    const newBallRadius = Math.round(baseBallRadius * ballScale);
+
+    // 随机形状
+    const shapes = [ArenaShape.CIRCLE, ArenaShape.RECT, ArenaShape.HEXAGON];
+    const shape = shapes[Math.floor(Math.random() * shapes.length)];
+
+    const result: any = {
+      width: newWidth,
+      height: newHeight,
+      arenaRadius: newRadius,
+      ballRadius: newBallRadius,
+      shape,
+    };
+
+    if (shape === ArenaShape.RECT) {
+      // 矩形：半宽/半高 = 半径 * 0.75（保持面积大致相同）
+      result.arenaHalfW = Math.round(newRadius * 0.75);
+      result.arenaHalfH = Math.round(newRadius * 0.75);
+    }
+
+    console.log(`[FishOil] 竞技场配置: ${playerCount}人 → ${newWidth}x${newHeight}, shape=${shape}, radius=${newRadius}, ballRadius=${newBallRadius}`);
+
+    return result;
+  }
+
+  /** 按人数生成 spawn 位置（圆形分布，随机旋转） */
+  private computeSpawnPositions(count: number, arenaRadius: number, canvasWidth: number, canvasHeight: number): { x: number; y: number }[] {
+    const centerX = canvasWidth / 2;
+    const centerY = canvasHeight / 2;
+    // 出生距离 = 竞技场半径 * 0.5（保持在场内且有一定间隔）
+    const spawnDist = arenaRadius * 0.5;
     const baseAngle = Math.random() * Math.PI * 2;
     const positions: { x: number; y: number }[] = [];
     for (let i = 0; i < count; i++) {
@@ -111,8 +158,8 @@ export default class FishOilRoom extends GameRoom {
   onStart() {
     const players = this.room.validPlayers;
     const playerCount = players.length;
-    if (playerCount < 2 || playerCount > 4) {
-      this.say('需要 2-4 名玩家（大逃杀模式）');
+    if (playerCount < 2 || playerCount > 8) {
+      this.say('需要 2-8 名玩家（大逃杀模式）');
       return;
     }
 
@@ -122,23 +169,34 @@ export default class FishOilRoom extends GameRoom {
       if (avatar) this.playerAvatars[p.id] = avatar;
     }
 
-    // 1. 初始化 BattleState
-    this.battleState = new BattleState(1280, 720);
+    // 根据人数计算竞技场配置
+    const arenaConfig = this.computeArenaConfig(playerCount);
+
+    // 1. 初始化 BattleState（使用动态尺寸）
+    this.battleState = new BattleState(arenaConfig.width, arenaConfig.height);
     for (const p of players) {
       this.battleState.addPlayer({
         id: p.id,
         name: p.name,
         hp: 100, maxHp: 100,
-        position: { x: 640, y: 360 },
+        position: { x: arenaConfig.width / 2, y: arenaConfig.height / 2 },
         totalDamageTaken: 0,
         isOverheated: false,
       });
       this.weaponSelections[p.id] = null;
     }
 
-    // 2. 初始化物理引擎
-    const spawnPositions = this.computeSpawnPositions(playerCount);
-    this.physics = new PhysicsEngine({ canvasWidth: 1280, canvasHeight: 720, arenaRadius: 280 });
+    // 2. 初始化物理引擎（使用动态配置）
+    const spawnPositions = this.computeSpawnPositions(playerCount, arenaConfig.arenaRadius, arenaConfig.width, arenaConfig.height);
+    this.physics = new PhysicsEngine({
+      canvasWidth: arenaConfig.width,
+      canvasHeight: arenaConfig.height,
+      arenaShape: arenaConfig.shape,
+      arenaRadius: arenaConfig.arenaRadius,
+      arenaHalfW: arenaConfig.arenaHalfW,
+      arenaHalfH: arenaConfig.arenaHalfH,
+      ballRadius: arenaConfig.ballRadius,
+    });
     for (let i = 0; i < playerCount; i++) {
       this.physics.addBall(players[i].id, spawnPositions[i].x, spawnPositions[i].y);
     }
@@ -169,6 +227,15 @@ export default class FishOilRoom extends GameRoom {
       weaponPool: weaponPoolForClient,
       countdown: 15,
       players: playerInfos,
+      arenaConfig: {
+        width: arenaConfig.width,
+        height: arenaConfig.height,
+        shape: arenaConfig.shape,
+        arenaRadius: arenaConfig.arenaRadius,
+        arenaHalfW: arenaConfig.arenaHalfW,
+        arenaHalfH: arenaConfig.arenaHalfH,
+        ballRadius: arenaConfig.ballRadius,
+      },
     });
 
     this.say(`大逃杀模式！${playerCount} 名玩家，选择你的武器！15 秒内做出决定。`);
@@ -441,13 +508,8 @@ export default class FishOilRoom extends GameRoom {
     [VisualEventType.HIVE_STING_HIT]:     VisualEventType.HIVE_STING,
     [VisualEventType.HIVE_STING_FLIGHT]:  VisualEventType.HIVE_STING,
     [VisualEventType.HIVE_STING_BOUNCE]:  VisualEventType.HIVE_STING_BOUNCE,
-    [VisualEventType.SHOCKWAVE_BOUNCE]:   VisualEventType.SHOCKWAVE_BOUNCE,
     [VisualEventType.BURST_TRIGGER]:      VisualEventType.BURST_TRIGGER,
     [VisualEventType.BEE_COUNT_CHANGE]:   VisualEventType.BEE_COUNT_CHANGE,
-    // 方案 B：射线追踪波前事件
-    [VisualEventType.SHOCKWAVE_WAVEFRONT_TRIGGER]: VisualEventType.SHOCKWAVE_WAVEFRONT_TRIGGER,
-    [VisualEventType.SHOCKWAVE_WAVEFRONT_UPDATE]:  VisualEventType.SHOCKWAVE_WAVEFRONT_UPDATE,
-    [VisualEventType.SHOCKWAVE_WAVEFRONT_REMOVE]:  VisualEventType.SHOCKWAVE_WAVEFRONT_REMOVE,
   };
 
   /** 从 WeaponScheduler 的 PendingVisualEvent 转换为 VisualEventData */
@@ -472,10 +534,6 @@ export default class FishOilRoom extends GameRoom {
         visualWidth: evt.metadata?.visualWidth,
         visualHeight: evt.metadata?.visualHeight,
         durationSec: evt.metadata?.durationSec,
-        // 方案 B：射线端点数据透传
-        waveId: evt.metadata?.waveId,
-        rayEndpoints: evt.metadata?.rayEndpoints,
-        waveAlpha: evt.metadata?.waveAlpha,
       });
     }
     return result;

@@ -6,7 +6,8 @@ import type { CyberFishRenderer } from './renderer/CyberFishRenderer';
 import type {
   GameStatePlayer,
   VisualEventData,
-} from '$/backend/src/shared/protocol';
+} from '$/backend/src/games/fish-oil-battle/shared/protocol';
+import { VisualEventType, WeaponId } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
 
 // ─── 前端扩展的 HUD 类型 ──────────────────────────────
 export interface HudPlayerInfo {
@@ -248,27 +249,32 @@ export function useFishOilBattle(
     if (!rendererRef.value) return;
 
     switch (data.type) {
-      case 'shockwave_trigger':
+      case VisualEventType.SHOCKWAVE_TRIGGER:
         if (data.x !== undefined && data.y !== undefined) {
           rendererRef.value.triggerSkillEffect({
             type: 'shockwave',
             x: data.x, y: data.y,
             isBurst: data.isBurst ?? false,
+            radius: data.radius,
             playerId: data.playerId,
           });
         }
         break;
-      case 'firewall_spawn':
+      case VisualEventType.FIREWALL_SPAWN:
         if (data.x !== undefined && data.y !== undefined) {
           rendererRef.value.triggerSkillEffect({
             type: 'firewall',
             x: data.x, y: data.y,
             isBurst: data.isBurst ?? false,
+            radius: data.radius,
+            visualWidth: data.visualWidth,
+            visualHeight: data.visualHeight,
+            durationSec: data.durationSec,
             playerId: data.playerId,
           });
         }
         break;
-      case 'hive_sting':
+      case VisualEventType.HIVE_STING:
         if (data.x !== undefined && data.y !== undefined &&
             data.tx !== undefined && data.ty !== undefined) {
           rendererRef.value.triggerSkillEffect({
@@ -279,13 +285,52 @@ export function useFishOilBattle(
           });
         }
         break;
-      case 'burst_trigger':
+      case VisualEventType.HIVE_STING_BOUNCE:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: 'hive_sting_bounce',
+            x: data.x, y: data.y,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.SHOCKWAVE_BOUNCE:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: 'shockwave_bounce',
+            x: data.x, y: data.y,
+            radius: data.radius,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.BURST_TRIGGER:
         rendererRef.value.triggerSkillEffect({
           type: 'burst_flash',
           playerId: data.playerId,
         });
         if (data.playerId) {
           rendererRef.value.playBurstEffect(data.playerId);
+          // 蜂巢母体爆发：蜂群数量永久增加，5秒后仅恢复蜂的视觉大小
+          if (data.weaponId === WeaponId.HIVE_MOTHER) {
+            const pid = data.playerId;
+            const beeCount = data.beeCount ?? 6;
+            rendererRef.value.setPlayerHiveActive(pid, beeCount, true);
+            setTimeout(() => {
+              // 爆发效果结束：保持蜂数，仅取消爆发视觉
+              rendererRef.value?.setPlayerHiveActive(pid, beeCount, false);
+            }, 5000);
+          }
+        }
+        break;
+      case VisualEventType.BEE_COUNT_CHANGE:
+        // 蜂巢母体蜂数变化（受击惩罚）
+        if (data.playerId && data.beeCount !== undefined) {
+          rendererRef.value.setPlayerHiveActive(
+            data.playerId,
+            data.beeCount,
+            data.isBurst ?? false,
+          );
         }
         break;
       case 'hit':
@@ -293,13 +338,23 @@ export function useFishOilBattle(
     }
   }
 
-  function onRoundStart(data: { duration: number }): void {
+  function onRoundStart(data: { duration: number; players?: Array<{ id: string; weaponId: string }> }): void {
     console.log('[FishOilBattle] onRoundStart: 进入战斗阶段, duration=', data.duration);
     showWeaponSelect.value = false;
     battleHudVisible.value = true;
     roundTimer.value = data.duration;
     roundDuration.value = data.duration;
     stopCountdown();
+
+    // 为蜂巢母体玩家启用蜂群绕球公转渲染
+    if (data.players && rendererRef.value) {
+      for (const p of data.players) {
+        if (p.weaponId === WeaponId.HIVE_MOTHER) {
+          console.log(`[FishOilBattle] 启用蜂群渲染: playerId=${p.id}`);
+          rendererRef.value.setPlayerHiveActive(p.id, 3, false);
+        }
+      }
+    }
   }
 
   function onRoundTimer(data: { remaining: number }): void {

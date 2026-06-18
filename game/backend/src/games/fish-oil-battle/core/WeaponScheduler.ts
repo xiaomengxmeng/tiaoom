@@ -1,90 +1,43 @@
 /**
- * 赛博鱼油 · BattleState 实现 + SkillScheduler（IWeapon 版本）
+ * 赛博鱼油 · 武器调度器
  *
- * SkillScheduler 是技能调度核心，负责：
- *   1. 管理每个玩家的 IWeapon 实例
- *   2. 按固定顺序驱动武器生命周期（onTick → onHit → onHitBy → burst）
- *   3. 收集 WeaponEffect → 转换为 SkillEffect 并应用到 BattleState
+ * 与 SkillScheduler 并行存在，专门调度 IWeapon 接口。
+ * 负责：注册武器 → 驱动生命周期 → 收集 WeaponEffect → 应用到 BattleState
  *
- * v2.0：重构为依赖 IWeapon 接口 + IPhysicsQuery，与 WeaponScheduler 对齐。
+ * 核心调度顺序（每 tick）：
+ *   1. 遍历所有武器 → onTick()（常驻被动 + 自动触发）
+ *   2. 应用所有 WeaponEffect 到 BattleState
+ *   3. 清理过期 activeEffects
+ *   4. state.tick++
+ *
+ * 碰撞处理：
+ *   - processHit(attackerId, targetId)
+ *     → attacker.onHitTarget() + target.onHitByAttacker()
  */
 
-import {
-  IBattleState,
-  PlayerState,
-  SkillEffect,
-} from './types';
-import type { IWeapon, IPhysicsQuery, WeaponEffect, WeaponRuntimeState } from './IWeapon';
+import type { IBattleState, SkillEffect } from './types';
+import type { IWeapon, IPhysicsQuery, WeaponEffect, WeaponEffectMetadata, PhysicsObstacle } from './IWeapon';
 import { TICKS_PER_SEC } from './IWeapon';
-import { WeaponEffectType } from '../config/GameEnums';
+import { WeaponEffectType, VisualEventType, WeaponId } from '../config/GameEnums';
 
-// ─── BattleState 实现 ────────────────────────────────
-export class BattleState implements IBattleState {
-  tick = 0;
-  players = new Map<string, PlayerState>();
-  pendingEffects: SkillEffect[] = [];
-  activeEffects: SkillEffect[] = [];
-  canvasWidth: number;
-  canvasHeight: number;
-
-  constructor(canvasWidth = 1280, canvasHeight = 720) {
-    this.canvasWidth = canvasWidth;
-    this.canvasHeight = canvasHeight;
-  }
-
-  addPlayer(state: PlayerState): void {
-    this.players.set(state.id, state);
-  }
-
-  getPlayer(id: string): PlayerState | undefined {
-    return this.players.get(id);
-  }
-
-  getOpponent(id: string): PlayerState | undefined {
-    for (const [pid, p] of this.players) {
-      if (pid !== id) return p;
-    }
-    return undefined;
-  }
-
-  /** 随机选取一个存活对手（大逃杀模式） */
-  getRandomAliveOpponent(id: string): PlayerState | undefined {
-    const alive = Array.from(this.players.values()).filter(
-      p => p.id !== id && p.hp > 0,
-    );
-    if (alive.length === 0) return undefined;
-    return alive[Math.floor(Math.random() * alive.length)];
-  }
-
-  applyDamage(targetId: string, amount: number, sourceId?: string): void {
-    const target = this.players.get(targetId);
-    if (!target || target.hp <= 0) return;
-    const hpBefore = target.hp;
-    target.hp = Math.max(0, target.hp - amount);
-    target.totalDamageTaken += amount;
-    const fmt = (n: number) => Math.round(n * 10) / 10;
-    console.log(`[FishOil] 伤害: ${targetId} (${target.name}) HP ${fmt(hpBefore)}→${fmt(target.hp)} (-${fmt(amount)}) from ${sourceId ?? 'system'}`);
-    this.pendingEffects.push({
-      type: WeaponEffectType.DAMAGE,
-      sourceId: sourceId || 'system',
-      targetId,
-      value: amount,
-    });
-  }
-}
-
-// ─── SkillScheduler（IWeapon 版本）──────────────────
-export interface PlayerWeaponBinding {
+/** 视觉事件（从 visual_only 类型 WeaponEffect 提取） */
+export interface PendingVisualEvent {
   playerId: string;
-  weapon: IWeapon;
+  weaponId?: WeaponId;
+  visualType?: VisualEventType;
+  x?: number;
+  y?: number;
+  tx?: number;
+  ty?: number;
+  radius?: number;
+  isBurst?: boolean;
+  metadata?: WeaponEffectMetadata;
 }
 
-/** @deprecated 请使用 PlayerWeaponBinding */
-export type PlayerSkillBinding = PlayerWeaponBinding;
-
-export class SkillScheduler {
+export class WeaponScheduler {
   private bindings = new Map<string, IWeapon>();
   private physicsQuery: IPhysicsQuery;
+  private pendingVisuals: PendingVisualEvent[] = [];
   /** expireEffects 秒级计数器：每 TICKS_PER_SEC 个 tick 减一次 duration */
   private expireCounter = 0;
 
@@ -92,9 +45,17 @@ export class SkillScheduler {
     this.physicsQuery = physicsQuery;
   }
 
-  /** 注册玩家武器（注入 playerId） */
+  /** 获取并清空待广播的视觉事件 */
+  getVisualEvents(): PendingVisualEvent[] {
+    const events = [...this.pendingVisuals];
+    this.pendingVisuals = [];
+    return events;
+  }
+
+  /** 注册玩家武器（注入 playerId 并初始化） */
   register(playerId: string, weapon: IWeapon): void {
     weapon.playerId = playerId;
+    weapon.reset();
     this.bindings.set(playerId, weapon);
   }
 
@@ -103,25 +64,17 @@ export class SkillScheduler {
     return this.bindings.get(playerId);
   }
 
-  /** @deprecated 请使用 getWeapon */
-  getSkill(playerId: string): IWeapon | undefined {
-    return this.getWeapon(playerId);
-  }
-
   /** 所有绑定的玩家 ID */
   get playerIds(): string[] {
     return Array.from(this.bindings.keys());
   }
 
-  // ── 核心调度 ──
+  // ── 核心调度 ────────────────────────────────────────
 
   /**
    * 每 tick 调度所有武器
-   *
-   * 顺序：onTick → applyEffects → expireEffects
-   * 注意：tick() 不自动触发爆发，调用方需显式调用 forceBurst()
    */
-  tick(state: BattleState): SkillEffect[] {
+  tick(state: IBattleState): SkillEffect[] {
     const allEffects: WeaponEffect[] = [];
 
     for (const [playerId, weapon] of this.bindings) {
@@ -150,9 +103,8 @@ export class SkillScheduler {
 
   /**
    * 处理碰撞：attacker 命中 target
-   * 即使 target 未注册武器，仍触发 attacker.onHitTarget
    */
-  processHit(attackerId: string, targetId: string, state: BattleState): WeaponEffect[] {
+  processHit(attackerId: string, targetId: string, state: IBattleState): WeaponEffect[] {
     const allEffects: WeaponEffect[] = [];
 
     const attackerWeapon = this.bindings.get(attackerId);
@@ -170,9 +122,33 @@ export class SkillScheduler {
   }
 
   /**
+   * 处理碰墙事件（可选）
+   */
+  processWallHit(playerId: string, state: IBattleState): WeaponEffect[] {
+    const weapon = this.bindings.get(playerId);
+    if (!weapon || !weapon.onWallHit) return [];
+    const effects = weapon.onWallHit(state, this.physicsQuery);
+    this.applyWeaponEffects(state, effects);
+    return effects;
+  }
+
+  /**
+   * 处理对手碰撞某玩家的障碍物（如硬化防火墙）
+   * @param obstacleSourceId 障碍物所属玩家 ID
+   * @param hittingPlayerId 发生碰撞的玩家 ID
+   */
+  processObstacleHit(obstacleSourceId: string, hittingPlayerId: string, state: IBattleState): WeaponEffect[] {
+    const weapon = this.bindings.get(obstacleSourceId);
+    if (!weapon || !weapon.onObstacleHit) return [];
+    const effects = weapon.onObstacleHit(hittingPlayerId, state, this.physicsQuery);
+    this.applyWeaponEffects(state, effects);
+    return effects;
+  }
+
+  /**
    * 手动触发某个玩家的爆发
    */
-  forceBurst(playerId: string, state: BattleState): WeaponEffect[] {
+  forceBurst(playerId: string, state: IBattleState): WeaponEffect[] {
     const weapon = this.bindings.get(playerId);
     if (!weapon || !weapon.isBurstReady()) return [];
 
@@ -181,13 +157,40 @@ export class SkillScheduler {
     return effects;
   }
 
-  // ── 内部 ──
+  /**
+   * 收集所有武器的物理障碍物（供物理引擎碰撞检测）
+   */
+  getObstacles(): PhysicsObstacle[] {
+    const obstacles: PhysicsObstacle[] = [];
+    for (const [, weapon] of this.bindings) {
+      if (weapon.getObstacles) {
+        obstacles.push(...weapon.getObstacles());
+      }
+    }
+    return obstacles;
+  }
 
-  /** 将 WeaponEffect 转换为 SkillEffect 并应用到 State */
+  // ── 内部 ────────────────────────────────────────────
+
+  /** 将 WeaponEffect 转换为 SkillEffect 并应用到 State，同时收集视觉事件 */
   private applyWeaponEffects(state: IBattleState, effects: WeaponEffect[]): void {
     for (const effect of effects) {
-      // visual_only 类型不转换为 SkillEffect（纯前端表现）
-      if (effect.type === WeaponEffectType.VISUAL_ONLY) continue;
+      // visual_only：不转换为 SkillEffect，仅收集为视觉事件
+      if (effect.type === WeaponEffectType.VISUAL_ONLY) {
+        this.pendingVisuals.push({
+          playerId: effect.sourceId,
+          weaponId: (effect.metadata?.weaponId as WeaponId) ?? this.bindings.get(effect.sourceId)?.id,
+          visualType: effect.metadata?.visualType,
+          x: effect.position?.x ?? effect.aoe?.x,
+          y: effect.position?.y ?? effect.aoe?.y,
+          tx: effect.metadata?.tx,
+          ty: effect.metadata?.ty,
+          radius: effect.aoe?.radius ?? effect.metadata?.radius,
+          isBurst: effect.metadata?.isBurst ?? effect.metadata?.burst,
+          metadata: effect.metadata,
+        });
+        continue;
+      }
 
       // ── dot 类型：value 是 DPS，按 tick 缩放为单次实际伤害 ──
       let applyValue = effect.value;
@@ -236,24 +239,5 @@ export class SkillScheduler {
       }
       return true;
     });
-  }
-
-  /** 汇总双方状态快照（供调试输出） */
-  summary(state: BattleState): Record<string, any> {
-    const result: Record<string, any> = {};
-    for (const [pid, weapon] of this.bindings) {
-      const p = state.getPlayer(pid);
-      const rt: WeaponRuntimeState = weapon.getRuntimeState();
-      result[pid] = {
-        name: p?.name,
-        hp: `${p?.hp}/${p?.maxHp}`,
-        weapon: weapon.name,
-        school: weapon.school,
-        energy: `${rt.energy}/${rt.maxEnergy}`,
-        stacks: Object.fromEntries(Object.entries(rt.stacks)),
-        burstReady: weapon.isBurstReady(),
-      };
-    }
-    return result;
   }
 }

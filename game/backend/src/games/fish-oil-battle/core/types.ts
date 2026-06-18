@@ -5,30 +5,26 @@
  * 所有 Skill 通过 ISkill 接口与调度器解耦，各自独立实现。
  */
 
-// ─── 流派 ────────────────────────────────────────────
-export type School = 'aggressor' | 'controller' | 'engineer' | 'wildcard';
+import type { WeaponEffectType } from '../config/GameEnums';
+import type { WeaponEffectMetadata } from './IWeapon';
 
 // ─── SkillEffect ─────────────────────────────────────
-/** 技能产生的效果类型 */
-export type EffectType =
-  | 'damage'          // 直接伤害
-  | 'dot'             // 持续伤害 (duration 有效)
-  | 'slow'            // 减速 (value=百分比)
-  | 'shield'          // 护盾
-  | 'spawn_firewall'  // 生成防火墙
-  | 'fire_sting'      // 蜂刺发射
-  | 'shockwave'       // 冲击波
-  | 'burst_damage';   // 爆发伤害
-
 /** 技能每次调用产生的效果集合 */
 export interface SkillEffect {
-  type: EffectType;
+  type: WeaponEffectType;
   sourceId: string;                   // 来源玩家 id
   targetId?: string;                  // 目标玩家 id（伤害类必填）
-  value: number;                      // 数值（伤害/减速百分比等）
-  duration?: number;                  // 持续 tick 数
+  /**
+   * 数值语义：
+   * - damage/aoe_damage/burst_damage → 单次伤害值
+   * - dot → 每秒伤害（DPS）
+   * - slow → 减速百分比（0-100）
+   */
+  value: number;
+  /** 持续时间（秒），dot/slow 等持续效果以此计时 */
+  duration?: number;
   position?: { x: number; y: number };
-  metadata?: Record<string, any>;     // 携带的额外数据
+  metadata?: WeaponEffectMetadata;    // 携带的额外数据
 }
 
 // ─── 玩家状态 ────────────────────────────────────────

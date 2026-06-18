@@ -1,15 +1,17 @@
 /**
  * 赛博鱼油 · 房间级游戏逻辑
  *
+ * v2.0 高可扩展武器系统架构
+ *
  * 继承 GameRoom，管理完整对局流程：
  *   1. 武器选择阶段（15s，三选一，选完即开战）
  *   2. 战斗阶段（90s，20fps tick loop）
  *   3. 结算阶段
  *
  * 负责：
- * - 组合 PhysicsEngine + BattleState + SkillScheduler
- * - 每 50ms 推进物理 + 技能调度 + 广播 game_state
- * - 广播 visual_event 技能特效事件
+ * - 组合 PhysicsEngine + BattleState + WeaponScheduler + PhysicsAdapter
+ * - 每 50ms 推进物理 + 武器调度 + 广播 game_state
+ * - 广播 visual_event 技能特效事件（从武器 visual_only 效果提取）
  * - 处理武器选择指令
  */
 
@@ -18,16 +20,13 @@ export const minSize = 2;
 export const maxSize = 4;
 export const description = '2-4 人大逃杀，选择武器，最后存活者获胜！';
 
-import { RoomPlayer, RoomStatus } from 'tiaoom';
+import { RoomPlayer } from 'tiaoom';
 import { GameRoom, IGameCommand } from '../index';
-import { BattleState, SkillScheduler, PlayerSkillBinding } from './core/SkillScheduler';
-import type { ISkill } from './core/types';
-import { PhysicsEngine, CollisionEvent } from './physics/PhysicsEngine';
-
-// 3 把武器
-import { ShockwaveGenerator } from './skills/ShockwaveGenerator';
-import { FirewallProtocol } from './skills/FirewallProtocol';
-import { HiveMother } from './skills/HiveMother';
+import { BattleState } from './core/SkillScheduler';
+import { WeaponScheduler, type PendingVisualEvent } from './core/WeaponScheduler';
+import { createWeapon, getImplementedWeaponMetaList } from './core/WeaponRegistry';
+import { PhysicsEngine } from './physics/PhysicsEngine';
+import { PhysicsAdapter, type PhysicsQueryDeps } from './physics/PhysicsAdapter';
 
 // 共享协议类型
 import type {
@@ -35,45 +34,45 @@ import type {
   VisualEventData,
   PlayerSpawnInfo,
   PlayerStats,
-} from '@/shared/protocol';
+} from './shared/protocol';
 
-// ─── 武器元信息（后端扩展了 factory）────────────────────────────
+import { School, VisualEventType, GameEndReason } from './config/GameEnums';
+
+// ─── 武器元信息 ────────────────────────────────────────────────────
 interface WeaponMeta {
   id: string;
   name: string;
-  faction: 'aggressor' | 'controller' | 'engineer' | 'wildcard';
-  difficulty: 1 | 2 | 3;
+  faction: School;
+  difficulty: number;
   iconId: string;
-  factory: () => ISkill;
 }
 
-const WEAPON_POOL: WeaponMeta[] = [
-  {
-    id: 'shockwave', name: '冲击波发生器',
-    faction: 'aggressor', difficulty: 1,
-    iconId: 'game-icons:lightning-dome',
-    factory: () => new ShockwaveGenerator(),
-  },
-  {
-    id: 'firewall', name: '防火墙协议',
-    faction: 'controller', difficulty: 2,
-    iconId: 'game-icons:firewall',
-    factory: () => new FirewallProtocol(),
-  },
-  {
-    id: 'hive', name: '蜂巢母体',
-    faction: 'engineer', difficulty: 3,
-    iconId: 'game-icons:hive-mind',
-    factory: () => new HiveMother(),
-  },
-];
+/** 仅包含已实现的武器（排除 StubWeapon） */
+const IMPLEMENTED_WEAPONS: WeaponMeta[] = getImplementedWeaponMetaList().map(w => ({
+  id: w.id,
+  name: w.name,
+  faction: w.school as any,
+  difficulty: w.difficulty,
+  iconId: w.iconId,
+}));
+
+/** Fisher-Yates 洗牌 */
+function shuffleArray<T>(arr: T[]): T[] {
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
 
 // ─── 房间类 ────────────────────────────────────────────────────
 export default class FishOilRoom extends GameRoom {
   // 子系统
   private battleState!: BattleState;
   private physics!: PhysicsEngine;
-  private scheduler: SkillScheduler = new SkillScheduler();
+  private scheduler!: WeaponScheduler;
+  private physicsAdapter!: PhysicsAdapter;
 
   // 武器绑定
   private weaponSelections: Record<string, string | null> = {}; // playerId → weaponId
@@ -95,8 +94,8 @@ export default class FishOilRoom extends GameRoom {
   private computeSpawnPositions(count: number): { x: number; y: number }[] {
     const centerX = 640;
     const centerY = 360;
-    const spawnDist = 100 + Math.random() * 80;          // 100~180 px 离圆心
-    const baseAngle = Math.random() * Math.PI * 2;        // 随机基准角度
+    const spawnDist = 100 + Math.random() * 80;
+    const baseAngle = Math.random() * Math.PI * 2;
     const positions: { x: number; y: number }[] = [];
     for (let i = 0; i < count; i++) {
       const angle = baseAngle + (Math.PI * 2 / count) * i;
@@ -137,10 +136,8 @@ export default class FishOilRoom extends GameRoom {
       this.weaponSelections[p.id] = null;
     }
 
-    // 2. 初始化物理引擎（圆形竞技场，N 人均匀分布在圆上）
-    // 按人数生成 spawn 位置：2人=对侧，3人=正三角，4人=正方
+    // 2. 初始化物理引擎
     const spawnPositions = this.computeSpawnPositions(playerCount);
-
     this.physics = new PhysicsEngine({ canvasWidth: 1280, canvasHeight: 720, arenaRadius: 280 });
     for (let i = 0; i < playerCount; i++) {
       this.physics.addBall(players[i].id, spawnPositions[i].x, spawnPositions[i].y);
@@ -150,17 +147,12 @@ export default class FishOilRoom extends GameRoom {
     this.phase = 'weapon_select';
     this.weaponConfirmed.clear();
 
-    const weaponPoolForClient = WEAPON_POOL.map(w => ({
-      id: w.id,
-      name: w.name,
-      faction: w.faction as any,
-      difficulty: w.difficulty,
-      iconId: w.iconId,
-    }));
+    // 每个玩家随机分配 3 个已实现的武器
+    const weaponPoolForClient = shuffleArray(IMPLEMENTED_WEAPONS).slice(0, 3);
 
     // 按人数分配 faction 颜色（轮转）
-    const allFactions: ('aggressor' | 'controller' | 'engineer' | 'wildcard')[] =
-      ['aggressor', 'controller', 'engineer', 'wildcard'];
+    const allFactions: School[] =
+      [School.AGGRESSOR, School.CONTROLLER, School.ENGINEER, School.WILD];
     const playerInfos: PlayerSpawnInfo[] = players.map((p, i) => ({
       id: p.id,
       name: p.name,
@@ -183,10 +175,9 @@ export default class FishOilRoom extends GameRoom {
 
     // 4. 启动武器选择倒计时（15s）
     this.startTimer(() => {
-      // 超时自动随机分配
       for (const p of players) {
         if (!this.weaponConfirmed.has(p.id)) {
-          const randomWeapon = WEAPON_POOL[Math.floor(Math.random() * WEAPON_POOL.length)];
+          const randomWeapon = IMPLEMENTED_WEAPONS[Math.floor(Math.random() * IMPLEMENTED_WEAPONS.length)];
           this.assignWeapon(p.id, randomWeapon);
         }
       }
@@ -210,7 +201,7 @@ export default class FishOilRoom extends GameRoom {
     if (this.phase !== 'weapon_select') return;
     if (this.weaponConfirmed.has(sender.id)) return;
 
-    const weapon = WEAPON_POOL.find(w => w.id === data.weaponId);
+    const weapon = IMPLEMENTED_WEAPONS.find(w => w.id === data.weaponId);
     if (!weapon) {
       sender.emit('command', { type: 'error', data: { message: '未知武器' } });
       return;
@@ -220,9 +211,9 @@ export default class FishOilRoom extends GameRoom {
     this.say(`${sender.name} 已选择 ${weapon.name}`);
     console.log(`[FishOil] 武器选择: ${sender.name} → ${weapon.name} (${this.weaponConfirmed.size}/${this.room.validPlayers.length})`);
 
-    // 两人都选了 → 直接开始战斗
+    // 全部选了 → 直接开始战斗
     if (this.weaponConfirmed.size >= this.room.validPlayers.length) {
-      console.log('[FishOil] 双方已选择武器，开始战斗！');
+      console.log('[FishOil] 全部已选择武器，开始战斗！');
       this.stopTimer('weapon_select');
       this.startBattle();
     }
@@ -233,7 +224,6 @@ export default class FishOilRoom extends GameRoom {
     this.weaponConfirmed.add(playerId);
     const player = this.room.validPlayers.find(p => p.id === playerId);
     if (player) {
-      // 私发确认
       player.emit('command', {
         type: 'weapon_confirmed',
         data: { weaponId: weapon.id, weaponName: weapon.name },
@@ -250,21 +240,46 @@ export default class FishOilRoom extends GameRoom {
     this.battleTick = 0;
     this.roundSecondsRemaining = 90;
     this.deadPlayers.clear();
-    this.scheduler = new SkillScheduler();
 
-    // 注册武器技能
+    // 创建 PhysicsAdapter 和 WeaponScheduler
+    const deps: PhysicsQueryDeps = {
+      getAllBalls: () => this.physics.getAllBalls(),
+      getPlayer: (id) => this.battleState.getPlayer(id),
+      getAllAliveOpponents: (selfId) => {
+        const result: import('./core/types').PlayerState[] = [];
+        for (const [, ps] of this.battleState.players) {
+          if (ps.id !== selfId && ps.hp > 0) result.push(ps);
+        }
+        return result;
+      },
+      getArenaCenter: () => ({
+        x: this.physics.config.canvasWidth / 2,
+        y: this.physics.config.canvasHeight / 2,
+      }),
+      getArenaRadius: () => this.physics.config.arenaRadius,
+    };
+    this.physicsAdapter = new PhysicsAdapter(deps);
+    this.scheduler = new WeaponScheduler(this.physicsAdapter);
+
+    // 注册武器技能（使用 WeaponRegistry 工厂）
     for (const p of this.room.validPlayers) {
       const weaponId = this.weaponSelections[p.id];
-      const weaponMeta = WEAPON_POOL.find(w => w.id === weaponId);
-      if (weaponMeta) {
-        this.scheduler.register(p.id, weaponMeta.factory());
+      if (weaponId) {
+        try {
+          const weapon = createWeapon(weaponId);
+          this.scheduler.register(p.id, weapon);
+          console.log(`[FishOil] 注册武器: ${p.name} → ${weapon.name} (${weapon.school})`);
+        } catch (err) {
+          console.error(`[FishOil] 创建武器失败: ${weaponId}`, err);
+        }
       }
     }
 
     this.say('⚔ 战斗开始！');
+
     const weaponNames = this.room.validPlayers.map(p => {
       const wid = this.weaponSelections[p.id];
-      const wm = WEAPON_POOL.find(w => w.id === wid);
+      const wm = IMPLEMENTED_WEAPONS.find(w => w.id === wid);
       return `${p.name}:${wm?.name ?? '未知'}`;
     });
     console.log('[FishOil] startBattle: ' + weaponNames.join(', '));
@@ -279,7 +294,7 @@ export default class FishOilRoom extends GameRoom {
     });
 
     // 启动 20fps 战斗循环
-    const TICK_MS = 50; // 20fps
+    const TICK_MS = 50;
     this.tickTimer = setInterval(() => this.battleTickLoop(), TICK_MS);
 
     // 启动 1s 回合倒计时
@@ -289,7 +304,7 @@ export default class FishOilRoom extends GameRoom {
         this.command('round_timer', { remaining: this.roundSecondsRemaining });
       }
       if (this.roundSecondsRemaining <= 0) {
-        this.endBattle(null); // 超时 → 平局
+        this.endBattle(null);
       }
     }, 1000);
   }
@@ -298,7 +313,10 @@ export default class FishOilRoom extends GameRoom {
     if (this.phase !== 'battle') return;
     this.battleTick++;
 
-    const dt = 0.05; // 50ms
+    const dt = 0.05;
+
+    // 0. 设置动态障碍物（硬化防火墙等）供物理引擎碰撞
+    this.physics.setObstacles(this.scheduler.getObstacles());
 
     // 1. 物理引擎推进
     const collisions = this.physics.tick(dt);
@@ -312,71 +330,57 @@ export default class FishOilRoom extends GameRoom {
       }
     }
 
-    // 2. 处理碰撞 → 技能系统
+    // 2. 处理碰撞 → 武器系统
     const visualEvents: VisualEventData[] = [];
     for (const col of collisions) {
       if (col.type === 'ball') {
-        // N 人碰撞：双方触发 onHitTarget
         const [a, b] = col.ballIds;
         this.scheduler.processHit(a, b, this.battleState);
         this.scheduler.processHit(b, a, this.battleState);
 
-        visualEvents.push({
-          type: 'shockwave_trigger',
-          x: col.position.x, y: col.position.y,
-          isBurst: false,
-          playerId: col.ballIds[0],
-        });
+        // 收集碰撞产生的视觉事件
+        visualEvents.push(...this.extractVisualEvents(this.scheduler.getVisualEvents()));
+
+        // 碰撞视觉事件由武器系统自行管理，不再添加默认冲击波
       } else if (col.type === 'wall') {
-        // 碰墙不再发送视觉事件
+        // 竞技场墙壁碰撞传递给武器
+        this.scheduler.processWallHit(col.ballIds[0], this.battleState);
+      } else if (col.type === 'obstacle') {
+        // 动态障碍物碰撞（硬化防火墙等）
+        // 1. 物理反弹已在 PhysicsEngine 中处理
+        // 2. 通知武器系统：障碍物碰撞伤害（如硬化防火墙的额外伤害）
+        if (col.sourceId && col.ballIds.length > 0) {
+          for (const ballId of col.ballIds) {
+            this.scheduler.processObstacleHit(col.sourceId, ballId, this.battleState);
+          }
+        }
+        visualEvents.push(...this.extractVisualEvents(this.scheduler.getVisualEvents()));
       }
     }
 
-    // 3. 技能调度器 tick
+    // 3. 武器调度器 tick
     this.scheduler.tick(this.battleState);
+    visualEvents.push(...this.extractVisualEvents(this.scheduler.getVisualEvents()));
 
     // 4. 触发爆发（能量满则自动爆）
     for (const playerId of this.scheduler.playerIds) {
-      const skill = this.scheduler.getSkill(playerId);
-      if (skill && skill.isBurstReady()) {
-        const burstEffects = this.scheduler.forceBurst(playerId, this.battleState);
+      const weapon = this.scheduler.getWeapon(playerId);
+      if (weapon && weapon.isBurstReady()) {
+        this.scheduler.forceBurst(playerId, this.battleState);
         const player = this.battleState.getPlayer(playerId);
 
+        // 收集爆发视觉事件
+        const burstVisuals = this.extractVisualEvents(this.scheduler.getVisualEvents());
+        visualEvents.push(...burstVisuals);
+
+        // 通用爆发事件
         visualEvents.push({
-          type: 'burst_trigger',
+          type: VisualEventType.BURST_TRIGGER,
           playerId,
-          weaponId: skill.id,
+          weaponId: weapon.id,
           x: player?.position.x, y: player?.position.y,
           isBurst: true,
         });
-
-        // 爆发特效映射
-        if (skill.id === 'shockwave') {
-          visualEvents.push({
-            type: 'shockwave_trigger',
-            x: player?.position.x, y: player?.position.y,
-            isBurst: true,
-            playerId,
-          });
-        } else if (skill.id === 'firewall') {
-          visualEvents.push({
-            type: 'firewall_spawn',
-            x: player?.position.x, y: player?.position.y,
-            isBurst: true,
-            playerId,
-          });
-        } else if (skill.id === 'hive_mother' || skill.id === 'hive') {
-          // 大逃杀：随机选一个存活对手作为蜂刺目标
-          const opponent = this.battleState.getRandomAliveOpponent(playerId);
-          if (opponent) {
-            visualEvents.push({
-              type: 'hive_sting',
-              x: player?.position.x, y: player?.position.y,
-              tx: opponent.position.x, ty: opponent.position.y,
-              playerId,
-            });
-          }
-        }
       }
     }
 
@@ -397,7 +401,7 @@ export default class FishOilRoom extends GameRoom {
       this.command('visual_event', evt);
     }
 
-    // 8. 大逃杀胜负判定：存活人数 ≤ 1 → 结束
+    // 8. 大逃杀胜负判定
     const aliveCount = Array.from(this.battleState.players.values())
       .filter(p => p.hp > 0).length;
 
@@ -410,12 +414,12 @@ export default class FishOilRoom extends GameRoom {
         this.endBattle(winnerPlayer ? [winnerPlayer] : null);
       } else {
         console.log(`[FishOil] 大逃杀结束: 全体阵亡 (tick=${this.battleTick})`);
-        this.endBattle(null); // 全灭 → 平局
+        this.endBattle(null);
       }
       return;
     }
 
-    // 每 20 tick（1秒）打印一次 HP 快照
+    // 每 20 tick 打印一次 HP 快照
     if (this.battleTick % 20 === 0) {
       const status: string[] = [];
       for (const [, ps] of this.battleState.players) {
@@ -426,6 +430,49 @@ export default class FishOilRoom extends GameRoom {
     }
   }
 
+  /**
+   * visualType → VisualEventData.type 映射表。
+   * 1:1 透传的事件直接列出，合并映射的（如 HIVE_STING_HIT/FLIGHT → HIVE_STING）显式标注。
+   * 不在表中的 visualType 会被过滤掉。
+   */
+  private static readonly VISUAL_TYPE_MAP: Partial<Record<VisualEventType, VisualEventType>> = {
+    [VisualEventType.SHOCKWAVE_TRIGGER]:  VisualEventType.SHOCKWAVE_TRIGGER,
+    [VisualEventType.FIREWALL_SPAWN]:     VisualEventType.FIREWALL_SPAWN,
+    [VisualEventType.HIVE_STING_HIT]:     VisualEventType.HIVE_STING,
+    [VisualEventType.HIVE_STING_FLIGHT]:  VisualEventType.HIVE_STING,
+    [VisualEventType.HIVE_STING_BOUNCE]:  VisualEventType.HIVE_STING_BOUNCE,
+    [VisualEventType.SHOCKWAVE_BOUNCE]:   VisualEventType.SHOCKWAVE_BOUNCE,
+    [VisualEventType.BURST_TRIGGER]:      VisualEventType.BURST_TRIGGER,
+    [VisualEventType.BEE_COUNT_CHANGE]:   VisualEventType.BEE_COUNT_CHANGE,
+  };
+
+  /** 从 WeaponScheduler 的 PendingVisualEvent 转换为 VisualEventData */
+  private extractVisualEvents(events: PendingVisualEvent[]): VisualEventData[] {
+    const result: VisualEventData[] = [];
+    for (const evt of events) {
+      if (evt.visualType === undefined) continue;
+      const mappedType = FishOilRoom.VISUAL_TYPE_MAP[evt.visualType];
+      if (mappedType === undefined) continue;
+
+      result.push({
+        type: mappedType,
+        playerId: evt.playerId,
+        weaponId: evt.weaponId,
+        x: evt.x,
+        y: evt.y,
+        radius: evt.radius,
+        isBurst: evt.isBurst,
+        tx: evt.tx,
+        ty: evt.ty,
+        beeCount: evt.metadata?.beeCount,
+        visualWidth: evt.metadata?.visualWidth,
+        visualHeight: evt.metadata?.visualHeight,
+        durationSec: evt.metadata?.durationSec,
+      });
+    }
+    return result;
+  }
+
   private broadcastGameState(): void {
     const players: GameStatePlayer[] = [];
     for (const p of this.room.validPlayers) {
@@ -434,8 +481,8 @@ export default class FishOilRoom extends GameRoom {
 
       const isDead = this.deadPlayers.has(p.id);
       const ball = this.physics.getBall(p.id);
-      const skill = this.scheduler.getSkill(p.id);
-      const weaponMeta = WEAPON_POOL.find(w => w.id === this.weaponSelections[p.id]);
+      const weapon = this.scheduler.getWeapon(p.id);
+      const weaponMeta = IMPLEMENTED_WEAPONS.find(w => w.id === this.weaponSelections[p.id]);
 
       players.push({
         id: p.id,
@@ -446,8 +493,8 @@ export default class FishOilRoom extends GameRoom {
         vy: isDead ? 0 : Math.round(ball?.vy ?? 0),
         hp: state.hp,
         maxHp: state.maxHp,
-        energy: skill?.getEnergy() ?? 0,
-        maxEnergy: skill?.getMaxEnergy() ?? 100,
+        energy: weapon?.getEnergy() ?? 0,
+        maxEnergy: weapon?.getMaxEnergy() ?? 100,
         weapon: {
           name: weaponMeta?.name ?? '未知',
           iconId: weaponMeta?.iconId ?? 'game-icons:help',
@@ -459,11 +506,10 @@ export default class FishOilRoom extends GameRoom {
       });
     }
 
-    // 调试日志：每 20 tick 输出位置（约每秒一次）
     if (this.battleTick % 20 === 0 || this.battleTick <= 2) {
       console.log(
         `[FishOil] broadcast tick=${this.battleTick}:`,
-        players.map(p => `${p.name}(${p.id.substring(0,4)})=(${p.x},${p.y}) v=(${p.vx},${p.vy})`).join(' | '),
+        players.map(p => `${p.name}(${p.id.substring(0, 4)})=(${p.x},${p.y}) v=(${p.vx},${p.vy})`).join(' | '),
       );
     }
 
@@ -479,7 +525,6 @@ export default class FishOilRoom extends GameRoom {
     this.phase = 'ended';
     this.stopBattleLoop();
 
-    // 构建对战统计
     const stats: Record<string, PlayerStats> = {};
     for (const [pid, pstate] of this.battleState.players) {
       stats[pid] = {
@@ -498,7 +543,7 @@ export default class FishOilRoom extends GameRoom {
       this.command('game_end', {
         winnerId: winner.id,
         winnerName: winner.name,
-        reason: 'last_stand',
+        reason: GameEndReason.LAST_STAND,
         stats,
       });
     } else {
@@ -507,12 +552,11 @@ export default class FishOilRoom extends GameRoom {
       this.command('game_end', {
         winnerId: '',
         winnerName: '',
-        reason: this.roundSecondsRemaining <= 0 ? 'timeout' : 'last_stand',
+        reason: this.roundSecondsRemaining <= 0 ? GameEndReason.TIMEOUT : GameEndReason.LAST_STAND,
         stats,
       });
     }
 
-    // 保存成就并结束房间
     setTimeout(() => {
       this.saveAchievements(winners).catch(console.error);
       this.room.end();
@@ -533,16 +577,11 @@ export default class FishOilRoom extends GameRoom {
   // ─── 覆盖 getStatus (断线重连) ─────────────────────
   getStatus(sender: RoomPlayer): any {
     const base = super.getStatus(sender);
-    // 断线重连：根据当前阶段发送相应数据
     if (this.phase === 'weapon_select') {
       return {
         ...base,
         phase: 'weapon_select',
-        weaponPool: WEAPON_POOL.map(w => ({
-          id: w.id, name: w.name,
-          faction: w.faction, difficulty: w.difficulty,
-          iconId: w.iconId,
-        })),
+        weaponPool: IMPLEMENTED_WEAPONS,
         players: this.room.validPlayers.map(p => ({
           id: p.id, name: p.name,
           avatar: this.playerAvatars[p.id] ?? '',
@@ -550,7 +589,6 @@ export default class FishOilRoom extends GameRoom {
       };
     }
     if (this.phase === 'battle') {
-      // 战斗中断线重连：补发当前状态
       const players = this.room.validPlayers.map(p => {
         const ball = this.physics.getBall(p.id);
         const state = this.battleState.getPlayer(p.id);
@@ -573,12 +611,9 @@ export default class FishOilRoom extends GameRoom {
   }
 
   // ─── 生命周期清理 ──────────────────────────────────
-  // GameRoom.init() 已在基类注册 'start'/'end'/'close' 等事件，
-  // 此处仅需在 onStart 中添加 close 监听。
   init() {
     const room = super.init();
     this.room.on('close', () => this.stopBattleLoop());
-    // 玩家离开时：战斗中则标记死亡并检查是否结束，武器选择阶段则清除确认状态
     this.room.on('leave', (player: any) => {
       const pid = player.id;
       if (this.phase === 'battle' && this.battleState) {

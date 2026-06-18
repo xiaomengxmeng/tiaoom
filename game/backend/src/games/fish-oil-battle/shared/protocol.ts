@@ -1,17 +1,19 @@
 /**
  * 赛博鱼油 · 前后端共享消息协议
  *
- * 后端: import from '@/shared/protocol'
- * 前端: import from '$/backend/src/shared/protocol'
+ * 后端: import from './shared/protocol' (fish-oil-battle 内部)
+ * 前端: import from '$/backend/src/games/fish-oil-battle/shared/protocol'
  *
  * 前后端都 import 这份类型，确保消息结构编译期一致。
  */
+
+import { School, VisualEventType, GameEndReason, WeaponId } from '../config/GameEnums';
 
 // ─── 武器元信息 ────────────────────────────────────────────────
 export interface WeaponMeta {
   id: string;
   name: string;
-  faction: 'aggressor' | 'controller' | 'engineer' | 'wildcard';
+  faction: School;
   difficulty: 1 | 2 | 3;
   iconId: string;
 }
@@ -43,12 +45,33 @@ export interface GameStatePlayer {
 
 // ─── 视觉事件（visual_event 用）───────────────
 export interface VisualEventData {
-  type: 'shockwave_trigger' | 'firewall_spawn' | 'hive_sting' | 'burst_trigger' | 'hit';
+  type: VisualEventType;
   playerId?: string;
-  weaponId?: string;
+  weaponId?: WeaponId;
   x?: number; y?: number;
   isBurst?: boolean;
   tx?: number; ty?: number;
+  /** 特效/技能生效范围（逻辑 px），前端用此值绘特效 */
+  radius?: number;
+  /** 防火墙视觉宽度（逻辑 px） */
+  visualWidth?: number;
+  /** 防火墙视觉高度（逻辑 px） */
+  visualHeight?: number;
+  /** 场地装置持续时间（秒），前端同步用（如防火墙 18s） */
+  durationSec?: number;
+  /** 蜂巢母体：当前蜂数（受击减少 / 爆发增加时同步前端） */
+  beeCount?: number;
+  /** 特效视觉配置（颜色、持续时间等，由后端 WeaponRangeConfig 驱动） */
+  effectConfig?: {
+    /** 主色（覆盖主题色） */
+    primaryColor?: number;
+    /** 发光色 */
+    glowColor?: number;
+    /** 扩散持续时间（ms） */
+    expandDurationMs?: number;
+    /** 反弹色 */
+    bounceColor?: number;
+  };
 }
 
 // ─── 游戏统计（game_end 用）───────────────
@@ -89,7 +112,7 @@ export interface ServerToClientMessages {
   game_end: {
     winnerId: string;
     winnerName: string;
-    reason: 'hp_zero' | 'timeout' | 'last_stand';
+    reason: GameEndReason;
     stats: Record<string, PlayerStats>;
   };
 }

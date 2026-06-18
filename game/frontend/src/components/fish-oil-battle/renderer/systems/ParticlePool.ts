@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { BLEND_MODES } from '../constants';
+import { ShapeRenderer, type ShapeDescriptor } from './ShapeRenderer';
 
 export interface PooledParticle {
   sprite: PIXI.Sprite | PIXI.Graphics;
@@ -110,6 +111,107 @@ export class ParticlePool {
     p.active = true;
 
     return p;
+  }
+
+  /**
+   * 从形状区域发射粒子（包围盒简化版）
+   *
+   * @param shape      形状描述符
+   * @param count      粒子数量
+   * @param pCfg       每个粒子的基础配置
+   * @param offsetX    发射中心 X 偏移（世界坐标）
+   * @param offsetY    发射中心 Y 偏移（世界坐标）
+   */
+  emitFromShape(
+    shape: ShapeDescriptor,
+    count: number,
+    pCfg: {
+      life?: number;
+      scaleStart?: number; scaleEnd?: number;
+      alphaStart?: number; alphaEnd?: number;
+      tint?: number;
+      speed?: number;
+      speedSpread?: number;
+      fromCenter?: boolean;
+      rotationSpeed?: number;
+      radius?: number;
+    },
+    offsetX = 0,
+    offsetY = 0,
+  ): void {
+    const bounds = ShapeRenderer.getBounds(shape);
+    const speed = pCfg.speed ?? 100;
+    const spread = pCfg.speedSpread ?? 0;
+
+    for (let i = 0; i < count; i++) {
+      let px: number, py: number, nx: number, ny: number;
+
+      if (pCfg.fromCenter) {
+        // 从中心随机角度发射
+        const a = Math.random() * Math.PI * 2;
+        const distFactor = Math.random();
+        // 在包围盒内随机取点（椭圆近似）
+        const hw = (bounds.maxX - bounds.minX) / 2;
+        const hh = (bounds.maxY - bounds.minY) / 2;
+        px = Math.cos(a) * hw * distFactor;
+        py = Math.sin(a) * hh * distFactor;
+        nx = Math.cos(a);
+        ny = Math.sin(a);
+      } else {
+        // 从包围盒边缘随机取点
+        const hw = (bounds.maxX - bounds.minX) / 2;
+        const hh = (bounds.maxY - bounds.minY) / 2;
+        const perimeter = 2 * (hw + hh);
+
+        // 按周长比例选择边
+        const edgeRand = Math.random() * perimeter;
+        if (edgeRand < hh) {
+          // 左边
+          px = bounds.minX;
+          py = bounds.minY + edgeRand;
+          nx = -1; ny = 0;
+        } else if (edgeRand < hh + hw * 2) {
+          // 上边
+          px = bounds.minX + (edgeRand - hh);
+          py = bounds.minY;
+          nx = 0; ny = -1;
+        } else if (edgeRand < hh * 2 + hw * 2) {
+          // 右边
+          px = bounds.maxX;
+          py = bounds.minY + (edgeRand - hh - hw * 2);
+          nx = 1; ny = 0;
+        } else {
+          // 下边
+          px = bounds.minX + (edgeRand - hh * 2 - hw * 2);
+          py = bounds.maxY;
+          nx = 0; ny = 1;
+        }
+
+        // 添加微小的随机偏移让发射方向自然
+        const angleJitter = (Math.random() - 0.5) * 0.4;
+        const cosJ = Math.cos(angleJitter), sinJ = Math.sin(angleJitter);
+        const rnx = nx * cosJ - ny * sinJ;
+        const rny = nx * sinJ + ny * cosJ;
+        nx = rnx; ny = rny;
+      }
+
+      const s = speed + (Math.random() - 0.5) * 2 * spread;
+
+      this.emit({
+        x: offsetX + px,
+        y: offsetY + py,
+        vx: nx * s,
+        vy: ny * s,
+        life: pCfg.life ?? 800,
+        scaleStart: pCfg.scaleStart ?? 0.5,
+        scaleEnd: pCfg.scaleEnd ?? 0,
+        alphaStart: pCfg.alphaStart ?? 1,
+        alphaEnd: pCfg.alphaEnd ?? 0,
+        tint: pCfg.tint ?? 0xffffff,
+        radius: pCfg.radius ?? 2,
+        rotationSpeed: pCfg.rotationSpeed ?? 0,
+      });
+    }
   }
 
   /**

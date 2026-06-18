@@ -71,6 +71,10 @@ export class PlayerRenderer {
   private burstScaleTimer = 0;
   private currentFaction: Faction = 'aggressor';
 
+  // ─── 减速特效 ─────────────────────────────────────────
+  private isSlowed = false;
+  private slowEffectTimer = 0;
+
   // ─── 尺寸 ─────────────────────────────────────────────
   private radiusScale = 1.0;
   private get r(): number { return PLAYER_BASE_RADIUS * this.radiusScale; }
@@ -178,8 +182,30 @@ export class PlayerRenderer {
       this.hitFlashTimer -= dt;
       const t = Math.max(0, this.hitFlashTimer / 150);
       this.avatar.alpha = 0.3 + 0.7 * (1 - t); // 闪白：30%→100%
+    } else if (this.isSlowed) {
+      this.avatar.alpha = 0.85; // 减速时略微变暗
     } else {
       this.avatar.alpha = 1;
+    }
+
+    // 减速特效：蓝色粒子拖尾
+    if (this.slowEffectTimer > 0) {
+      this.slowEffectTimer -= dt;
+      if (Math.random() < 0.3) {
+        this.particlePool.emit({
+          x: this.container.x + (Math.random() - 0.5) * this.r * 2,
+          y: this.container.y + (Math.random() - 0.5) * this.r * 2,
+          vx: (Math.random() - 0.5) * 20,
+          vy: (Math.random() - 0.5) * 20,
+          life: 500,
+          radius: 3,
+          alphaStart: 0.5,
+          alphaEnd: 0,
+          tint: 0x66CCFF,
+        });
+      }
+    } else if (this.isSlowed) {
+      this.isSlowed = false;
     }
 
     // 爆发放大
@@ -213,8 +239,10 @@ export class PlayerRenderer {
    * 显示掉血数字（浮起渐隐）
    */
   showDamageNumber(damage: number): void {
+    // 格式化伤害值：显示整数，避免浮点数精度问题（如 4.2000000000000）
+    const formattedDamage = Math.round(damage);
     const text = new PIXI.Text({
-      text: `-${damage}`,
+      text: `-${formattedDamage}`,
       style: {
         fontFamily: 'system-ui, -apple-system, "SF Pro Display", Inter, sans-serif',
         fontSize: damage >= 20 ? 22 : 16,
@@ -325,6 +353,20 @@ export class PlayerRenderer {
 
   /** 获取当前拖尾颜色（头像提取的主色或流派默认色） */
   getTrailColor(): number { return this.trailColor; }
+
+  /**
+   * 设置减速状态（防火墙范围内时调用）
+   * @param slowed true=进入减速范围，false=离开范围
+   */
+  setSlowed(slowed: boolean): void {
+    if (this.isSlowed === slowed) return;
+    this.isSlowed = slowed;
+    if (slowed) {
+      this.slowEffectTimer = 1000;
+    } else {
+      this.slowEffectTimer = 0;
+    }
+  }
 
   // ═══════════════════════════════════════════════════
   //  视觉绘制

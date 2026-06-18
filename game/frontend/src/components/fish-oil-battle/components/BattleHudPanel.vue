@@ -22,7 +22,7 @@
           :max="maxHp"
         />
         <span class="text-[10px] font-mono text-base-content/60">
-          {{ currentHp }} / {{ maxHp }}
+          {{ Math.ceil(currentHp) }} / {{ maxHp }}
         </span>
       </div>
     </div>

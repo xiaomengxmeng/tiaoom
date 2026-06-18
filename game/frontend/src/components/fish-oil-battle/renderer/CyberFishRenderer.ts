@@ -1,10 +1,12 @@
 import * as PIXI from 'pixi.js';
-import { LOGICAL_W, LOGICAL_H } from './constants';
+import { LOGICAL_W, LOGICAL_H, SHOCKWAVE_MAX_RADIUS, FIREWALL_HEX_RADIUS } from './constants';
 import { PhysicsSystem, type InterpolatedState, type PhysicsState } from './systems/PhysicsSystem';
 import { ParticlePool } from './systems/ParticlePool';
 import { ArenaRenderer } from './systems/ArenaRenderer';
 import { PlayerRenderer, type Faction } from './entities/PlayerRenderer';
 import { EffectRenderer } from './entities/EffectRenderer';
+import type { ShapeDescriptor } from './systems/ShapeRenderer';
+import type { ShapeEffectConfig } from './entities/ShapeEffect';
 
 /**
  * 赛博鱼油主渲染器（编排层）
@@ -40,6 +42,15 @@ export class CyberFishRenderer {
 
   // ─── 战斗状态 ─────────────────────────────────────
   private battleActive = false;
+
+  // ─── 蜂群渲染状态（蜂巢母体常驻） ──────────────────
+  /** 活跃蜂群玩家：playerId → { beeCount, isBurst } */
+  private hivePlayers = new Map<string, { beeCount: number; isBurst: boolean }>();
+
+  // ─── 防火墙追踪（减速特效检测） ────────────────────
+  /** 活跃防火墙 { 画布像素坐标 + 所有者 }，检测对手是否在范围内 */
+  private activeFirewalls: Array<{ x: number; y: number; radius: number; ownerId: string; spawnedAt: number }> = [];
+  private static readonly FIREWALL_MAX_LIFE_MS = 22000; // 18s 持续时间 + 4s 缓冲
 
   // ─── 渲染循环 ─────────────────────────────────────
   private rafId = 0;
@@ -111,6 +122,8 @@ export class CyberFishRenderer {
       this.playerRenderers.delete(playerId);
     }
     this.physics.removePlayer(playerId);
+    this.hivePlayers.delete(playerId);
+    this.effectRenderer.removeHiveBees(playerId);
   }
 
   /**
@@ -136,15 +149,42 @@ export class CyberFishRenderer {
   /**
    * 触发技能特效（坐标为后端 LOGICAL，自动映射）
    * @param config.playerId 发起技能的玩家 ID（用于获取头像主题色）
+   * @param config.radius 后端传入的技能生效范围（逻辑 px），前端用此值绘特效
    */
   triggerSkillEffect(config: {
-    type: 'shockwave' | 'firewall' | 'hive_sting' | 'burst_flash';
+    type: 'shockwave' | 'shockwave_bounce' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'shape' | 'sustained_shape';
     x?: number; y?: number;
     isBurst?: boolean;
+    radius?: number;
+    visualWidth?: number;
+    visualHeight?: number;
+    durationSec?: number;
     fromX?: number; fromY?: number;
     toX?: number; toY?: number;
     factionColor?: number;
     playerId?: string;
+    /** shape/sustained_shape 专用：形状描述 */
+    shapeDesc?: ShapeDescriptor;
+    /** shape 专用：动画配置 */
+    shapeAnimCfg?: {
+      life?: number;
+      scaleStart?: number; scaleEnd?: number;
+      alphaStart?: number; alphaEnd?: number;
+      rotationSpeed?: number;
+      ease?: 'linear' | 'easeOut' | 'easeIn' | 'easeInOut';
+    };
+    /** sustained_shape 专用：唯一标识键 */
+    sustainedKey?: string;
+    /** sustained_shape 专用：脉冲/旋转配置 */
+    sustainedCfg?: {
+      pulseSpeed?: number;
+      rotationSpeed?: number;
+      alphaPulse?: boolean;
+    };
+    /** sustained_shape 专用：部分更新（用于 updateSustained） */
+    sustainedPartial?: Partial<ShapeEffectConfig>;
+    /** sustained_shape 专用：移除操作 */
+    sustainedRemove?: boolean;
   }): void {
     // 映射所有坐标参数
     const mapCfg: typeof config & Record<string, any> = { ...config };
@@ -163,12 +203,33 @@ export class CyberFishRenderer {
     switch (config.type) {
       case 'shockwave':
         if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
-          this.effectRenderer.triggerShockwave(mapCfg.x, mapCfg.y, config.isBurst ?? false, -1, themeColor);
+          const shockRadius = config.radius ?? SHOCKWAVE_MAX_RADIUS;
+          this.effectRenderer.triggerShockwave(mapCfg.x, mapCfg.y, config.isBurst ?? false, -1, themeColor, shockRadius);
+        }
+        break;
+      case 'shockwave_bounce':
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          const shockRadius = config.radius ?? SHOCKWAVE_MAX_RADIUS;
+          this.effectRenderer.triggerShockwaveBounce(mapCfg.x, mapCfg.y, themeColor, shockRadius);
         }
         break;
       case 'firewall':
         if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
-          this.effectRenderer.triggerFirewall(mapCfg.x, mapCfg.y, config.isBurst ?? false, undefined, themeColor);
+          const fwRadius = config.radius ?? FIREWALL_HEX_RADIUS;
+          this.effectRenderer.triggerFirewall(
+            mapCfg.x, mapCfg.y, config.isBurst ?? false, undefined, themeColor, fwRadius,
+            config.visualWidth, config.visualHeight, config.durationSec,
+          );
+          // 追踪防火墙位置用于减速特效检测
+          if (config.playerId) {
+            this.activeFirewalls.push({
+              x: mapCfg.x,
+              y: mapCfg.y,
+              radius: fwRadius * this.getUniformScale(),
+              ownerId: config.playerId,
+              spawnedAt: performance.now(),
+            });
+          }
         }
         break;
       case 'hive_sting':
@@ -180,8 +241,39 @@ export class CyberFishRenderer {
           );
         }
         break;
+      case 'hive_sting_bounce':
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerHiveStingBounce(mapCfg.x, mapCfg.y, themeColor);
+        }
+        break;
       case 'burst_flash':
         this.effectRenderer.triggerBurstFlash(themeColor ?? config.factionColor ?? 0xFF00FF);
+        break;
+      case 'shape':
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined && config.shapeDesc) {
+          this.effectRenderer.triggerShapeEffect(
+            config.shapeDesc,
+            mapCfg.x, mapCfg.y,
+            config.shapeAnimCfg,
+          );
+        }
+        break;
+      case 'sustained_shape':
+        if (config.sustainedRemove && config.sustainedKey) {
+          // 移除操作
+          this.effectRenderer.removeSustainedShape(config.sustainedKey);
+        } else if (config.sustainedPartial && config.sustainedKey) {
+          // 更新操作
+          this.effectRenderer.updateSustainedShape(config.sustainedKey, config.sustainedPartial);
+        } else if (mapCfg.x !== undefined && mapCfg.y !== undefined && config.shapeDesc && config.sustainedKey) {
+          // 创建操作
+          this.effectRenderer.triggerSustainedShape(
+            config.sustainedKey,
+            config.shapeDesc,
+            mapCfg.x, mapCfg.y,
+            config.sustainedCfg,
+          );
+        }
         break;
     }
   }
@@ -214,6 +306,9 @@ export class CyberFishRenderer {
    */
   setBattleActive(active: boolean): void {
     this.battleActive = active;
+    if (!active) {
+      this.activeFirewalls = [];
+    }
   }
 
   /**
@@ -226,7 +321,28 @@ export class CyberFishRenderer {
     }
     if (!alive) {
       this.physics.removePlayer(playerId);
+      // 清理蜂群
+      this.hivePlayers.delete(playerId);
+      this.effectRenderer.removeHiveBees(playerId);
     }
+  }
+
+  /**
+   * 设置玩家蜂群渲染（蜂巢母体常驻特效）
+   * @param playerId 玩家 ID
+   * @param beeCount 蜂数量（3 常态 / 6 爆发）
+   * @param isBurst 是否爆发状态
+   */
+  setPlayerHiveActive(playerId: string, beeCount: number, isBurst: boolean): void {
+    this.hivePlayers.set(playerId, { beeCount, isBurst });
+  }
+
+  /**
+   * 移除玩家蜂群渲染
+   */
+  removePlayerHive(playerId: string): void {
+    this.hivePlayers.delete(playerId);
+    this.effectRenderer.removeHiveBees(playerId);
   }
 
   /**
@@ -271,6 +387,7 @@ export class CyberFishRenderer {
       pr.destroy();
     }
     this.playerRenderers.clear();
+    this.activeFirewalls = [];
     this.l1Player?.destroy({ children: true });
     this.l2Entity?.destroy({ children: true });
     this.l3Field?.destroy({ children: true });
@@ -361,11 +478,42 @@ export class CyberFishRenderer {
       // 1. 推进物理插值时间
       this.physics.advanceRenderTime(dt);
 
+      // 清理过期防火墙记录（防止无限增长）
+      const now = performance.now();
+      this.activeFirewalls = this.activeFirewalls.filter(
+        fw => now - fw.spawnedAt < CyberFishRenderer.FIREWALL_MAX_LIFE_MS,
+      );
+
       // 2. 更新所有 PlayerRenderer（插值后的画布像素状态）
       for (const [playerId, pr] of this.playerRenderers) {
         const state = this.physics.interpolate(playerId, performance.now());
         if (state) {
           pr.update(state, dt);
+          // 防火墙减速检测
+          let slowed = false;
+          for (const fw of this.activeFirewalls) {
+            if (fw.ownerId === playerId) continue; // 不减速自己
+            const dx = state.x - fw.x;
+            const dy = state.y - fw.y;
+            if (Math.sqrt(dx * dx + dy * dy) < fw.radius) {
+              slowed = true;
+              break;
+            }
+          }
+          pr.setSlowed(slowed);
+        }
+      }
+
+      // 2.5 更新蜂群绕球公转（蜂巢母体常驻特效）
+      for (const [playerId, hv] of this.hivePlayers) {
+        const state = this.physics.interpolate(playerId, performance.now());
+        if (state) {
+          const themeColor = this.playerRenderers.get(playerId)?.getTrailColor();
+          this.effectRenderer.updateHiveBees(
+            playerId, state.x, state.y,
+            hv.beeCount, hv.isBurst, dt,
+            themeColor,
+          );
         }
       }
     } else {

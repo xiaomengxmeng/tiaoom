@@ -23,8 +23,16 @@ export { default } from './FishOilRoom';
 
 // 也导出核心模块供外部直接测试
 export { SkillScheduler, BattleState } from './core/SkillScheduler';
-export type { ISkill, IBattleState, SkillEffect, School } from './core/types';
-export { ShockwaveGenerator } from './skills/ShockwaveGenerator';
-export { FirewallProtocol } from './skills/FirewallProtocol';
-export { HiveMother } from './skills/HiveMother';
+export { WeaponScheduler } from './core/WeaponScheduler';
+export type { ISkill, IBattleState, SkillEffect } from './core/types';
+export type { IWeapon, IPhysicsQuery, WeaponEffect, WeaponRuntimeState, AliveOpponent } from './core/IWeapon';
+export { createWeapon, getWeaponMetaList, getImplementedWeaponMetaList } from './core/WeaponRegistry';
+export { PhysicsAdapter } from './physics/PhysicsAdapter';
+// 新版 IWeapon 武器
+export { ShockwaveGeneratorWeapon } from './skills/weapons/ShockwaveGeneratorWeapon';
+export { FirewallProtocolWeapon } from './skills/weapons/FirewallProtocolWeapon';
+export { HiveMotherWeapon } from './skills/weapons/HiveMotherWeapon';
 export { PhysicsEngine } from './physics/PhysicsEngine';
+export { School, WeaponId, WeaponEffectType, VisualEventType, GameEndReason } from './config/GameEnums';
+export { WEAPON_RANGE_CONFIG } from './config/WeaponRangeConfig';
+export type { WeaponRangeConfig, WeaponProjectileConfig, WeaponFieldConfig } from './config/WeaponRangeConfig';

@@ -27,15 +27,38 @@ export const ARENA_RADIUS_LOGICAL = 280;
 /** 小球基础半径（逻辑坐标） */
 export const PLAYER_BASE_RADIUS = 36;
 
-// ─── 技能特效逻辑尺寸 ─────────────────────────────────
+// ─── 技能特效逻辑尺寸（从后端 WeaponRangeConfig 统一配置导入） ──
 
-/** 冲击波最大扩散半径（逻辑 px） */
-export const SHOCKWAVE_MAX_RADIUS = 220;
-/** 防火墙六边形基准半径（逻辑 px） */
-export const FIREWALL_HEX_RADIUS = 100;
+import {
+  WEAPON_RANGE_CONFIG,
+  type WeaponRangeConfig,
+} from '$/backend/src/games/fish-oil-battle/config/WeaponRangeConfig';
+import { WeaponId } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
+
+/** 冲击波默认扩散半径（逻辑 px），后端可覆盖 */
+export const SHOCKWAVE_MAX_RADIUS =
+  (WEAPON_RANGE_CONFIG[WeaponId.SHOCKWAVE_GENERATOR]?.aoeMaxRadius
+   ?? WEAPON_RANGE_CONFIG[WeaponId.SHOCKWAVE_GENERATOR]?.damageRadius
+   ?? 200);
+/** 防火墙默认六边形半径（逻辑 px），后端可覆盖 */
+export const FIREWALL_HEX_RADIUS =
+  (WEAPON_RANGE_CONFIG[WeaponId.FIREWALL_PROTOCOL]?.field?.hexRadius
+   ?? WEAPON_RANGE_CONFIG[WeaponId.FIREWALL_PROTOCOL]?.field?.radius
+   ?? 80);
+/** 防火墙默认视觉宽度（逻辑 px），后端可覆盖 */
+export const FIREWALL_VISUAL_WIDTH =
+  (WEAPON_RANGE_CONFIG[WeaponId.FIREWALL_PROTOCOL]?.field?.visualWidth
+   ?? 100);
+/** 防火墙默认视觉高度（逻辑 px），后端可覆盖 */
+export const FIREWALL_VISUAL_HEIGHT =
+  (WEAPON_RANGE_CONFIG[WeaponId.FIREWALL_PROTOCOL]?.field?.visualHeight
+   ?? 40);
 /** 蜂刺飞行速度（逻辑 px/s） */
-export const STINGER_SPEED = 300;
+export const STINGER_SPEED =
+  WEAPON_RANGE_CONFIG[WeaponId.HIVE_MOTHER]?.projectile?.speed ?? 300;
 /** 爆发闪屏持续时间（ms） */
 export const BURST_FLASH_DURATION = 400;
 /** 蜂群爆发放大倍率 */
 export const HIVE_BURST_SCALE = 1.5;
+
+export { WEAPON_RANGE_CONFIG, type WeaponRangeConfig };

@@ -24,6 +24,20 @@ export interface BallPhysics {
   speed: number;        // 当前速率
 }
 
+/** 动态障碍物（硬化防火墙等场地装置） */
+export interface PhysicsObstacle {
+  x: number;
+  y: number;
+  /** 碰撞半径（逻辑 px） */
+  radius: number;
+  /** 碰撞矩形宽度（逻辑 px），方案 B */
+  width?: number;
+  /** 碰撞矩形高度（逻辑 px） */
+  height?: number;
+  /** 障碍物所属玩家 ID（用于碰撞时追溯伤害来源 + 跳过创造者自己的碰撞） */
+  sourceId: string;
+}
+
 export interface PhysicsConfig {
   canvasWidth: number;
   canvasHeight: number;
@@ -44,17 +58,26 @@ const DEFAULT_CONFIG: PhysicsConfig = {
 };
 
 export interface CollisionEvent {
-  type: 'wall' | 'ball';
+  type: 'wall' | 'ball' | 'obstacle';
   ballIds: string[];          // 参与碰撞的球
   position: { x: number; y: number };  // 碰撞位置
+  /** obstacle 碰撞时：障碍物所属玩家 ID（用于伤害追溯） */
+  sourceId?: string;
 }
 
 export class PhysicsEngine {
   readonly config: PhysicsConfig;
   private balls = new Map<string, BallPhysics>();
+  /** 每帧刷新一次的动态障碍物（由 WeaponScheduler 通过 setObstacles 注入） */
+  private obstacles: PhysicsObstacle[] = [];
 
   constructor(config?: Partial<PhysicsConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  /** 设置本帧的活跃障碍物（每次 tick 前调用） */
+  setObstacles(obs: PhysicsObstacle[]): void {
+    this.obstacles = obs;
   }
 
   // ═══════════════════════════════════════════════════
@@ -105,6 +128,71 @@ export class PhysicsEngine {
       ball.x += ball.vx * dt;
       ball.y += ball.vy * dt;
       ball.speed = Math.sqrt(ball.vx ** 2 + ball.vy ** 2);
+    }
+
+    // 1.5 动态障碍物碰撞（硬化防火墙等场地装置反弹角色）
+    for (const obs of this.obstacles) {
+      for (const [, ball] of this.balls) {
+        // 创造者不碰撞自己的障碍物
+        if (ball.id === obs.sourceId) continue;
+
+        // 矩形碰撞检测（方案 B：width/height 存在时使用 AABB）
+        if (obs.width !== undefined && obs.height !== undefined && obs.width > 0 && obs.height > 0) {
+          const halfW = obs.width / 2;
+          const halfH = obs.height / 2;
+          const closestX = Math.max(obs.x - halfW, Math.min(ball.x, obs.x + halfW));
+          const closestY = Math.max(obs.y - halfH, Math.min(ball.y, obs.y + halfH));
+          const dx = ball.x - closestX;
+          const dy = ball.y - closestY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < ball.radius && dist > 0) {
+            // 法向量（从最近点指向球心）
+            const nx = dx / dist;
+            const ny = dy / dist;
+            // 将球推出障碍物
+            ball.x = closestX + nx * ball.radius;
+            ball.y = closestY + ny * ball.radius;
+            // 反射速度
+            const dot = ball.vx * nx + ball.vy * ny;
+            ball.vx -= 2 * dot * nx;
+            ball.vy -= 2 * dot * ny;
+
+            events.push({
+              type: 'obstacle',
+              ballIds: [ball.id],
+              position: { x: ball.x, y: ball.y },
+              sourceId: obs.sourceId,
+            });
+          }
+        } else {
+          // 原有圆形碰撞检测
+          const dx = ball.x - obs.x;
+          const dy = ball.y - obs.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const collisionDist = ball.radius + obs.radius;
+
+          if (dist < collisionDist && dist > 0) {
+            // 法向量（从障碍物圆心指向球）
+            const nx = dx / dist;
+            const ny = dy / dist;
+            // 将球推出障碍物
+            ball.x = obs.x + nx * collisionDist;
+            ball.y = obs.y + ny * collisionDist;
+            // 反射速度（v' = v - 2(v·n)n），只改方向不改速率
+            const dot = ball.vx * nx + ball.vy * ny;
+            ball.vx -= 2 * dot * nx;
+            ball.vy -= 2 * dot * ny;
+
+            events.push({
+              type: 'obstacle',
+              ballIds: [ball.id],
+              position: { x: ball.x, y: ball.y },
+              sourceId: obs.sourceId,
+            });
+          }
+        }
+      }
     }
 
     // 2. 圆形竞技场边界反弹（球在圆内弹跳）

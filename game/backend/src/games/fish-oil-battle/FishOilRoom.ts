@@ -444,6 +444,10 @@ export default class FishOilRoom extends GameRoom {
     [VisualEventType.SHOCKWAVE_BOUNCE]:   VisualEventType.SHOCKWAVE_BOUNCE,
     [VisualEventType.BURST_TRIGGER]:      VisualEventType.BURST_TRIGGER,
     [VisualEventType.BEE_COUNT_CHANGE]:   VisualEventType.BEE_COUNT_CHANGE,
+    // 方案 B：射线追踪波前事件
+    [VisualEventType.SHOCKWAVE_WAVEFRONT_TRIGGER]: VisualEventType.SHOCKWAVE_WAVEFRONT_TRIGGER,
+    [VisualEventType.SHOCKWAVE_WAVEFRONT_UPDATE]:  VisualEventType.SHOCKWAVE_WAVEFRONT_UPDATE,
+    [VisualEventType.SHOCKWAVE_WAVEFRONT_REMOVE]:  VisualEventType.SHOCKWAVE_WAVEFRONT_REMOVE,
   };
 
   /** 从 WeaponScheduler 的 PendingVisualEvent 转换为 VisualEventData */
@@ -468,6 +472,10 @@ export default class FishOilRoom extends GameRoom {
         visualWidth: evt.metadata?.visualWidth,
         visualHeight: evt.metadata?.visualHeight,
         durationSec: evt.metadata?.durationSec,
+        // 方案 B：射线端点数据透传
+        waveId: evt.metadata?.waveId,
+        rayEndpoints: evt.metadata?.rayEndpoints,
+        waveAlpha: evt.metadata?.waveAlpha,
       });
     }
     return result;

@@ -152,7 +152,7 @@ export class CyberFishRenderer {
    * @param config.radius 后端传入的技能生效范围（逻辑 px），前端用此值绘特效
    */
   triggerSkillEffect(config: {
-    type: 'shockwave' | 'shockwave_bounce' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'shape' | 'sustained_shape';
+    type: 'shockwave' | 'shockwave_bounce' | 'shockwave_wavefront_trigger' | 'shockwave_wavefront_update' | 'shockwave_wavefront_remove' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'shape' | 'sustained_shape';
     x?: number; y?: number;
     isBurst?: boolean;
     radius?: number;
@@ -163,6 +163,12 @@ export class CyberFishRenderer {
     toX?: number; toY?: number;
     factionColor?: number;
     playerId?: string;
+    /** 波前专用：唯一 ID */
+    waveId?: string;
+    /** 波前专用：射线端点数组 */
+    rayEndpoints?: Array<{ x: number; y: number }>;
+    /** 波前专用：透明度 */
+    waveAlpha?: number;
     /** shape/sustained_shape 专用：形状描述 */
     shapeDesc?: ShapeDescriptor;
     /** shape 专用：动画配置 */
@@ -211,6 +217,32 @@ export class CyberFishRenderer {
         if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
           const shockRadius = config.radius ?? SHOCKWAVE_MAX_RADIUS;
           this.effectRenderer.triggerShockwaveBounce(mapCfg.x, mapCfg.y, themeColor, shockRadius);
+        }
+        break;
+      case 'shockwave_wavefront_trigger':
+        if (config.waveId && mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerWavefront(
+            config.waveId,
+            mapCfg.x, mapCfg.y,
+            config.isBurst ?? false,
+            themeColor,
+            config.rayEndpoints,
+            config.waveAlpha,
+          );
+        }
+        break;
+      case 'shockwave_wavefront_update':
+        if (config.waveId && config.rayEndpoints) {
+          this.effectRenderer.updateWavefront(
+            config.waveId,
+            config.rayEndpoints,
+            config.waveAlpha,
+          );
+        }
+        break;
+      case 'shockwave_wavefront_remove':
+        if (config.waveId) {
+          this.effectRenderer.removeWavefront(config.waveId);
         }
         break;
       case 'firewall':

@@ -136,6 +136,59 @@ export class EffectRenderer {
   }
 
   // ══════════════════════════════════════════════════════
+  //  方案 B：射线追踪波前 API
+  // ══════════════════════════════════════════════════════
+
+  /** 波前 ActiveEffect 追踪：waveId → ActiveEffect */
+  private wavefrontEffects = new Map<string, ActiveEffect>();
+
+  /**
+   * 创建波前（收到 SHOCKWAVE_WAVEFRONT_TRIGGER）
+   */
+  triggerWavefront(
+    waveId: string,
+    x: number, y: number,
+    isBurst: boolean,
+    themeColor?: number,
+    initialEndpoints?: Array<{ x: number; y: number }>,
+    initialAlpha?: number,
+  ): void {
+    // 先移除旧波前（如果有）
+    this.removeWavefront(waveId);
+
+    const ef = this.shockwaveRenderer.addWavefront(
+      waveId, x, y, isBurst, themeColor, initialEndpoints, initialAlpha,
+    );
+    if (ef) {
+      this.wavefrontEffects.set(waveId, ef);
+      this.activeEffects.push(ef);
+    }
+  }
+
+  /**
+   * 更新波前端点（收到 SHOCKWAVE_WAVEFRONT_UPDATE）
+   */
+  updateWavefront(
+    waveId: string,
+    endpoints: Array<{ x: number; y: number }>,
+    alpha?: number,
+  ): void {
+    this.shockwaveRenderer.updateWavefrontData(waveId, endpoints, alpha);
+  }
+
+  /**
+   * 移除波前（收到 SHOCKWAVE_WAVEFRONT_REMOVE）
+   */
+  removeWavefront(waveId: string): void {
+    const ef = this.wavefrontEffects.get(waveId);
+    if (ef) {
+      // 标记为即将过期（下一帧会触发 onDecay）
+      ef.life = ef.maxLife;
+      this.wavefrontEffects.delete(waveId);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════
   //  公开 API：防火墙
   // ══════════════════════════════════════════════════════
 

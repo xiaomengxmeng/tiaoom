@@ -78,6 +78,12 @@ export enum VisualEventType {
   HIVE_STING_HIT = 'hive_sting_hit',
   HIVE_STING_BOUNCE = 'hive_sting_bounce',
   SHOCKWAVE_BOUNCE = 'shockwave_bounce',
+  /** 射线追踪波前：创建（替换旧 SHOCKWAVE_TRIGGER 的前端渲染方式） */
+  SHOCKWAVE_WAVEFRONT_TRIGGER = 'shockwave_wavefront_trigger',
+  /** 射线追踪波前：更新端点数据 */
+  SHOCKWAVE_WAVEFRONT_UPDATE = 'shockwave_wavefront_update',
+  /** 射线追踪波前：移除 */
+  SHOCKWAVE_WAVEFRONT_REMOVE = 'shockwave_wavefront_remove',
   BURST_TRIGGER = 'burst_trigger',
   BEE_COUNT_CHANGE = 'bee_count_change',
   HIT = 'hit',

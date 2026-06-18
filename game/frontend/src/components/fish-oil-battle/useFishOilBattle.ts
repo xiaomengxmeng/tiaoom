@@ -304,6 +304,39 @@ export function useFishOilBattle(
           });
         }
         break;
+      case VisualEventType.SHOCKWAVE_WAVEFRONT_TRIGGER:
+        if (data.x !== undefined && data.y !== undefined && data.waveId) {
+          rendererRef.value.triggerSkillEffect({
+            type: 'shockwave_wavefront_trigger',
+            waveId: data.waveId,
+            x: data.x, y: data.y,
+            isBurst: data.isBurst ?? false,
+            rayEndpoints: data.rayEndpoints,
+            waveAlpha: data.waveAlpha,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.SHOCKWAVE_WAVEFRONT_UPDATE:
+        if (data.waveId && data.rayEndpoints) {
+          rendererRef.value.triggerSkillEffect({
+            type: 'shockwave_wavefront_update',
+            waveId: data.waveId,
+            rayEndpoints: data.rayEndpoints,
+            waveAlpha: data.waveAlpha,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.SHOCKWAVE_WAVEFRONT_REMOVE:
+        if (data.waveId) {
+          rendererRef.value.triggerSkillEffect({
+            type: 'shockwave_wavefront_remove',
+            waveId: data.waveId,
+            playerId: data.playerId,
+          });
+        }
+        break;
       case VisualEventType.BURST_TRIGGER:
         rendererRef.value.triggerSkillEffect({
           type: 'burst_flash',

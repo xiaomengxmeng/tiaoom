@@ -61,6 +61,12 @@ export interface VisualEventData {
   durationSec?: number;
   /** 蜂巢母体：当前蜂数（受击减少 / 爆发增加时同步前端） */
   beeCount?: number;
+  /** 射线追踪波前：唯一 ID */
+  waveId?: string;
+  /** 射线追踪波前：射线端点数组（逻辑坐标，前端用于绘制波前多边形） */
+  rayEndpoints?: Array<{ x: number; y: number }>;
+  /** 射线追踪波前：透明度（0-1） */
+  waveAlpha?: number;
   /** 特效视觉配置（颜色、持续时间等，由后端 WeaponRangeConfig 驱动） */
   effectConfig?: {
     /** 主色（覆盖主题色） */

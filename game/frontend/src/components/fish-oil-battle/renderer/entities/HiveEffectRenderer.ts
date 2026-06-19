@@ -43,6 +43,8 @@ export class HiveEffectRenderer {
   private scale = 1;
   private canvasW: number;
   private canvasH: number;
+  /** 缩放变化时强制重建蜂群 */
+  private scaleDirty = false;
 
   constructor(
     entityContainer: PIXI.Container,
@@ -71,6 +73,9 @@ export class HiveEffectRenderer {
 
   /** 同步缩放 + 画布尺寸 */
   setScale(scale: number, canvasW: number, canvasH: number): void {
+    if (scale !== this.scale) {
+      this.scaleDirty = true;
+    }
     this.scale = scale;
     this.canvasW = canvasW;
     this.canvasH = canvasH;
@@ -285,6 +290,16 @@ export class HiveEffectRenderer {
     themeColor?: number,
     visualCfg?: HiveVisualConfig,
   ): void {
+    // 缩放变化时强制重建蜂群，使半径立即生效
+    if (this.scaleDirty) {
+      const old = this.hiveBees.get(playerId);
+      if (old) {
+        old.container.destroy({ children: true });
+        this.hiveBees.delete(playerId);
+      }
+      this.scaleDirty = false;
+    }
+
     let entry = this.hiveBees.get(playerId);
     const primary = themeColor ?? 0x32D63A;
     const burstScale = visualCfg?.burstScale ?? HIVE_BURST_SCALE;
@@ -302,16 +317,17 @@ export class HiveEffectRenderer {
         const g = new PIXI.Graphics();
         g.blendMode = BLEND_MODES.ADD as unknown as PIXI.BLEND_MODES;
         if (isBurst) {
-          g.circle(0, 0, 10);
+          g.circle(0, 0, 10 * this.scale);
           g.fill({ color: 0xFFFFFF, alpha: 0.9 });
-          g.circle(0, 0, 6);
+          g.circle(0, 0, 6 * this.scale);
           g.fill({ color: primary, alpha: 0.6 });
           g.scale.set(burstScale);
         } else {
-          g.circle(0, 0, 6);
+          g.circle(0, 0, 6 * this.scale);
           g.fill({ color: primary, alpha: 0.8 });
-          g.circle(0, 0, 3);
+          g.circle(0, 0, 3 * this.scale);
           g.fill({ color: 0xFFFFFF, alpha: 0.4 });
+          g.scale.set(1.0);
         }
         container.addChild(g);
         bees.push(g);
@@ -328,15 +344,15 @@ export class HiveEffectRenderer {
       for (const g of entry.bees) {
         g.clear();
         if (isBurst) {
-          g.circle(0, 0, 10);
+          g.circle(0, 0, 10 * this.scale);
           g.fill({ color: 0xFFFFFF, alpha: 0.9 });
-          g.circle(0, 0, 6);
+          g.circle(0, 0, 6 * this.scale);
           g.fill({ color: primary, alpha: 0.6 });
           g.scale.set(burstScale);
         } else {
-          g.circle(0, 0, 6);
+          g.circle(0, 0, 6 * this.scale);
           g.fill({ color: primary, alpha: 0.8 });
-          g.circle(0, 0, 3);
+          g.circle(0, 0, 3 * this.scale);
           g.fill({ color: 0xFFFFFF, alpha: 0.4 });
           g.scale.set(1.0);
         }

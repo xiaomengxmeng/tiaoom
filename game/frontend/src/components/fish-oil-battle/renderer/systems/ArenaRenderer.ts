@@ -63,8 +63,10 @@ export class ArenaRenderer {
 
   /** 当前墙壁风格（默认霓虹） */
   private wallStyle: WallStyle = WallStyle.NEON;
-  /** 当前霓虹主色（每次 rebuild 随机） */
+  /** 当前霓虹主色（优先使用后端同步颜色，保证所有玩家一致） */
   private neonColor: number = NEON.cyan;
+  /** 后端下发的墙壁颜色（未收到时 undefined，rebuild 时按形状兜底） */
+  private syncedWallColor?: number;
 
   /** 当前画布尺寸 */
   private w = 1280;
@@ -86,6 +88,13 @@ export class ArenaRenderer {
 
   /** 强制重建背景/墙壁（用于形状切换等不改尺寸的场景） */
   forceRedraw(): void {
+    this.rebuild();
+  }
+
+  /** 设置后端同步的墙壁颜色 */
+  setWallColor(color?: number): void {
+    if (this.syncedWallColor === color) return;
+    this.syncedWallColor = color;
     this.rebuild();
   }
 
@@ -120,8 +129,18 @@ export class ArenaRenderer {
   }
 
   private rebuild(): void {
-    // 每次重建随机选取霓虹主色
-    this.neonColor = NEON.palette[Math.floor(Math.random() * NEON.palette.length)];
+    // 优先使用后端同步颜色，保证所有玩家一致；未收到时按形状兜底
+    if (this.syncedWallColor !== undefined) {
+      this.neonColor = this.syncedWallColor;
+    } else {
+      const shape = getArenaShape();
+      const shapeColorMap: Record<ArenaShape, number> = {
+        [ArenaShape.CIRCLE]: NEON.cyan,
+        [ArenaShape.RECT]: NEON.magenta,
+        [ArenaShape.HEXAGON]: 0x00FF88,
+      };
+      this.neonColor = shapeColorMap[shape] ?? NEON.cyan;
+    }
     this.drawBackground();
     this.drawArenaBoundary();
   }

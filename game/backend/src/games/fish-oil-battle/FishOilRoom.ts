@@ -95,7 +95,7 @@ export default class FishOilRoom extends GameRoom {
    * 设计原则：人数越多 → 竞技场越大 → 保持游戏体验
    * 形状随机选择：circle / rect / hexagon
    */
-  private computeArenaConfig(playerCount: number): { width: number; height: number; arenaRadius: number; ballRadius: number; shape: ArenaShape; arenaHalfW?: number; arenaHalfH?: number } {
+  private computeArenaConfig(playerCount: number): { width: number; height: number; arenaRadius: number; ballRadius: number; shape: ArenaShape; arenaHalfW?: number; arenaHalfH?: number; wallColor?: number } {
     // 基础配置（2人）
     const baseWidth = 1280;
     const baseHeight = 720;
@@ -117,12 +117,21 @@ export default class FishOilRoom extends GameRoom {
     const shapes = [ArenaShape.CIRCLE, ArenaShape.RECT, ArenaShape.HEXAGON];
     const shape = shapes[Math.floor(Math.random() * shapes.length)];
 
+    // 随机墙壁颜色（后端权威，保证同一局所有玩家同步）
+    const wallColorPalette = [
+      0x00FFFF, 0xFF00FF, 0x00FF88, 0xFF6600,
+      0xFFDD00, 0x00AAFF, 0xFF4488, 0x88FF00,
+      0xCC44FF, 0xFF2266,
+    ];
+    const wallColor = wallColorPalette[Math.floor(Math.random() * wallColorPalette.length)];
+
     const result: any = {
       width: newWidth,
       height: newHeight,
       arenaRadius: newRadius,
       ballRadius: newBallRadius,
       shape,
+      wallColor,
     };
 
     if (shape === ArenaShape.RECT) {
@@ -235,6 +244,7 @@ export default class FishOilRoom extends GameRoom {
         arenaHalfW: arenaConfig.arenaHalfW,
         arenaHalfH: arenaConfig.arenaHalfH,
         ballRadius: arenaConfig.ballRadius,
+        wallColor: arenaConfig.wallColor,
       },
     });
 

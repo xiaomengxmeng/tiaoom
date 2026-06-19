@@ -1,7 +1,6 @@
 import * as PIXI from 'pixi.js';
 import {
   getLogicalW, getLogicalH,
-  HIVE_BURST_SCALE,
 } from '../constants';
 import { WEAPON_RANGE_CONFIG } from '$/backend/src/games/fish-oil-battle/config/WeaponRangeConfig';
 import { WeaponId } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
@@ -169,31 +168,6 @@ export class EffectRenderer {
       : undefined;
     const ef = this.hiveRenderer.triggerBurstFlash(factionColor, visualCfg);
     if (ef) this.activeEffects.push(ef);
-  }
-
-  triggerHiveBurst(hives: PIXI.Container[], themeColor?: number): void {
-    // 蜂群爆发视觉：所有蜂变大 + 白热
-    const primary = themeColor ?? 0x39FF14;
-    for (const h of hives) {
-      h.scale.set(HIVE_BURST_SCALE);
-      if (h instanceof PIXI.Graphics) {
-        h.clear();
-        h.circle(0, 0, 10);
-        h.fill({ color: 0xFFFFFF, alpha: 0.9 });
-        h.circle(0, 0, 6);
-        h.fill({ color: primary, alpha: 0.6 });
-      }
-    }
-    setTimeout(() => {
-      for (const h of hives) {
-        h.scale.set(1.0);
-        if (h instanceof PIXI.Graphics) {
-          h.clear();
-          h.circle(0, 0, 7);
-          h.fill({ color: primary, alpha: 0.8 });
-        }
-      }
-    }, 3000);
   }
 
   updateHiveBees(

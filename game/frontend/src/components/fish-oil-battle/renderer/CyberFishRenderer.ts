@@ -370,7 +370,7 @@ export class CyberFishRenderer {
   /**
    * 设置竞技场配置（由后端 battle_start 消息驱动）
    */
-  setArenaConfig(config: { width: number; height: number; arenaRadius: number; ballRadius: number; shape?: string; arenaHalfW?: number; arenaHalfH?: number }): void {
+  setArenaConfig(config: { width: number; height: number; arenaRadius: number; ballRadius: number; shape?: string; arenaHalfW?: number; arenaHalfH?: number; wallColor?: number }): void {
     // 更新 constants.ts 中的动态配置（传递 shape）
     updateArenaConfig({
       width: config.width,
@@ -381,6 +381,9 @@ export class CyberFishRenderer {
       arenaHalfW: config.arenaHalfW,
       arenaHalfH: config.arenaHalfH,
     });
+
+    // 同步后端墙壁颜色（保证所有玩家一致）
+    this.arenaRenderer.setWallColor(config.wallColor);
 
     // 更新画布尺寸
     this.canvasW = this.app.screen.width;

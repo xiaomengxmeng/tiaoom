@@ -1,7 +1,24 @@
 <template>
+  <!-- compact 模式：顶部小横幅，不遮挡地图 -->
+  <Transition name="slide-down">
+    <div
+      v-if="(winnerName || isDraw) && compact"
+      class="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-4 py-2 rounded-xl shadow-lg border text-center text-sm font-bold bg-base-100/95 backdrop-blur-sm whitespace-nowrap"
+      :class="isDraw ? 'text-warning border-warning/30' : 'text-primary border-primary/30'"
+    >
+      <template v-if="isDraw">
+        ⚖️ 平局！{{ drawSubtitleText }}
+      </template>
+      <template v-else>
+        {{ resultIcon }} {{ winnerName }} 获胜！{{ subtitleText }}
+      </template>
+    </div>
+  </Transition>
+
+  <!-- 非 compact 模式：全屏居中面板 -->
   <Transition name="zoom">
     <div
-      v-if="winnerName || isDraw"
+      v-if="(winnerName || isDraw) && !compact"
       class="absolute inset-0 z-10 flex items-center justify-center
              bg-base-300/40 backdrop-blur-sm rounded-xl"
     >
@@ -30,7 +47,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   /** 胜者昵称，非空时显示结算遮罩 */
   winnerName: string | null;
   /** 胜者 ID */
@@ -43,7 +60,11 @@ const props = defineProps<{
   isWatcher: boolean;
   /** 当前玩家昵称 */
   roomPlayerName: string;
-}>();
+  /** 紧凑模式：顶部小横幅，不遮挡地图 */
+  compact?: boolean;
+}>(), {
+  compact: false,
+});
 
 const resultIcon = computed(() => {
   if (!props.winnerName) return '';
@@ -74,5 +95,13 @@ const drawSubtitleText = computed(() => {
 <style scoped>
 .zoom-enter-active, .zoom-leave-active { transition: opacity 0.3s ease, transform 0.3s ease; }
 .zoom-enter-from,  .zoom-leave-to      { opacity: 0; transform: scale(0.9); }
+
+.slide-down-enter-active, .slide-down-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.slide-down-enter-from, .slide-down-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-100%);
+}
 </style>
 

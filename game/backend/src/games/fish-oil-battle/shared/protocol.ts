@@ -25,6 +25,8 @@ export interface ArenaConfig {
   arenaHalfH?: number;
   /** 小球碰撞半径（逻辑单位） */
   ballRadius: number;
+  /** 墙壁霓虹主色（后端随机生成，保证所有玩家同步） */
+  wallColor?: number;
 }
 
 // ─── 武器元信息 ────────────────────────────────────────────────

@@ -117,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, computed, onMounted, onUnmounted, type Ref } from 'vue';
+import { ref, shallowRef, computed, onUnmounted } from 'vue';
 import type { RoomPlayer, Room } from 'tiaoom/client';
 import GameView from '@/components/common/GameView.vue';
 import FishOilBattleCanvas from './FishOilBattleCanvas.vue';
@@ -126,8 +126,9 @@ import WeaponSelectOverlay from './components/WeaponSelectOverlay.vue';
 import BattleResultOverlay from './components/BattleResultOverlay.vue';
 import type { GameCore } from '@/core/game';
 import { CyberFishRenderer } from './renderer/CyberFishRenderer';
-import { useFishOilBattle, type HudPlayerInfo, type SelectableWeapon } from './useFishOilBattle';
-import { computeRadialHudLayout, hudPositionToStyle, type HudPosition } from './utils/hudLayout';
+import { useFishOilBattle, type SelectableWeapon } from './useFishOilBattle';
+import type { ArenaConfig } from '$/backend/src/games/fish-oil-battle/shared/protocol';
+import { computeRadialHudLayout, hudPositionToStyle } from './utils/hudLayout';
 
 const props = withDefaults(defineProps<{
   roomPlayer: RoomPlayer & { room: Room };
@@ -149,7 +150,7 @@ const rendererRef = shallowRef<CyberFishRenderer | null>(null);
 /** HUD 缩放因子（跟随 canvas uniformScale，最小 0.5，最大 1.0） */
 const hudScale = ref(1);
 
-function onPixiReady(app: any, stage: any): void {
+function onPixiReady(_app: any, stage: any): void {
   void stage; // 消除未使用警告
   if (!canvasRef.value) return;
   const appInstance = (canvasRef.value as any).getApp();
@@ -195,7 +196,6 @@ const battleHudVisible = computed(() => battleState.battleHudVisible.value);
 const selfHud = computed(() => battleState.selfHud.value);
 const otherPlayerHuds = computed(() => battleState.otherPlayerHuds.value);
 const roundTimer = computed(() => battleState.roundTimer.value);
-const roundDuration = computed(() => battleState.roundDuration.value);
 const winnerName = computed(() => battleState.winnerName.value as string | null);
 const winnerPlayerId = computed(() => battleState.winnerPlayerId.value as string);
 const isDraw = computed(() => battleState.isDraw.value as boolean);
@@ -242,7 +242,7 @@ function getCanvasSize(): { w: number; h: number } {
 /** 己方 HUD 位置 */
 const selfHudPosition = computed(() => {
   const total = otherPlayerHuds.value.length + 1;
-  const { w, h } = getCanvasSize();
+  getCanvasSize();
 
   if (total <= 4) {
     return { left: '16px', bottom: '16px' };
@@ -263,7 +263,7 @@ function getOtherHudStyle(index: number): Record<string, string> {
 
   if (total <= 4) {
     // 角落布局
-    const positions = [
+    const positions: Record<string, string>[] = [
       { right: '16px', top: '16px' },
       { right: '16px', bottom: '16px' },
       { left: '16px', top: '16px' },
@@ -313,7 +313,7 @@ async function handleBattleStart(data: {
   weaponPool: SelectableWeapon[];
   countdown: number;
   players?: Array<{ id: string; name: string; avatar?: string; faction?: string; x?: number; y?: number }>;
-  arenaConfig?: { width: number; height: number; arenaRadius: number; ballRadius: number };
+  arenaConfig?: ArenaConfig;
 }): Promise<void> {
   console.log('[FishOilBattle] handleBattleStart:', JSON.stringify(data.players), 'arenaConfig=', data.arenaConfig);
 

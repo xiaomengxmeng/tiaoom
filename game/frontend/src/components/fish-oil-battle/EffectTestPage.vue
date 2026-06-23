@@ -161,7 +161,7 @@
                     :min="640" :max="2560" :step="64"
                     type="range"
                     class="range range-secondary range-xs mt-0.5"
-                    @input="onArenaChange"
+                    @input="onArenaChange()"
                   />
                 </label>
                 <label class="form-control min-w-[100px]">
@@ -174,7 +174,7 @@
                     :min="360" :max="1440" :step="36"
                     type="range"
                     class="range range-secondary range-xs mt-0.5"
-                    @input="onArenaChange"
+                    @input="onArenaChange()"
                   />
                 </label>
                 <!-- 圆形/六边形：半径 -->
@@ -188,7 +188,7 @@
                     :min="140" :max="560" :step="14"
                     type="range"
                     class="range range-secondary range-xs mt-0.5"
-                    @input="onArenaChange"
+                    @input="onArenaChange()"
                   />
                 </label>
                 <!-- 矩形：半宽/半高 -->
@@ -203,7 +203,7 @@
                       :min="100" :max="500" :step="10"
                       type="range"
                       class="range range-secondary range-xs mt-0.5"
-                      @input="onArenaChange"
+                      @input="onArenaChange()"
                     />
                   </label>
                   <label class="form-control min-w-[100px]">
@@ -216,7 +216,7 @@
                       :min="80" :max="400" :step="10"
                       type="range"
                       class="range range-secondary range-xs mt-0.5"
-                      @input="onArenaChange"
+                      @input="onArenaChange()"
                     />
                   </label>
                 </template>

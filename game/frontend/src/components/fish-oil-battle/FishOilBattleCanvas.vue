@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, type PropType } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import * as PIXI from 'pixi.js';
 
 const props = defineProps({

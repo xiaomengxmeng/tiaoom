@@ -55,7 +55,7 @@ export interface SelectableWeapon {
 
 export interface FishOilBattleActions {
   selectWeapon: (weaponId: string) => void;
-  onBattleStart: (data: { weaponPool: SelectableWeapon[]; countdown: number }) => void;
+  onBattleStart: (data: { weaponPool: SelectableWeapon[]; countdown: number; arenaConfig?: ArenaConfig }) => void;
   onRoundStart: (data: { duration: number }) => void;
   onRoundTimer: (data: { remaining: number }) => void;
   onWeaponConfirmed: (data: { weaponId: string; weaponName: string }) => void;

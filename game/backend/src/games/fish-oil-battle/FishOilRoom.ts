@@ -22,6 +22,7 @@ export const description = '2-8 人大逃杀，选择武器，最后存活者获
 
 import { RoomPlayer } from 'tiaoom';
 import { GameRoom, IGameCommand } from '../index';
+import { BotPlayer } from './BotPlayer';
 import { BattleState } from './core/SkillScheduler';
 import { WeaponScheduler, type PendingVisualEvent } from './core/WeaponScheduler';
 import { createWeapon, getImplementedWeaponMetaList } from './core/WeaponRegistry';
@@ -89,6 +90,10 @@ export default class FishOilRoom extends GameRoom {
   private battleTick = 0;
   /** 大逃杀：已死亡的玩家 ID 集合 */
   private deadPlayers = new Set<string>();
+
+  // 测试模式
+  private isTestMode = false;
+  private botPlayers = new Map<string, BotPlayer>();
 
   /**
    * 根据玩家数量计算竞技场配置
@@ -167,7 +172,7 @@ export default class FishOilRoom extends GameRoom {
   onStart() {
     const players = this.room.validPlayers;
     const playerCount = players.length;
-    if (playerCount < 2 || playerCount > 8) {
+    if (!this.isTestMode && (playerCount < 2 || playerCount > 8)) {
       this.say('需要 2-8 名玩家（大逃杀模式）');
       return;
     }
@@ -260,6 +265,29 @@ export default class FishOilRoom extends GameRoom {
       }
       this.startBattle();
     }, 15000, 'weapon_select');
+
+    // 测试模式：Bot 立即随机选择武器（人类玩家仍需手动选择）
+    if (this.isTestMode) {
+      for (const bot of this.botPlayers.values()) {
+        if (!this.weaponConfirmed.has(bot.id)) {
+          const randomWeapon = IMPLEMENTED_WEAPONS[Math.floor(Math.random() * IMPLEMENTED_WEAPONS.length)];
+          this.assignWeapon(bot.id, randomWeapon);
+          console.log(`[FishOil] Bot ${bot.id} 自动选择武器: ${randomWeapon.name}`);
+        }
+      }
+      // 如果所有玩家都选了武器（只有人类还没选），提前结束倒计时
+      this.checkAllConfirmed();
+    }
+  }
+
+  /** 检查是否所有玩家都已确认武器，如果是则立即开战 */
+  private checkAllConfirmed(): void {
+    const totalPlayers = this.room.validPlayers.filter(p => p.role === 'player').length;
+    if (this.weaponConfirmed.size >= totalPlayers) {
+      console.log('[FishOil] 全部已选择武器（含 Bot），开始战斗！');
+      this.stopTimer('weapon_select');
+      this.startBattle();
+    }
   }
 
   // ─── 覆盖 onCommand ──────────────────────────────────
@@ -270,6 +298,9 @@ export default class FishOilRoom extends GameRoom {
     switch (message.type) {
       case 'select_weapon':
         this.handleSelectWeapon(sender, message.data);
+        break;
+      case 'start_test_mode':
+        this.handleStartTestMode(sender, message.data);
         break;
     }
   }
@@ -306,6 +337,53 @@ export default class FishOilRoom extends GameRoom {
         data: { weaponId: weapon.id, weaponName: weapon.name },
       });
     }
+  }
+
+  // ─── 测试模式：自动添加 Bot ─────────────────────────
+  private handleStartTestMode(sender: RoomPlayer, data: { botCount: number }): void {
+    const botCount = Math.max(1, Math.min(7, data.botCount ?? 1));
+    const totalPlayers = 1 + botCount; // 1 human + N bots
+
+    if (totalPlayers > this.room.size && this.room.size > 0) {
+      this.say(`房间容量不足：当前容量 ${this.room.size}，需要至少 ${totalPlayers} 个位置`);
+      return;
+    }
+
+    console.log(`[FishOil] 测试模式启动: botCount=${botCount}, totalPlayers=${totalPlayers}`);
+
+    // 清理旧 bot
+    this.cleanupBots();
+
+    this.isTestMode = true;
+
+    // 创建并添加 Bot 玩家
+    for (let i = 0; i < botCount; i++) {
+      const bot = new BotPlayer(i + 1);
+      bot.roomId = this.room.id;
+      this.room.addPlayer(bot);
+      this.botPlayers.set(bot.id, bot);
+    }
+
+    console.log(`[FishOil] 已添加 ${botCount} 个 Bot: ${Array.from(this.botPlayers.keys()).join(', ')}`);
+
+    // 设置 human 玩家为 ready
+    sender.isReady = true;
+    sender.emit('command', { type: 'test_mode_ready', data: { botCount } });
+
+    // 直接启动游戏（绕过准备检查）
+    this.room.start(sender);
+  }
+
+  /** 清理所有 Bot 玩家 */
+  private cleanupBots(): void {
+    for (const [id] of this.botPlayers) {
+      const idx = this.room.players.findIndex(p => p.id === id);
+      if (idx >= 0) {
+        this.room.players.splice(idx, 1);
+      }
+    }
+    this.botPlayers.clear();
+    this.isTestMode = false;
   }
 
   // ═══════════════════════════════════════════════════
@@ -689,7 +767,10 @@ export default class FishOilRoom extends GameRoom {
   // ─── 生命周期清理 ──────────────────────────────────
   init() {
     const room = super.init();
-    this.room.on('close', () => this.stopBattleLoop());
+    this.room.on('close', () => {
+      this.stopBattleLoop();
+      this.cleanupBots();
+    });
     this.room.on('leave', (player: any) => {
       const pid = player.id;
       if (this.phase === 'battle' && this.battleState) {

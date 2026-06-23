@@ -12,62 +12,88 @@
         <Icon :icon="sidebarOpen ? 'ph:sidebar-simple-fill' : 'ph:sidebar-simple'" />
       </button>
 
+      <!-- Tab 切换 -->
+      <div class="tabs tabs-bordered tabs-sm">
+        <a
+          class="tab tab-sm"
+          :class="{ 'tab-active': currentTab === 'effect' }"
+          @click="currentTab = 'effect'"
+        >特效测试</a>
+        <a
+          class="tab tab-sm"
+          :class="{ 'tab-active': currentTab === 'battle' }"
+          @click="currentTab = 'battle'"
+        >对局测试</a>
+      </div>
+
       <!-- 分隔 -->
       <div class="w-px h-5 bg-base-300" />
 
-      <!-- 特效名称 -->
-      <span class="text-sm font-semibold min-w-0 truncate">
+      <!-- 特效名称（仅特效 tab 显示） -->
+      <span v-if="currentTab === 'effect'" class="text-sm font-semibold min-w-0 truncate">
         {{ currentEffect?.name ?? '选择特效' }}
       </span>
 
       <!-- 分隔 -->
-      <div class="w-px h-5 bg-base-300" />
+      <div v-if="currentTab === 'effect'" class="w-px h-5 bg-base-300" />
 
-      <!-- 循环开关 -->
-      <label class="label cursor-pointer gap-1.5 p-0">
-        <input v-model="loopEnabled" type="checkbox" class="toggle toggle-primary toggle-xs" />
-        <span class="label-text text-xs">循环</span>
-      </label>
-      <span v-if="loopEnabled" class="text-[11px] opacity-50 tabular-nums">
-        {{ loopInterval }}ms
-      </span>
+      <!-- 循环开关（仅特效 tab 显示） -->
+      <template v-if="currentTab === 'effect'">
+        <label class="label cursor-pointer gap-1.5 p-0">
+          <input v-model="loopEnabled" type="checkbox" class="toggle toggle-primary toggle-xs" />
+          <span class="label-text text-xs">循环</span>
+        </label>
+        <span v-if="loopEnabled" class="text-[11px] opacity-50 tabular-nums">
+          {{ loopInterval }}ms
+        </span>
+      </template>
 
       <div class="flex-1" />
 
-      <!-- 操作按钮组 -->
-      <div class="join">
-        <button class="btn btn-primary btn-xs join-item" @click="playOnce">
-          <Icon icon="ph:play-fill" />
-          Play
-        </button>
-        <button class="btn btn-error btn-soft btn-xs join-item" @click="clearAll">
-          <Icon icon="ph:x" />
-          Clear
-        </button>
-      </div>
+      <!-- 操作按钮组（仅特效 tab） -->
+      <template v-if="currentTab === 'effect'">
+        <div class="join">
+          <button class="btn btn-primary btn-xs join-item" @click="playOnce">
+            <Icon icon="ph:play-fill" />
+            Play
+          </button>
+          <button class="btn btn-error btn-soft btn-xs join-item" @click="clearAll">
+            <Icon icon="ph:x" />
+            Clear
+          </button>
+        </div>
 
-      <!-- 参数面板切换 -->
-      <button
-        class="btn btn-ghost btn-sm btn-square"
-        @click="paramsOpen = !paramsOpen"
-      >
-        <Icon :icon="paramsOpen ? 'ph:sliders-fill' : 'ph:sliders'" />
-      </button>
-
-      <!-- 复制 -->
-      <div class="tooltip tooltip-bottom" data-tip="复制 JSON">
-        <button class="btn btn-ghost btn-sm btn-square" @click="copyParams">
-          <Icon icon="ph:copy" />
+        <!-- 参数面板切换 -->
+        <button
+          class="btn btn-ghost btn-sm btn-square"
+          @click="paramsOpen = !paramsOpen"
+        >
+          <Icon :icon="paramsOpen ? 'ph:sliders-fill' : 'ph:sliders'" />
         </button>
-      </div>
 
-      <!-- 活跃计数 -->
-      <span class="badge badge-sm badge-ghost tabular-nums">{{ activeCount }}</span>
+        <!-- 复制 -->
+        <div class="tooltip tooltip-bottom" data-tip="复制 JSON">
+          <button class="btn btn-ghost btn-sm btn-square" @click="copyParams">
+            <Icon icon="ph:copy" />
+          </button>
+        </div>
+
+        <!-- 活跃计数 -->
+        <span class="badge badge-sm badge-ghost tabular-nums">{{ activeCount }}</span>
+      </template>
     </header>
 
     <!-- ══════════════════════════════════════════════════ -->
-    <!--  主体：侧边栏 + 画布                             -->
+    <!--  内容：对局测试模式                              -->
     <!-- ══════════════════════════════════════════════════ -->
+    <div v-if="currentTab === 'battle'" class="flex-1 overflow-hidden">
+      <BattleTestPanel />
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  内容：特效测试模式                              -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <template v-if="currentTab === 'effect'">
     <div class="flex flex-1 overflow-hidden">
       <!-- 侧边栏 -->
       <aside
@@ -367,6 +393,7 @@
         </div>
       </div>
     </div>
+  </template>
 
     <!-- ══════════════════════════════════════════════════ -->
     <!--  Toast 通知                                      -->
@@ -391,6 +418,7 @@ import { EFFECT_REGISTRY, type EffectDefinition, type EffectParam } from './test
 import { ArenaShape } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
 import { WallStyle } from './renderer/systems/ArenaRenderer';
 import type { WallStyle as WallStyleType } from './renderer/systems/ArenaRenderer';
+import BattleTestPanel from './components/BattleTestPanel.vue';
 
 // ── 状态 ────────────────────────────────────────────
 
@@ -401,6 +429,7 @@ const loopInterval = ref(1500);
 const activeCount = ref(0);
 const sidebarOpen = ref(true);
 const paramsOpen = ref(true);
+const currentTab = ref<'effect' | 'battle'>('effect');
 
 const paramValues = ref<Record<string, any>>({});
 

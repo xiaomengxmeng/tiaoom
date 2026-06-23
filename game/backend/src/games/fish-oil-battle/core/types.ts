@@ -36,6 +36,18 @@ export interface PlayerState {
   position: { x: number; y: number };
   /** 本局累计受到伤害（用于 Firewall 能量计算） */
   totalDamageTaken: number;
+  /** 本局累计造成的伤害 */
+  damageDealt: number;
+  /** 击杀数 */
+  kills: number;
+  /** 死亡数（大逃杀模式下最多为 1） */
+  deaths: number;
+  /** 单次最大伤害 */
+  maxHit: number;
+  /** 武器技能触发次数（造成伤害的次数） */
+  weaponTriggers: number;
+  /** 爆发次数 */
+  bursts: number;
   /** 当前是否为过热期 */
   isOverheated: boolean;
 }

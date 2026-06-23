@@ -97,10 +97,24 @@ export interface VisualEventData {
 // ─── 游戏统计（game_end 用）───────────────
 export interface PlayerStats {
   remainingHp: number;
-  totalDamage: number;
+  /** 受到的伤害总额 */
+  totalDamageTaken: number;
+  /** 造成的伤害总额 */
+  totalDamageDealt: number;
+  /** 单次最大伤害 */
   maxHit: number;
+  /** 武器技能触发次数 */
   weaponTriggers: number;
+  /** 爆发次数 */
   bursts: number;
+  /** 击杀数 */
+  kills: number;
+  /** 死亡数 */
+  deaths: number;
+  /** 使用的武器 ID */
+  weaponId: string;
+  /** 存活时间（秒） */
+  survivalTimeSec: number;
   /** 是否存活到最后 */
   survived: boolean;
 }

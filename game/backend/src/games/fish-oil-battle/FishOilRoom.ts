@@ -88,8 +88,12 @@ export default class FishOilRoom extends GameRoom {
   private roundTimer: ReturnType<typeof setInterval> | null = null;
   private roundSecondsRemaining = 90;
   private battleTick = 0;
+  /** 战斗开始时间戳（毫秒），用于计算存活时间 */
+  private roundStartTimestamp = 0;
   /** 大逃杀：已死亡的玩家 ID 集合 */
   private deadPlayers = new Set<string>();
+  /** 玩家死亡时间戳（毫秒），用于精确计算存活时间 */
+  private playerDeathTime = new Map<string, number>();
 
   // 测试模式
   private isTestMode = false;
@@ -195,6 +199,12 @@ export default class FishOilRoom extends GameRoom {
         hp: 100, maxHp: 100,
         position: { x: arenaConfig.width / 2, y: arenaConfig.height / 2 },
         totalDamageTaken: 0,
+        damageDealt: 0,
+        kills: 0,
+        deaths: 0,
+        maxHit: 0,
+        weaponTriggers: 0,
+        bursts: 0,
         isOverheated: false,
       });
       this.weaponSelections[p.id] = null;
@@ -394,7 +404,9 @@ export default class FishOilRoom extends GameRoom {
     this.phase = 'battle';
     this.battleTick = 0;
     this.roundSecondsRemaining = 90;
+    this.roundStartTimestamp = Date.now();
     this.deadPlayers.clear();
+    this.playerDeathTime.clear();
 
     // 创建 PhysicsAdapter 和 WeaponScheduler
     const deps: PhysicsQueryDeps = {
@@ -523,6 +535,7 @@ export default class FishOilRoom extends GameRoom {
       if (weapon && weapon.isBurstReady()) {
         this.scheduler.forceBurst(playerId, this.battleState);
         const player = this.battleState.getPlayer(playerId);
+        if (player) player.bursts++;
 
         // 收集爆发视觉事件
         const burstVisuals = this.extractVisualEvents(this.scheduler.getVisualEvents());
@@ -543,6 +556,7 @@ export default class FishOilRoom extends GameRoom {
     for (const [pid, pstate] of this.battleState.players) {
       if (pstate.hp <= 0 && !this.deadPlayers.has(pid)) {
         this.deadPlayers.add(pid);
+        this.playerDeathTime.set(pid, Date.now());
         this.physics.removeBall(pid);
         console.log(`[FishOil] 玩家死亡: ${pstate.name} (tick=${this.battleTick})`);
       }
@@ -680,14 +694,26 @@ export default class FishOilRoom extends GameRoom {
     this.stopBattleLoop();
 
     const stats: Record<string, PlayerStats> = {};
+    const now = Date.now();
+    const roundElapsedSec = (now - this.roundStartTimestamp) / 1000;
     for (const [pid, pstate] of this.battleState.players) {
+      const isDead = this.deadPlayers.has(pid);
+      const deathSec = this.playerDeathTime.get(pid);
+      const survivalSec = isDead && deathSec
+        ? (deathSec - this.roundStartTimestamp) / 1000
+        : roundElapsedSec;
       stats[pid] = {
         remainingHp: pstate.hp,
-        totalDamage: pstate.totalDamageTaken,
-        maxHit: 0,
-        weaponTriggers: 0,
-        bursts: 0,
-        survived: !this.deadPlayers.has(pid),
+        totalDamageTaken: pstate.totalDamageTaken,
+        totalDamageDealt: pstate.damageDealt,
+        maxHit: pstate.maxHit,
+        weaponTriggers: pstate.weaponTriggers,
+        bursts: pstate.bursts,
+        kills: pstate.kills,
+        deaths: isDead ? 1 : 0,
+        weaponId: this.weaponSelections[pid] ?? 'unknown',
+        survivalTimeSec: Math.round(survivalSec),
+        survived: !isDead,
       };
     }
 
@@ -775,6 +801,7 @@ export default class FishOilRoom extends GameRoom {
       const pid = player.id;
       if (this.phase === 'battle' && this.battleState) {
         this.deadPlayers.add(pid);
+        this.playerDeathTime.set(pid, Date.now());
         this.physics?.removeBall(pid);
         const aliveCount = Array.from(this.battleState.players.values())
           .filter(p => p.hp > 0 && !this.deadPlayers.has(p.id)).length;

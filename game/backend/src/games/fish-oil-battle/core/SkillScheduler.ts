@@ -62,6 +62,24 @@ export class BattleState implements IBattleState {
     const hpBefore = target.hp;
     target.hp = Math.max(0, target.hp - amount);
     target.totalDamageTaken += amount;
+
+    // 追踪来源玩家的统计数据
+    if (sourceId && sourceId !== 'system') {
+      const source = this.players.get(sourceId);
+      if (source) {
+        source.damageDealt += amount;
+        source.weaponTriggers++;
+        if (amount > source.maxHit) {
+          source.maxHit = amount;
+        }
+        // 目标死亡 → 来源击杀数 +1
+        if (target.hp <= 0) {
+          source.kills++;
+          target.deaths = 1;
+        }
+      }
+    }
+
     const fmt = (n: number) => Math.round(n * 10) / 10;
     console.log(`[FishOil] 伤害: ${targetId} (${target.name}) HP ${fmt(hpBefore)}→${fmt(target.hp)} (-${fmt(amount)}) from ${sourceId ?? 'system'}`);
     this.pendingEffects.push({

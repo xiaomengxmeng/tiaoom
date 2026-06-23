@@ -40,6 +40,15 @@
       <p class="text-[10px] opacity-40 leading-relaxed">
         自动添加 {{ botCount }} 个 Bot，随机选择武器，技能自动释放。完整 HUD 渲染。
       </p>
+
+      <!-- 测试报告 -->
+      <button
+        class="btn btn-outline btn-sm w-full mt-auto"
+        :disabled="!Object.keys(currentStats).length"
+        @click="showStatsModal = true"
+      >
+        测试报告
+      </button>
     </aside>
 
     <!-- ═══════════════════════════════════════════════ -->
@@ -134,6 +143,17 @@
         :is-watcher="false"
         :room-player-name="selfName"
       />
+
+      <!-- 测试报告弹窗 -->
+      <BattleStatsModal
+        :show="showStatsModal"
+        :stats="currentStats"
+        :player-name-map="playerNameMap"
+        :winner-id="statsWinnerId"
+        :winner-name="statsWinnerName"
+        :end-reason="statsEndReason"
+        @close="showStatsModal = false"
+      />
     </main>
   </div>
 </template>
@@ -148,9 +168,9 @@ import WeaponSelectOverlay from './WeaponSelectOverlay.vue';
 import BattleResultOverlay from './BattleResultOverlay.vue';
 import { CyberFishRenderer } from '../renderer/CyberFishRenderer';
 import type { SelectableWeapon, HudPlayerInfo } from '../useFishOilBattle';
-import type { ArenaConfig } from '$/backend/src/games/fish-oil-battle/shared/protocol';
+import type { ArenaConfig, PlayerStats } from '$/backend/src/games/fish-oil-battle/shared/protocol';
 import { VisualEventType, WeaponId } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
-import Icon from '@/components/common/Icon.vue';
+import BattleStatsModal from './BattleStatsModal.vue';
 
 const router = useRouter();
 const gameStore = useGameStore();
@@ -165,7 +185,7 @@ const roomId = ref('');
 // ── Pixi.js 渲染器 ────────────────────────────────
 const canvasRef = ref<InstanceType<typeof FishOilBattleCanvas>>();
 const rendererRef = shallowRef<CyberFishRenderer | null>(null);
-const selfName = computed(() => gameStore.player?.name ?? '我');
+const selfName = computed(() => gameStore.player?.nickname ?? '我');
 
 function onPixiReady(_app: any, _stage: any): void {
   if (!canvasRef.value) return;
@@ -205,6 +225,15 @@ const winnerPlayerId = ref('');
 const isDraw = ref(false);
 const endReason = ref('');
 
+// ── 测试报告 ──────────────────────────────────────
+const showStatsModal = ref(false);
+const currentStats = ref<Record<string, PlayerStats>>({});
+/** playerId → name 映射 */
+const playerNameMap = ref<Record<string, string>>({});
+const statsWinnerId = ref('');
+const statsWinnerName = ref('');
+const statsEndReason = ref('');
+
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 const prevHp = new Map<string, number>();
 
@@ -217,7 +246,7 @@ const formattedRoundTime = computed(() => {
 function getOtherHudStyle(index: number): Record<string, string> {
   const total = otherPlayerHuds.value.length + 1;
   if (total <= 4) {
-    const positions = [
+    const positions: Record<string, string>[] = [
       { right: '16px', top: '16px' },
       { right: '16px', bottom: '16px' },
       { left: '16px', top: '16px' },
@@ -311,6 +340,14 @@ function handleBattleStart(data: {
   battleHudVisible.value = false;
   prevHp.clear();
 
+  // 构建玩家名映射（供测试报告用）
+  playerNameMap.value = {};
+  if (data.players) {
+    for (const p of data.players) {
+      playerNameMap.value[p.id] = p.name;
+    }
+  }
+
   if (data.arenaConfig && rendererRef.value) {
     rendererRef.value.setArenaConfig(data.arenaConfig);
   }
@@ -363,7 +400,7 @@ function handleGameState(data: { players: any[]; tick: number; timestamp: number
   if (!rendererRef.value) return;
 
   const selfId = gameStore.player?.id ?? '';
-  const selfName = gameStore.player?.name ?? '';
+  const selfName = gameStore.player?.nickname ?? '';
 
   const newOtherHuds: HudPlayerInfo[] = [];
 
@@ -476,7 +513,7 @@ function handleVisualEvent(data: any): void {
   }
 }
 
-function handleGameEnd(data: { winnerId?: string; winnerName?: string; reason?: string }): void {
+function handleGameEnd(data: { winnerId?: string; winnerName?: string; reason?: string; stats?: Record<string, PlayerStats> }): void {
   battleHudVisible.value = false;
   stopCountdown();
   if (data.winnerName) {
@@ -491,6 +528,14 @@ function handleGameEnd(data: { winnerId?: string; winnerName?: string; reason?: 
     endReason.value = data.reason ?? 'timeout';
   }
   showWeaponSelect.value = false;
+
+  // 存储统计数据（供测试报告使用）
+  if (data.stats) {
+    currentStats.value = data.stats;
+  }
+  statsWinnerId.value = data.winnerId ?? '';
+  statsWinnerName.value = data.winnerName ?? '';
+  statsEndReason.value = data.reason ?? '';
 }
 
 // ── 开始 / 停止对局 ──────────────────────────────

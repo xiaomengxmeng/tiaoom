@@ -80,6 +80,20 @@ export enum VisualEventType {
   BURST_TRIGGER = 'burst_trigger',
   BEE_COUNT_CHANGE = 'bee_count_change',
   HIT = 'hit',
+  /** 全局彩蛋效果（前后端共享） */
+  GLOBAL_EFFECT = 'global_effect',
+}
+
+// ── 全局彩蛋效果类型（前后端共享）────────────────
+export enum GlobalEffectType {
+  /** 无彩蛋 */
+  NONE = 'none',
+  /** 古今观察者（小梦）- 开局15秒回溯 */
+  TIME_OBSERVER = 'time_observer',
+  /** 俺寻思之力（薯饼）- 每10秒速度扰动 */
+  RANDOM_FORCE = 'random_force',
+  /** 万物亲和（君）- 牵引线 + 伤害/速度修正 */
+  NATURE_BOND = 'nature_bond',
 }
 
 // ── 竞技场形状 ─────────────────────────────────

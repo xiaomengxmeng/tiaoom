@@ -41,6 +41,12 @@ export class WeaponScheduler {
   /** expireEffects 秒级计数器：每 TICKS_PER_SEC 个 tick 减一次 duration */
   private expireCounter = 0;
 
+  /**
+   * 外部伤害修正回调（如全局彩蛋效果）
+   * 在 applyDamage 之前调用，返回修正后的伤害值
+   */
+  public damageModifier: ((baseDamage: number, attackerId: string, victimId: string) => number) | null = null;
+
   constructor(physicsQuery: IPhysicsQuery) {
     this.physicsQuery = physicsQuery;
   }
@@ -213,14 +219,20 @@ export class WeaponScheduler {
       };
       state.pendingEffects.push(se);
 
-      // 伤害类效果：用缩放后的 applyValue
+      // 伤害类效果：用缩放后的 applyValue，通过 damageModifier 修正
       if ((effect.type === WeaponEffectType.DAMAGE || effect.type === WeaponEffectType.AOE_DAMAGE || effect.type === WeaponEffectType.BURST_DAMAGE) && effect.targetId) {
-        state.applyDamage(effect.targetId, applyValue, effect.sourceId);
+        const actualDamage = this.damageModifier
+          ? this.damageModifier(applyValue, effect.sourceId, effect.targetId)
+          : applyValue;
+        state.applyDamage(effect.targetId, actualDamage, effect.sourceId);
       }
 
-      // dot 效果：用缩放后的 applyValue
+      // dot 效果：用缩放后的 applyValue，通过 damageModifier 修正
       if (effect.type === WeaponEffectType.DOT && effect.targetId) {
-        state.applyDamage(effect.targetId, applyValue, effect.sourceId);
+        const actualDamage = this.damageModifier
+          ? this.damageModifier(applyValue, effect.sourceId, effect.targetId)
+          : applyValue;
+        state.applyDamage(effect.targetId, actualDamage, effect.sourceId);
       }
 
       // 持续类效果（添加到 activeEffects），duration 以秒为单位

@@ -7,7 +7,7 @@
  * 前后端都 import 这份类型，确保消息结构编译期一致。
  */
 
-import { School, VisualEventType, GameEndReason, WeaponId, ArenaShape } from '../config/GameEnums';
+import { School, VisualEventType, GlobalEffectType, GameEndReason, WeaponId, ArenaShape } from '../config/GameEnums';
 
 // ─── 竞技场配置（数据驱动，根据玩家数量动态调整）────────
 export interface ArenaConfig {
@@ -92,6 +92,19 @@ export interface VisualEventData {
     /** 反弹色 */
     bounceColor?: number;
   };
+  /**
+   * 全局彩蛋效果类型（GLOBAL_EFFECT 事件专用）
+   * @see GlobalEffectType
+   */
+  globalEffectType?: GlobalEffectType;
+  /**
+   * 全局效果的 targets 信息（万物亲和牵引线的对手 ID）
+   */
+  targetId?: string;
+  /**
+   * 全局效果持续时间（毫秒），如古今观察者闪白 100ms
+   */
+  durationMs?: number;
 }
 
 // ─── 游戏统计（game_end 用）───────────────

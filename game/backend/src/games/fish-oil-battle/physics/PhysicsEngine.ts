@@ -398,6 +398,30 @@ export class PhysicsEngine {
     return hit;
   }
 
+  /**
+   * 修改指定球的速度（外部系统调用，如全局彩蛋效果）
+   * @param playerId 玩家/球 ID
+   * @param newSpeed 新的速率
+   * @param newAngle 新的角度（弧度，可选；不传则保持原方向）
+   */
+  modifyBallSpeed(playerId: string, newSpeed: number, newAngle?: number): void {
+    const ball = this.balls.get(playerId);
+    if (!ball) return;
+
+    if (newAngle !== undefined) {
+      ball.vx = Math.cos(newAngle) * newSpeed;
+      ball.vy = Math.sin(newAngle) * newSpeed;
+    } else {
+      const oldSpeed = ball.speed;
+      if (oldSpeed > 0) {
+        const ratio = newSpeed / oldSpeed;
+        ball.vx *= ratio;
+        ball.vy *= ratio;
+      }
+    }
+    ball.speed = newSpeed;
+  }
+
   /** 清理所有小球 */
   clear(): void {
     this.balls.clear();

@@ -8,8 +8,10 @@ import { ParticlePool } from './systems/ParticlePool';
 import { ArenaRenderer } from './systems/ArenaRenderer';
 import { PlayerRenderer, type Faction } from './entities/PlayerRenderer';
 import { EffectRenderer } from './entities/EffectRenderer';
+import { GlobalEffectRenderer } from './GlobalEffectRenderer';
 import type { ShapeDescriptor } from './systems/ShapeRenderer';
 import type { ShapeEffectConfig } from './entities/ShapeEffect';
+import type { VisualEventData } from '$/backend/src/games/fish-oil-battle/shared/protocol';
 
 /**
  * 赛博鱼油主渲染器（编排层）
@@ -40,6 +42,7 @@ export class CyberFishRenderer {
   private physics: PhysicsSystem;
   private particlePool: ParticlePool;
   private effectRenderer: EffectRenderer;
+  private globalEffectRenderer!: GlobalEffectRenderer;
   private arenaRenderer!: ArenaRenderer;
   private playerRenderers: Map<string, PlayerRenderer> = new Map();
 
@@ -80,6 +83,12 @@ export class CyberFishRenderer {
       this.l3Field,
       this.l5Hologram,
       this.particlePool,
+    );
+    this.globalEffectRenderer = new GlobalEffectRenderer(
+      this.l2Entity,
+      this.l5Hologram,
+      app.screen.width,
+      app.screen.height,
     );
 
     // 3. 竞技场背景（最底层）
@@ -147,6 +156,13 @@ export class CyberFishRenderer {
       vx: state.vx * this.getUniformScale(),
       vy: state.vy * this.getUniformScale(),
     });
+  }
+
+  /**
+   * 处理全局彩蛋视觉效果
+   */
+  handleGlobalEffect(event: VisualEventData): void {
+    this.globalEffectRenderer.handleGlobalEvent(event, this.mapX.bind(this), this.mapY.bind(this));
   }
 
   /**
@@ -396,6 +412,7 @@ export class CyberFishRenderer {
     const scale = this.getUniformScale();
     this.effectRenderer.setScale(scale, this.canvasW, this.canvasH);
     this.particlePool.setScale(scale);
+    this.globalEffectRenderer.resize(this.canvasW, this.canvasH);
 
     // 同步玩家缩放
     for (const [, pr] of this.playerRenderers) {
@@ -416,6 +433,7 @@ export class CyberFishRenderer {
     this.stop();
     this.arenaRenderer?.destroy();
     this.effectRenderer?.destroy();
+    this.globalEffectRenderer?.destroy();
     this.particlePool?.destroy();
     this.physics.clear();
     for (const [, pr] of this.playerRenderers) {
@@ -452,10 +470,11 @@ export class CyberFishRenderer {
       this.physics.rescaleWithOffset(oldOX, oldOY, scaleRatio, newOX, newOY);
     }
 
-    // 同步缩放：竞技场 → 特效 → 粒子池 → 玩家
+    // 同步缩放：竞技场 → 特效 → 粒子池 → 全局特效 → 玩家
     this.arenaRenderer.resize(w, h);
     this.effectRenderer.setScale(newScale, w, h);
     this.particlePool.setScale(newScale);
+    this.globalEffectRenderer.resize(w, h);
 
     const uniformScale = newScale;
     for (const [, pr] of this.playerRenderers) {
@@ -577,6 +596,9 @@ export class CyberFishRenderer {
 
     // 4. 更新特效系统
     this.effectRenderer.update(dt);
+
+    // 5. 更新全局彩蛋特效（闪白/马赛克/牵引线）
+    this.globalEffectRenderer.update(dt * 1000); // 转为毫秒
   }
 
   private applyPostProcessing(): void {

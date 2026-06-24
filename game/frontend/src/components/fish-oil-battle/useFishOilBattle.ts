@@ -330,6 +330,11 @@ export function useFishOilBattle(
           );
         }
         break;
+      case VisualEventType.GLOBAL_EFFECT:
+        if (rendererRef.value) {
+          rendererRef.value.handleGlobalEffect(data);
+        }
+        break;
       case 'hit':
         break;
     }

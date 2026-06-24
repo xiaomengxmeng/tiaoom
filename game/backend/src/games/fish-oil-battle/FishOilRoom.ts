@@ -28,6 +28,7 @@ import { WeaponScheduler, type PendingVisualEvent } from './core/WeaponScheduler
 import { createWeapon, getImplementedWeaponMetaList } from './core/WeaponRegistry';
 import { PhysicsEngine } from './physics/PhysicsEngine';
 import { PhysicsAdapter, type PhysicsQueryDeps } from './physics/PhysicsAdapter';
+import { GlobalEffectSystem } from './systems/GlobalEffectSystem';
 
 // 共享协议类型
 import type {
@@ -94,6 +95,9 @@ export default class FishOilRoom extends GameRoom {
   private deadPlayers = new Set<string>();
   /** 玩家死亡时间戳（毫秒），用于精确计算存活时间 */
   private playerDeathTime = new Map<string, number>();
+
+  // 全局彩蛋效果系统
+  private globalEffectSystem: GlobalEffectSystem | null = null;
 
   // 测试模式
   private isTestMode = false;
@@ -442,6 +446,16 @@ export default class FishOilRoom extends GameRoom {
       }
     }
 
+    // 5. 激活全局彩蛋效果
+    this.globalEffectSystem = new GlobalEffectSystem();
+    this.globalEffectSystem.onBattleStart(this.battleState, this.physics);
+    console.log(`[FishOil] 全局彩蛋激活: ${this.globalEffectSystem.activeName} (${this.globalEffectSystem.activeType})`);
+
+    // 将伤害修正回调注入 WeaponScheduler（万物亲和等效果）
+    this.scheduler.damageModifier = (baseDamage, attackerId, victimId) => {
+      return this.globalEffectSystem?.modifyDamage(baseDamage, attackerId, victimId) ?? baseDamage;
+    };
+
     this.say('⚔ 战斗开始！');
 
     const weaponNames = this.room.validPlayers.map(p => {
@@ -450,6 +464,14 @@ export default class FishOilRoom extends GameRoom {
       return `${p.name}:${wm?.name ?? '未知'}`;
     });
     console.log('[FishOil] startBattle: ' + weaponNames.join(', '));
+
+    // 广播彩蛋激活
+    if (this.globalEffectSystem) {
+      this.command('global_effect_activated', {
+        effectType: this.globalEffectSystem.activeType,
+        effectName: this.globalEffectSystem.activeName,
+      });
+    }
 
     // 广播倒计时
     this.command('round_start', {
@@ -528,6 +550,25 @@ export default class FishOilRoom extends GameRoom {
     // 3. 武器调度器 tick
     this.scheduler.tick(this.battleState);
     visualEvents.push(...this.extractVisualEvents(this.scheduler.getVisualEvents()));
+
+    // 3.5 全局效果：速度修正（万物亲和 +10% 移速等）
+    if (this.globalEffectSystem) {
+      for (const ball of this.physics.getAllBalls()) {
+        const newSpeed = this.globalEffectSystem.modifySpeed(ball.id, ball.speed);
+        if (newSpeed !== ball.speed) {
+          this.physics.modifyBallSpeed(ball.id, newSpeed);
+        }
+      }
+
+      // 全局效果：onTick 产生视觉事件
+      const globalEvents = this.globalEffectSystem.onTick(
+        this.battleTick, this.battleState, this.physics,
+      );
+      for (const evt of globalEvents) {
+        // GLOBAL_EFFECT 事件直接透传，不在 VISUAL_TYPE_MAP 里查
+        visualEvents.push(evt);
+      }
+    }
 
     // 4. 触发爆发（能量满则自动爆）
     for (const playerId of this.scheduler.playerIds) {
@@ -692,6 +733,12 @@ export default class FishOilRoom extends GameRoom {
   private endBattle(winners: RoomPlayer[] | null): void {
     this.phase = 'ended';
     this.stopBattleLoop();
+
+    // 清理全局彩蛋效果
+    if (this.globalEffectSystem) {
+      this.globalEffectSystem.onBattleEnd();
+      this.globalEffectSystem = null;
+    }
 
     const stats: Record<string, PlayerStats> = {};
     const now = Date.now();

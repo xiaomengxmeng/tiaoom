@@ -101,7 +101,7 @@ export function easeInOutCubic(t: number): number {
 
 /** 活跃特效实例（通用接口，所有子渲染器共用） */
 export interface ActiveEffect {
-  type: 'shockwave' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'sustained_shape';
+  type: 'shockwave' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'sustained_shape' | 'optical_slash' | 'optical_slash_burst';
   container: PIXI.Container;
   life: number;
   maxLife: number;
@@ -167,4 +167,24 @@ export interface HiveVisualConfig {
   burstScale?: number;
   /** 爆发闪屏持续时间（ms） */
   burstFlashDuration?: number;
+}
+
+/**
+ * 光学斩击视觉配置（数据驱动，从 WeaponRangeConfig 构建）
+ */
+export interface OpticalSlashVisualConfig {
+  /** 主色（玩家主题色覆盖） */
+  primaryColor?: number;
+  /** 发光色 */
+  glowColor?: number;
+  /** 扩散/飞行持续时间（ms） */
+  expandDurationMs?: number;
+  /** 最大半径（逻辑 px） */
+  maxRadius?: number;
+  /** 飞行速度（px/s） */
+  flightSpeed?: number;
+  /** 弧月弓弯距离（逻辑 px） */
+  arcBow?: number;
+  /** 刀光半宽（逻辑 px） */
+  bladeHalfWidth?: number;
 }

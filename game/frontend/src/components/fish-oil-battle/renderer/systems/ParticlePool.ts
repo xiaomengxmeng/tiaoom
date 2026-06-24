@@ -264,7 +264,8 @@ export class ParticlePool {
   /** 销毁（释放 Pixi.js 资源） */
   destroy(): void {
     for (let i = 0; i < this.capacity; i++) {
-      this.pool[i].sprite.destroy(true);
+      const sprite = this.pool[i]?.sprite;
+      if (sprite && !sprite.destroyed) sprite.destroy(true);
     }
     this.pool.length = 0;
   }

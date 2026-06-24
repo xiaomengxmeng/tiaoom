@@ -171,7 +171,7 @@ export class CyberFishRenderer {
    * @param config.radius 后端传入的技能生效范围（逻辑 px），前端用此值绘特效
    */
   triggerSkillEffect(config: {
-    type: 'shockwave' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'shape' | 'sustained_shape';
+    type: 'shockwave' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'optical_slash' | 'optical_slash_burst' | 'shape' | 'sustained_shape';
     x?: number; y?: number;
     isBurst?: boolean;
     radius?: number;
@@ -180,6 +180,7 @@ export class CyberFishRenderer {
     durationSec?: number;
     fromX?: number; fromY?: number;
     toX?: number; toY?: number;
+    angle?: number;
     factionColor?: number;
     playerId?: string;
     /** shape/sustained_shape 专用：形状描述 */
@@ -261,6 +262,25 @@ export class CyberFishRenderer {
         break;
       case 'burst_flash':
         this.effectRenderer.triggerBurstFlash(themeColor ?? config.factionColor ?? 0xFF00FF);
+        break;
+      case 'optical_slash':
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined && config.radius !== undefined) {
+          this.effectRenderer.triggerOpticalSlash(
+            mapCfg.x, mapCfg.y,
+            (config as any).angle ?? 0, config.radius,
+            themeColor ?? config.factionColor ?? 0x00BFFF,
+            false,
+          );
+        }
+        break;
+      case 'optical_slash_burst':
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerOpticalSlashBurst(
+            mapCfg.x, mapCfg.y,
+            themeColor ?? config.factionColor ?? 0x00BFFF,
+            config.radius,
+          );
+        }
         break;
       case 'shape':
         if (mapCfg.x !== undefined && mapCfg.y !== undefined && config.shapeDesc) {

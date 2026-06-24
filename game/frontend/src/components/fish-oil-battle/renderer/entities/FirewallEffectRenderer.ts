@@ -274,7 +274,7 @@ export class FirewallEffectRenderer {
   destroy(): void {
     this.clear();
     for (const g of this.pool) {
-      g.destroy(true);
+      if (!g.destroyed) g.destroy(true);
     }
     this.pool.length = 0;
   }

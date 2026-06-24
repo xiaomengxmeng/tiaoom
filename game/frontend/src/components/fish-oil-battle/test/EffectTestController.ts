@@ -8,6 +8,7 @@ import { ArenaRenderer, type WallStyle } from '../renderer/systems/ArenaRenderer
 import { ShockwaveEffectRenderer } from '../renderer/entities/ShockwaveEffectRenderer';
 import { FirewallEffectRenderer } from '../renderer/entities/FirewallEffectRenderer';
 import { HiveEffectRenderer } from '../renderer/entities/HiveEffectRenderer';
+import { OpticalSlashEffectRenderer } from '../renderer/entities/OpticalSlashEffectRenderer';
 import type { ActiveEffect } from '../renderer/entities/VisualEffectUtils';
 
 /**
@@ -36,6 +37,7 @@ export interface EffectTestContext {
   shockwaveRenderer: ShockwaveEffectRenderer;
   firewallRenderer: FirewallEffectRenderer;
   hiveRenderer: HiveEffectRenderer;
+  opticalSlashRenderer: OpticalSlashEffectRenderer;
   /** 活跃特效列表 */
   activeEffects: ActiveEffect[];
   /** 添加活跃特效 */
@@ -106,6 +108,7 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
   const shockwaveRenderer = new ShockwaveEffectRenderer(l3Field, logicalW, logicalH, 20);
   const firewallRenderer = new FirewallEffectRenderer(l3Field, 16);
   const hiveRenderer = new HiveEffectRenderer(l2Entity, l5Hologram, particlePool, logicalW, logicalH, 60);
+  const opticalSlashRenderer = new OpticalSlashEffectRenderer(l3Field, l5Hologram);
 
   // 6. 活跃特效管理
   const activeEffects: ActiveEffect[] = [];
@@ -158,6 +161,7 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
     shockwaveRenderer.setScale(s, canvasW, canvasH);
     firewallRenderer.setScale(s);
     hiveRenderer.setScale(s, canvasW, canvasH);
+    opticalSlashRenderer.setScale(s, canvasW, canvasH);
   }
 
   function setArenaConfig(config: { width: number; height: number; arenaRadius: number; shape?: string; arenaHalfW?: number; arenaHalfH?: number }): void {
@@ -218,6 +222,7 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
     shockwaveRenderer,
     firewallRenderer,
     hiveRenderer,
+    opticalSlashRenderer,
     activeEffects,
     addEffect,
     clearEffects,
@@ -233,6 +238,7 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
       shockwaveRenderer.destroy();
       firewallRenderer.destroy();
       hiveRenderer.destroy();
+      opticalSlashRenderer.destroy();
       particlePool.destroy();
       app.destroy(true, { children: true });
     },

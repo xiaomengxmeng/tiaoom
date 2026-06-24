@@ -1,18 +1,24 @@
 /**
  * 武器模板 - [武器名称]
  *
- * 流派：[AGGRESSOR / CONTROLLER / ENGINEER / WILDCARD]
- * 难度：⭐ [1-3]
- *
  * [武器机制描述]
  *
  * 使用方法：
  * 1. 复制此文件到 skills/weapons/ 目录
  * 2. 重命名类名和文件名
  * 3. 实现 TODO 标记的方法
- * 4. 在 WeaponRegistry.ts 中注册
- * 5. 在 GameEnums.ts 中添加 WeaponId 和 WeaponName
- * 6. 在 WeaponRangeConfig.ts 中添加配置
+ * 4. 在 GameEnums.ts 中添加 WeaponId 和 WeaponName
+ * 5. 在 WeaponRangeConfig.ts 中添加配置（包含视觉参数）
+ * 6. 在 WeaponRegistry.ts 中注册
+ *
+ * ⚠️ 数据驱动强制检查清单（必须全部完成）:
+ * ☐ FishOilRoom.VISUAL_TYPE_MAP 注册新 VisualEventType
+ * ☐ FishOilRoom.extractVisualEvents() 提取特有字段
+ * ☐ WeaponRangeConfig 包含视觉参数（不使用前端硬编码）
+ * ☐ EffectRenderer.buildXxxVisualCfg() 从配置构建
+ * ☐ useFishOilBattle.onVisualEvent() case 路由
+ * ☐ CyberFishRenderer.triggerSkillEffect() case 路由
+ * ☐ 子渲染器参数来源为 buildXxxVisualCfg 返回的配置
  */
 
 
@@ -27,8 +33,6 @@
 //   static readonly ID = WeaponId.YOUR_WEAPON_ID;
 //   readonly id = WeaponId.YOUR_WEAPON_ID;
 //   readonly name = WeaponName.YOUR_WEAPON_ID;
-//   readonly school = School.AGGRESSOR;  // TODO: 选择合适的流派
-//   readonly difficulty = 2;            // TODO: 设置难度 1-3
 //   readonly iconId = 'game-icons:sonic-wave';  // TODO: 从 game-icons.net 选择
 //   playerId = '';
 
@@ -55,6 +59,18 @@
 //     // 1. 更新投射物位置、检测碰撞
 //     // 2. 更新场地装置计时器
 //     // 3. 定期发送视觉更新事件
+//     //
+//     // ⚠️ 视觉事件示例:
+//     // effects.push({
+//     //   type: WeaponEffectType.VISUAL_ONLY,
+//     //   sourceId: this.playerId,
+//     //   value: 0,
+//     //   metadata: {
+//     //     visualType: VisualEventType.YOUR_EFFECT_UPDATE,
+//     //     angle: currentAngle,        // ← 特有字段放 metadata
+//     //     yourField: someValue,
+//     //   },
+//     // });
 
 //     return effects;
 //   }
@@ -73,17 +89,12 @@
 //     // 1. 从 WEAPON_RANGE_CONFIG 获取伤害值
 //     // 2. 返回 DAMAGE 或 AOE_DAMAGE 类型的 WeaponEffect
 //     // 3. 发送视觉事件（VISUAL_ONLY + metadata.visualType）
+//     //    ⚠️ metadata 中的特有字段需要在 FishOilRoom.extractVisualEvents() 中提取
 //     // 4. 积攒能量：this.energy++
 
 //     if (isBurst) {
 //       this.burstNextHit = false;
 //       // TODO: 爆发额外效果
-//       // effects.push({
-//       //   type: WeaponEffectType.BURST_DAMAGE,
-//       //   sourceId: this.playerId,
-//       //   value: CFG.burstDamage!,
-//       //   ...
-//       // });
 //     }
 
 //     return effects;
@@ -94,12 +105,7 @@
 //    */
 //   onHitByAttacker(_state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
 //     const effects: WeaponEffect[] = [];
-
 //     // TODO: 被命中时的反应（可选）
-//     // 1. 护盾反弹伤害
-//     // 2. 积攒能量
-//     // 3. 触发被动效果
-
 //     return effects;
 //   }
 
@@ -107,7 +113,6 @@
 //    * 碰撞墙壁时调用（可选）
 //    */
 //   onWallHit?(_state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
-//     // TODO: 碰墙反应（可选）
 //     return [];
 //   }
 
@@ -115,7 +120,6 @@
 //    * 对手碰撞到本武器生成的障碍物时调用（可选）
 //    */
 //   onObstacleHit?(hittingPlayerId: string, state: IBattleState, physics: IPhysicsQuery): WeaponEffect[] {
-//     // TODO: 障碍物碰撞反应（可选，如硬化防火墙）
 //     return [];
 //   }
 
@@ -123,7 +127,6 @@
 //    * 返回当前活跃的物理障碍物列表（可选）
 //    */
 //   getObstacles?() {
-//     // TODO: 返回 PhysicsObstacle[]（可选，如硬化防火墙）
 //     return [];
 //   }
 
@@ -149,10 +152,7 @@
 //     this.burstNextHit = true;
 
 //     // TODO: 爆发逻辑
-//     // 1. 设置爆发标志位（下次 onHitTarget 触发）
-//     // 2. 或立即产生爆发效果
-//     // 3. 发送视觉事件
-
+//     // ⚠️ 视觉事件必须包含完整参数:
 //     return [{
 //       type: WeaponEffectType.VISUAL_ONLY,
 //       sourceId: this.playerId,

@@ -21,6 +21,14 @@ export interface WeaponProjectileConfig {
   maxLifetimeSec: number;
   /** 命中判定半径（逻辑 px） */
   hitRadius: number;
+  /** 视觉飞行速度（px/s），前端渲染用 */
+  visualFlightSpeed?: number;
+  /** 弧月弓弯距离（逻辑 px），飞行弹道武器视觉用 */
+  visualArcBow?: number;
+  /** 投射物视觉半宽（逻辑 px），飞行弹道武器视觉用 */
+  visualBladeHalfWidth?: number;
+  /** 斩击命中角度容差（rad），光学斩击专用，默认 0.1 */
+  slashAngleTolerance?: number;
 }
 
 export interface WeaponFieldConfig {
@@ -193,6 +201,28 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
       maxEnergy: 7,
       orbitRadius: 50,
       ballRadius: 40,
+    },
+  },
+
+  // ── 角色武器 ──────────────────────────────────────
+
+  /** 光学斩击 - Liya */
+  [WeaponId.OPTICAL_SLASH]: {
+    damage: 5,
+    burstDamage: 10,
+    maxEnergy: 6,
+    damageRadius: 100,
+    visualRadius: 150,
+    visualDurationMs: 800,
+    projectile: {
+      speed: 0,
+      maxBounces: 0,
+      maxLifetimeSec: 0.8,
+      hitRadius: 4,
+      visualFlightSpeed: 300,
+      visualArcBow: 28,
+      visualBladeHalfWidth: 20,
+      slashAngleTolerance: 0.15,   // 斩击命中锥角 (rad)，100px处有效宽度≈30px
     },
   },
 };

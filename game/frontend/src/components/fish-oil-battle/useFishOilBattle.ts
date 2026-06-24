@@ -330,6 +330,27 @@ export function useFishOilBattle(
           );
         }
         break;
+      case VisualEventType.OPTICAL_SLASH_TRIGGER:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: 'optical_slash',
+            x: data.x, y: data.y,
+            radius: data.length ?? 100,
+            angle: data.angle ?? 0,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.OPTICAL_SLASH_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: 'optical_slash_burst',
+            x: data.x, y: data.y,
+            radius: data.length ?? 150,
+            playerId: data.playerId,
+          });
+        }
+        break;
       case VisualEventType.GLOBAL_EFFECT:
         if (rendererRef.value) {
           rendererRef.value.handleGlobalEffect(data);

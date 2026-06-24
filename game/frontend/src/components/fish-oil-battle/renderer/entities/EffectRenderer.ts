@@ -18,10 +18,14 @@ import {
 import {
   HiveEffectRenderer,
 } from './HiveEffectRenderer';
+import {
+  OpticalSlashEffectRenderer,
+} from './OpticalSlashEffectRenderer';
 import type {
   ShockwaveVisualConfig,
   FirewallVisualConfig,
   HiveVisualConfig,
+  OpticalSlashVisualConfig,
 } from './VisualEffectUtils';
 
 /**
@@ -43,6 +47,7 @@ export class EffectRenderer {
   private shockwaveRenderer: ShockwaveEffectRenderer;
   private firewallRenderer: FirewallEffectRenderer;
   private hiveRenderer: HiveEffectRenderer;
+  private opticalSlashRenderer: OpticalSlashEffectRenderer;
 
   // ── 形状特效池 ────────────────────────────────────────
   private shapeEffectPool: ShapeEffectPool;
@@ -74,6 +79,9 @@ export class EffectRenderer {
       this.canvasW, this.canvasH,
     );
 
+    // 光学斩击渲染器
+    this.opticalSlashRenderer = new OpticalSlashEffectRenderer(fieldContainer, hologramContainer);
+
     // 初始化形状特效池
     this.shapeEffectPool = new ShapeEffectPool(fieldContainer, 20);
   }
@@ -89,6 +97,7 @@ export class EffectRenderer {
     this.shockwaveRenderer.setScale(s, w, h);
     this.firewallRenderer.setScale(s);
     this.hiveRenderer.setScale(s, w, h);
+    this.opticalSlashRenderer.setScale(s, w, h);
   }
 
   // ══════════════════════════════════════════════════════
@@ -182,6 +191,36 @@ export class EffectRenderer {
 
   removeHiveBees(playerId: string): void {
     this.hiveRenderer.removeHiveBees(playerId);
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  公开 API：光学斩击
+  // ══════════════════════════════════════════════════════
+
+  triggerOpticalSlash(
+    x: number, y: number,
+    angle: number, length: number,
+    themeColor: number,
+    isBurst = false,
+    visualCfg?: OpticalSlashVisualConfig,
+  ): void {
+    const dataCfg = this.buildOpticalSlashVisualCfg();
+    const cfg: OpticalSlashVisualConfig = { ...dataCfg, ...visualCfg };
+    const ef = this.opticalSlashRenderer.triggerSlash(x, y, angle, length, themeColor, isBurst, cfg);
+    if (ef) this.activeEffects.push(ef);
+  }
+
+  triggerOpticalSlashBurst(
+    x: number, y: number,
+    themeColor: number,
+    radius?: number,
+    visualCfg?: OpticalSlashVisualConfig,
+  ): void {
+    const dataCfg = this.buildOpticalSlashVisualCfg();
+    const cfg: OpticalSlashVisualConfig = { ...dataCfg, ...visualCfg };
+    if (radius !== undefined) cfg.maxRadius = radius;
+    const effects = this.opticalSlashRenderer.triggerBurst(x, y, themeColor, cfg);
+    for (const ef of effects) this.activeEffects.push(ef);
   }
 
   // ══════════════════════════════════════════════════════
@@ -305,6 +344,22 @@ export class EffectRenderer {
     };
   }
 
+  /**
+   * 从 WeaponRangeConfig 构建 OpticalSlashVisualConfig
+   * 所有视觉参数由后端配置驱动，无硬编码常量
+   */
+  private buildOpticalSlashVisualCfg(): OpticalSlashVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.OPTICAL_SLASH];
+    const p = rc?.projectile;
+    return {
+      expandDurationMs: rc?.visualDurationMs ?? 800,
+      maxRadius: rc?.visualRadius ?? 150,
+      flightSpeed: p?.visualFlightSpeed ?? 300,
+      arcBow: p?.visualArcBow ?? 28,
+      bladeHalfWidth: p?.visualBladeHalfWidth ?? 20,
+    };
+  }
+
   // ══════════════════════════════════════════════════════
   //  生命周期
   // ══════════════════════════════════════════════════════
@@ -347,6 +402,7 @@ export class EffectRenderer {
     this.shockwaveRenderer.destroy();
     this.firewallRenderer.destroy();
     this.hiveRenderer.destroy();
+    this.opticalSlashRenderer.destroy();
     this.shapeEffectPool.destroy();
   }
 }

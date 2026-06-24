@@ -36,6 +36,11 @@ export interface WeaponProjectileConfig {
   maxBounces: number;
   maxLifetimeSec: number;
   hitRadius: number;
+  visualFlightSpeed?: number;
+  visualArcBow?: number;
+  visualBladeHalfWidth?: number;
+  /** 斩击命中角度容差（rad），光学斩击专用，默认 0.1 */
+  slashAngleTolerance?: number;
 }
 
 export interface WeaponRangeConfig {
@@ -97,6 +102,26 @@ export const LOCAL_WEAPON_CONFIG: Record<string, WeaponRangeConfig> = {
       slowPercent: 40,
       damagePerEnergy: 15,
       burstHardenDamage: 4.2,
+    },
+  },
+
+  // ── 光学斩击 (Liya) ──────────────────────────────
+  [WeaponId.OPTICAL_SLASH]: {
+    damage: 5,
+    burstDamage: 10,
+    maxEnergy: 6,
+    damageRadius: 100,
+    visualRadius: 150,
+    visualDurationMs: 800,
+    projectile: {
+      speed: 0,
+      maxBounces: 0,
+      maxLifetimeSec: 0.8,
+      hitRadius: 4,
+      visualFlightSpeed: 300,
+      visualArcBow: 28,
+      visualBladeHalfWidth: 20,
+      slashAngleTolerance: 0.15,   // 斩击命中锥角 (rad)，100px处有效宽度≈30px
     },
   },
 

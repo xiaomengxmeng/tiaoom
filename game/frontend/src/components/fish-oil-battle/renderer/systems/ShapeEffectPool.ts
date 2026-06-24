@@ -133,7 +133,7 @@ export class ShapeEffectPool {
   destroy(): void {
     this.clear();
     for (const ef of this.pool) {
-      ef.g.destroy(true);
+      if (!ef.g.destroyed) ef.g.destroy(true);
     }
     this.pool.length = 0;
   }

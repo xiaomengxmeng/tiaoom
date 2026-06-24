@@ -92,6 +92,10 @@ export interface VisualEventData {
     /** 反弹色 */
     bounceColor?: number;
   };
+  /** 光学斩击：斩击角度（弧度） */
+  angle?: number;
+  /** 光学斩击：斩击长度（逻辑 px） */
+  length?: number;
   /**
    * 全局彩蛋效果类型（GLOBAL_EFFECT 事件专用）
    * @see GlobalEffectType

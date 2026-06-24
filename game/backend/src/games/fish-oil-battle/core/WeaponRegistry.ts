@@ -12,6 +12,7 @@ import { School, WeaponId, WeaponName } from '../config/GameEnums';
 import { ShockwaveGeneratorWeapon } from '../skills/weapons/ShockwaveGeneratorWeapon';
 import { FirewallProtocolWeapon } from '../skills/weapons/FirewallProtocolWeapon';
 import { HiveMotherWeapon } from '../skills/weapons/HiveMotherWeapon';
+import { OpticalSlashWeapon } from '../skills/weapons/OpticalSlashWeapon';
 
 // ── 武器元信息（工厂模式） ──────────────────────────────────
 export interface WeaponEntry {
@@ -118,6 +119,13 @@ export const REGISTRY: Record<string, WeaponEntry> = {
     id: WeaponId.RICOCHET_CORE, name: WeaponName.RICOCHET_CORE,
     school: School.WILD, difficulty: 2, iconId: 'game-icons:ricochet',
     factory: () => new StubWeapon(WeaponId.RICOCHET_CORE, WeaponName.RICOCHET_CORE, School.WILD, 2, 'game-icons:ricochet'),
+  },
+
+  // ── 角色武器 ──────────────────────────────────────
+  [WeaponId.OPTICAL_SLASH]: {
+    id: WeaponId.OPTICAL_SLASH, name: WeaponName.OPTICAL_SLASH,
+    school: School.AGGRESSOR, difficulty: 2, iconId: 'game-icons:sword-cut',
+    factory: () => new OpticalSlashWeapon(),
   },
 };
 

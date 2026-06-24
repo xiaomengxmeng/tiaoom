@@ -97,6 +97,8 @@ export default class FishOilRoom extends GameRoom {
   private playerDeathTime = new Map<string, number>();
 
   // 全局彩蛋效果系统
+  // [TEMP DISABLED] 存在速度膨胀/复活冲突等 Bug，见游戏设计文档/全局彩蛋修复方案.md
+  private static readonly GLOBAL_EFFECT_ENABLED = false;
   private globalEffectSystem: GlobalEffectSystem | null = null;
 
   // 测试模式
@@ -446,15 +448,17 @@ export default class FishOilRoom extends GameRoom {
       }
     }
 
-    // 5. 激活全局彩蛋效果
-    this.globalEffectSystem = new GlobalEffectSystem();
-    this.globalEffectSystem.onBattleStart(this.battleState, this.physics);
-    console.log(`[FishOil] 全局彩蛋激活: ${this.globalEffectSystem.activeName} (${this.globalEffectSystem.activeType})`);
+    // 5. 激活全局彩蛋效果 [TEMP DISABLED]
+    if (FishOilRoom.GLOBAL_EFFECT_ENABLED) {
+      this.globalEffectSystem = new GlobalEffectSystem();
+      this.globalEffectSystem.onBattleStart(this.battleState, this.physics);
+      console.log(`[FishOil] 全局彩蛋激活: ${this.globalEffectSystem.activeName} (${this.globalEffectSystem.activeType})`);
 
-    // 将伤害修正回调注入 WeaponScheduler（万物亲和等效果）
-    this.scheduler.damageModifier = (baseDamage, attackerId, victimId) => {
-      return this.globalEffectSystem?.modifyDamage(baseDamage, attackerId, victimId) ?? baseDamage;
-    };
+      // 将伤害修正回调注入 WeaponScheduler（万物亲和等效果）
+      this.scheduler.damageModifier = (baseDamage, attackerId, victimId) => {
+        return this.globalEffectSystem?.modifyDamage(baseDamage, attackerId, victimId) ?? baseDamage;
+      };
+    }
 
     this.say('⚔ 战斗开始！');
 
@@ -465,8 +469,8 @@ export default class FishOilRoom extends GameRoom {
     });
     console.log('[FishOil] startBattle: ' + weaponNames.join(', '));
 
-    // 广播彩蛋激活
-    if (this.globalEffectSystem) {
+    // 广播彩蛋激活 [TEMP DISABLED]
+    if (FishOilRoom.GLOBAL_EFFECT_ENABLED && this.globalEffectSystem) {
       this.command('global_effect_activated', {
         effectType: this.globalEffectSystem.activeType,
         effectName: this.globalEffectSystem.activeName,
@@ -551,8 +555,8 @@ export default class FishOilRoom extends GameRoom {
     this.scheduler.tick(this.battleState);
     visualEvents.push(...this.extractVisualEvents(this.scheduler.getVisualEvents()));
 
-    // 3.5 全局效果：速度修正（万物亲和 +10% 移速等）
-    if (this.globalEffectSystem) {
+    // 3.5 全局效果：速度修正 + onTick 视觉事件 [TEMP DISABLED]
+    if (FishOilRoom.GLOBAL_EFFECT_ENABLED && this.globalEffectSystem) {
       for (const ball of this.physics.getAllBalls()) {
         const newSpeed = this.globalEffectSystem.modifySpeed(ball.id, ball.speed);
         if (newSpeed !== ball.speed) {
@@ -646,13 +650,15 @@ export default class FishOilRoom extends GameRoom {
    * 不在表中的 visualType 会被过滤掉。
    */
   private static readonly VISUAL_TYPE_MAP: Partial<Record<VisualEventType, VisualEventType>> = {
-    [VisualEventType.SHOCKWAVE_TRIGGER]:  VisualEventType.SHOCKWAVE_TRIGGER,
-    [VisualEventType.FIREWALL_SPAWN]:     VisualEventType.FIREWALL_SPAWN,
-    [VisualEventType.HIVE_STING_HIT]:     VisualEventType.HIVE_STING,
-    [VisualEventType.HIVE_STING_FLIGHT]:  VisualEventType.HIVE_STING,
-    [VisualEventType.HIVE_STING_BOUNCE]:  VisualEventType.HIVE_STING_BOUNCE,
-    [VisualEventType.BURST_TRIGGER]:      VisualEventType.BURST_TRIGGER,
-    [VisualEventType.BEE_COUNT_CHANGE]:   VisualEventType.BEE_COUNT_CHANGE,
+    [VisualEventType.SHOCKWAVE_TRIGGER]:     VisualEventType.SHOCKWAVE_TRIGGER,
+    [VisualEventType.FIREWALL_SPAWN]:        VisualEventType.FIREWALL_SPAWN,
+    [VisualEventType.HIVE_STING_HIT]:        VisualEventType.HIVE_STING,
+    [VisualEventType.HIVE_STING_FLIGHT]:     VisualEventType.HIVE_STING,
+    [VisualEventType.HIVE_STING_BOUNCE]:     VisualEventType.HIVE_STING_BOUNCE,
+    [VisualEventType.BURST_TRIGGER]:         VisualEventType.BURST_TRIGGER,
+    [VisualEventType.BEE_COUNT_CHANGE]:      VisualEventType.BEE_COUNT_CHANGE,
+    [VisualEventType.OPTICAL_SLASH_TRIGGER]: VisualEventType.OPTICAL_SLASH_TRIGGER,
+    [VisualEventType.OPTICAL_SLASH_BURST]:   VisualEventType.OPTICAL_SLASH_BURST,
   };
 
   /** 从 WeaponScheduler 的 PendingVisualEvent 转换为 VisualEventData */
@@ -677,6 +683,8 @@ export default class FishOilRoom extends GameRoom {
         visualWidth: evt.metadata?.visualWidth,
         visualHeight: evt.metadata?.visualHeight,
         durationSec: evt.metadata?.durationSec,
+        angle: evt.metadata?.angle,
+        length: evt.metadata?.length,
       });
     }
     return result;
@@ -734,8 +742,8 @@ export default class FishOilRoom extends GameRoom {
     this.phase = 'ended';
     this.stopBattleLoop();
 
-    // 清理全局彩蛋效果
-    if (this.globalEffectSystem) {
+    // 清理全局彩蛋效果 [TEMP DISABLED]
+    if (FishOilRoom.GLOBAL_EFFECT_ENABLED && this.globalEffectSystem) {
       this.globalEffectSystem.onBattleEnd();
       this.globalEffectSystem = null;
     }

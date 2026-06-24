@@ -21,6 +21,8 @@ export enum WeaponId {
   QUANTUM_RIFT = 'quantum_rift',
   SIZE_WARP = 'size_warp',
   RICOCHET_CORE = 'ricochet_core',
+  // ── 角色武器（按角色名命名）────────────────────
+  OPTICAL_SLASH = 'optical_slash', // Liya - 光学斩击
 }
 
 // ── 武器名称 ─────────────────────────────────────
@@ -41,6 +43,8 @@ export enum WeaponName {
   QUANTUM_RIFT = '量子裂隙',
   SIZE_WARP = '体积扭曲',
   RICOCHET_CORE = '弹射核心',
+  // ── 角色武器 ─────────────────────────────────
+  OPTICAL_SLASH = '光学斩击', // Liya
 }
 
 // ── 流派 ─────────────────────────────────────────
@@ -82,6 +86,10 @@ export enum VisualEventType {
   HIT = 'hit',
   /** 全局彩蛋效果（前后端共享） */
   GLOBAL_EFFECT = 'global_effect',
+  /** Liya - 光学斩击触发 */
+  OPTICAL_SLASH_TRIGGER = 'optical_slash_trigger',
+  /** Liya - 光学斩击爆发（无限剑制） */
+  OPTICAL_SLASH_BURST = 'optical_slash_burst',
 }
 
 // ── 全局彩蛋效果类型（前后端共享）────────────────

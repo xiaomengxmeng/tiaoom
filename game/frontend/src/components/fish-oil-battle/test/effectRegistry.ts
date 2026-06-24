@@ -119,6 +119,39 @@ export const EFFECT_REGISTRY: EffectDefinition[] = [
     },
   },
 
+  // ── 光学斩击 ───────────────────────────────────────
+  {
+    id: 'optical_slash',
+    name: '光学斩击 (Liya)',
+    params: [
+      { key: 'x', label: 'X 位置', type: 'range', min: 0, max: 1280, step: 1, defaultValue: 640 },
+      { key: 'y', label: 'Y 位置', type: 'range', min: 0, max: 720, step: 1, defaultValue: 360 },
+      { key: 'angleDeg', label: '角度(°)', type: 'range', min: 0, max: 360, step: 1, defaultValue: 45 },
+      { key: 'length', label: '长度(px)', type: 'range', min: 50, max: 300, step: 10, defaultValue: 100 },
+      { key: 'themeColor', label: '主题色(hex)', type: 'color', defaultValue: 0x00BFFF },
+    ],
+    play: (ctx, v) => {
+      const angleRad = (v.angleDeg * Math.PI) / 180;
+      const ef = ctx.opticalSlashRenderer.triggerSlash(v.x, v.y, angleRad, v.length, Number(v.themeColor ?? 0x00BFFF), false);
+      if (ef) ctx.addEffect(ef);
+    },
+  },
+
+  // ── 光学斩击爆发 ────────────────────────────────────
+  {
+    id: 'optical_slash_burst',
+    name: '光学斩击·无限剑制 (Liya)',
+    params: [
+      { key: 'x', label: 'X 位置', type: 'range', min: 0, max: 1280, step: 1, defaultValue: 640 },
+      { key: 'y', label: 'Y 位置', type: 'range', min: 0, max: 720, step: 1, defaultValue: 360 },
+      { key: 'themeColor', label: '主题色(hex)', type: 'color', defaultValue: 0x00BFFF },
+    ],
+    play: (ctx, v) => {
+      const effects = ctx.opticalSlashRenderer.triggerBurst(v.x, v.y, Number(v.themeColor ?? 0x00BFFF));
+      ctx.addEffect(effects);
+    },
+  },
+
   // ── 爆发闪屏 ───────────────────────────────────────
   {
     id: 'burst_flash',

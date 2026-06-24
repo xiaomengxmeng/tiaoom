@@ -3,8 +3,9 @@
 
 **常驻特性**
 
-- 每次球体互撞，沿碰撞法线方向生成一道 **笔直斩击**（长 100px，宽 4px），无视墙壁阻挡。
-- 对路径上所有对手造成 **5 点穿透伤害**（单道斩击对每个对手只生效 1 次）。
+- 每次球体互撞，沿碰撞法线（指向最近对手）方向生成一道 **笔直斩击**（长 100px），无视墙壁阻挡。
+- **立即**检测路径上所有对手并造成 **5 点穿透伤害**（锥角 `slashAngleTolerance`，单道斩击对每个对手只生效 1 次）。
+- 斩击残留 0.8s，期间碰撞路径的对手也会受伤。
 - 每命中 1 个对手，自身移速 +5%（持续 2 秒，上限 20%）。
 
 **爆发方式**
@@ -20,12 +21,31 @@
   damage: 5,
   burstDamage: 10,
   maxEnergy: 6,
-  damageRadius: 100,
-  visualRadius: 150,
-  visualDurationMs: 800,
-  projectile: { speed: 0, maxBounces: 0, maxLifetimeSec: 0.8, hitRadius: 4 },
+  damageRadius: 100,           // 斩击长度 (逻辑 px)
+  visualRadius: 150,           // 爆发斩击长度 (逻辑 px)
+  visualDurationMs: 800,       // 残留时间 (ms)
+  projectile: {
+    speed: 0,
+    maxBounces: 0,
+    maxLifetimeSec: 0.8,
+    hitRadius: 4,
+    visualFlightSpeed: 300,      // 刀光飞行速度 (px/s)
+    visualArcBow: 28,            // 外弧弓弯距离 (逻辑 px)
+    visualBladeHalfWidth: 20,    // 刀身半宽 (逻辑 px)
+    slashAngleTolerance: 0.15,   // ★ 斩击命中锥角 (rad)，100px处有效宽度≈30px
+  },
 }
 ```
+
+**视觉渲染方案**（2025-06-24 重构）
+
+月牙刀光采用 **填充闭合形状** 渲染，不再使用描边线条：
+
+- 形状：外弧（向前弓弯）+ 内弧（向前少弓）构成闭合月牙，中间厚、两端尖
+- 6 层叠加：辉光填充 → 主题色主体 → 内核高亮 → 刀刃白边 → 内缘暗线 → 尖端星光
+- `visualArcBow`: 28 控制外弧前突程度，`visualBladeHalfWidth`: 20 控制刀身展开宽度
+- 飞行时带尾部残影 + 两侧光粒洒落
+- 爆发模式：6 道扇形刀光 + 十字准星锁定特效
 
 **人设彩蛋**
 

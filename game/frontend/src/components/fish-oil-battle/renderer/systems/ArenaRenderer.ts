@@ -441,8 +441,8 @@ export class ArenaRenderer {
   // ═══════════════════════════════════════════════════
 
   destroy(): void {
-    this.bg.destroy({ children: true });
-    this.arenaCircle.destroy({ children: true });
-    this.container.destroy({ children: true });
+    if (!this.bg.destroyed) this.bg.destroy({ children: true });
+    if (!this.arenaCircle.destroyed) this.arenaCircle.destroy({ children: true });
+    if (!this.container.destroyed) this.container.destroy({ children: true });
   }
 }

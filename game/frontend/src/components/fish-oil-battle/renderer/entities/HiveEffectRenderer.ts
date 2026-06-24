@@ -372,7 +372,7 @@ export class HiveEffectRenderer {
   removeHiveBees(playerId: string): void {
     const entry = this.hiveBees.get(playerId);
     if (entry) {
-      entry.container.destroy({ children: true });
+      if (!entry.container.destroyed) entry.container.destroy({ children: true });
       this.hiveBees.delete(playerId);
     }
   }
@@ -387,7 +387,7 @@ export class HiveEffectRenderer {
     this.stingerActive.clear();
 
     for (const [, entry] of this.hiveBees) {
-      entry.container.destroy({ children: true });
+      if (!entry.container.destroyed) entry.container.destroy({ children: true });
     }
     this.hiveBees.clear();
   }
@@ -395,7 +395,7 @@ export class HiveEffectRenderer {
   destroy(): void {
     this.clear();
     for (const g of this.stingerPool) {
-      g.destroy(true);
+      if (!g.destroyed) g.destroy(true);
     }
     this.stingerPool.length = 0;
   }

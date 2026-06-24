@@ -339,14 +339,16 @@ export class PlayerRenderer {
   }
 
   destroy(): void {
-    for (const d of this.damageTexts) d.text.destroy(true);
+    for (const d of this.damageTexts) {
+      if (!d.text.destroyed) d.text.destroy(true);
+    }
     this.damageTexts.length = 0;
-    this.trailSprite.texture.destroy(true);
-    this.trailSprite.destroy(true);
-    this.idBg.destroy(true);
-    this.avatar.destroy(true);
-    this.idText.destroy(true);
-    this.container.destroy({ children: true });
+    if (!this.trailSprite.texture.destroyed) this.trailSprite.texture.destroy(true);
+    if (!this.trailSprite.destroyed) this.trailSprite.destroy(true);
+    if (!this.idBg.destroyed) this.idBg.destroy(true);
+    if (!this.avatar.destroyed) this.avatar.destroy(true);
+    if (!this.idText.destroyed) this.idText.destroy(true);
+    if (!this.container.destroyed) this.container.destroy({ children: true });
   }
 
   getContainer(): PIXI.Container { return this.container; }

@@ -9,7 +9,7 @@ description: 辅助开发鱼油战斗（Fish Oil Battle）的新武器技能机�
 
 ## 一、数据驱动架构全景
 
-所有视觉参数从 `WeaponRangeConfig` 出发，经过 7 步到达前端渲染。**每一步都是强制检查点**，漏掉任何一步都会导致特效静默丢弃。
+所有视觉参数从 `WeaponRangeConfig` 出发，经过 6 步到达前端渲染。**每一步都是强制检查点**，漏掉任何一步都会导致特效静默丢弃。
 
 ```
 WeaponRangeConfig                          EffectRenderer
@@ -27,8 +27,8 @@ PendingVisualEvent[]                             │
 { playerId, weaponId, visualType,               │
   x, y, metadata }                              │
       │                                          │
-      │ ⚠️ 检查点1: FishOilRoom.VISUAL_TYPE_MAP │
-      │ ⚠️ 检查点2: extractVisualEvents 字段提取 │
+      │ ⚠️ 检查点1: extractVisualEvents 字段提取 │
+      │  所有事件直接透传，无需白名单过滤           │
       ▼                                          │
 VisualEventData (协议)                           │
 { type, playerId, x, y, angle,                  │
@@ -36,23 +36,23 @@ VisualEventData (协议)                           │
       │                                          │
       │ WebSocket → 前端                         │
       ▼                                          │
-⚠️ 检查点3: protocol.ts VisualEventData          │
+⚠️ 检查点2: protocol.ts VisualEventData          │
   协议类型定义是否包含新字段                       │
       │                                          │
       ▼                                          │
-⚠️ 检查点4: useFishOilBattle.onVisualEvent()     │
+⚠️ 检查点3: useFishOilBattle.onVisualEvent()     │
   switch(data.type) → Case 路由                  │
       │                                          │
       ▼                                          │
-⚠️ 检查点5: CyberFishRenderer.triggerSkillEffect()│
+⚠️ 检查点4: CyberFishRenderer.triggerSkillEffect()│
   参数类型定义 + switch(config.type) → EffectRenderer API
       │                                          │
       ▼                                          │
-⚠️ 检查点6: EffectRenderer.buildXxxVisualCfg()   │
+⚠️ 检查点5: EffectRenderer.buildXxxVisualCfg()   │
   从 WEAPON_RANGE_CONFIG 构建配置 ───────────────┘
       │
       ▼
-⚠️ 检查点7: 子渲染器接收 config 参数
+⚠️ 检查点6: 子渲染器接收 config 参数
   禁止文件顶部 const 硬编码
 ```
 
@@ -81,28 +81,21 @@ VisualEventData (协议)                           │
 
 在 `IMPLEMENTED_WEAPONS` 数组中添加武器元信息。
 
-#### ⚠️ Step 5: VISUAL_TYPE_MAP 注册 (`FishOilRoom.ts`)
+#### ⚠️ Step 5: extractVisualEvents 字段提取 (`FishOilRoom.ts`)
 
-**每个新的 VisualEventType 都必须在 `VISUAL_TYPE_MAP` 中注册**，否则事件会被静默丢弃。
-1:1 透传的事件直接列出；合并映射的显式标注。
-
-```typescript
-// FishOilRoom.ts 约 L648
-private static readonly VISUAL_TYPE_MAP: Partial<Record<VisualEventType, VisualEventType>> = {
-  [VisualEventType.YOUR_EVENT]: VisualEventType.YOUR_EVENT,
-  // ...
-};
-```
-
-#### ⚠️ Step 6: extractVisualEvents 字段提取 (`FishOilRoom.ts`)
-
-**武器特有字段必须从 metadata 提取到 VisualEventData**。若遗漏，前端收不到这些字段。
+**所有视觉事件直接透传**，不再有白名单过滤。只需确保武器特有字段从 metadata 提取到 VisualEventData。
 
 ```typescript
-// FishOilRoom.ts extractVisualEvents() 约 L659
+// FishOilRoom.ts extractVisualEvents() 
 result.push({
-  // ... 通用字段
-  yourField: evt.metadata?.yourField,  // ← 新增特有字段
+  // ... 通用字段 (type, playerId, weaponId, x, y, radius, isBurst, tx, ty)
+  angle: evt.metadata?.angle,
+  length: evt.metadata?.length,
+  // 各武器特有字段 ↓
+  anchorId: evt.metadata?.anchorId,           // 空气斥力场
+  frostbiteTargetId: evt.metadata?.targetId,  // 熵寂之触
+  frostbiteStacks: evt.metadata?.stacks,      // 熵寂之触冻伤层数
+  yourField: evt.metadata?.yourField,         // ← 新增特有字段
 });
 ```
 
@@ -147,19 +140,19 @@ result.push({
 
 ## 三、数据驱动强制检查清单
 
-新建武器后，逐项核查以下 8 个检查点：
+新建武器后，逐项核查以下检查点：
 
 | # | 检查位置 | 检查内容 | 遗漏后果 |
 |:---:|:---|:---|:---|
-| ☐1 | `FishOilRoom.VISUAL_TYPE_MAP` | 每个新 VisualEventType 是否已注册 | 事件静默丢弃 |
-| ☐2 | `FishOilRoom.extractVisualEvents()` | 特有字段(angle/length/beeCount等)是否从 metadata 提取 | 前端收不到 |
-| ☐3 | `WeaponRangeConfig.ts` | 视觉参数是否有配置项(不依赖前端硬编码) | 数值不一致 |
-| ☐4 | `protocol.ts` VisualEventData | 协议类型定义是否包含新字段 | TypeScript 类型错误 |
-| ☐5 | `useFishOilBattle.onVisualEvent()` | switch 是否匹配所有新 VisualEventType | 收到事件不处理 |
-| ☐6 | `CyberFishRenderer.triggerSkillEffect()` 参数类型 | 是否为新技能添加了所需属性（targetId/frostbiteStacks 等） | TypeScript 类型错误 |
-| ☐7 | `CyberFishRenderer.triggerSkillEffect()` switch | switch 是否匹配所有新 type | 不触发渲染 |
-| ☐8 | `EffectRenderer.buildXxxVisualCfg()` | 是否从 WEAPON_RANGE_CONFIG 构建配置 | 前端数值与后端脱节 |
-| ☐9 | 子渲染器参数来源 | 参数默认值是否来自 buildXxxVisualCfg 返回的配置 | 参数魔法数散布 |
+| ☐1 | `FishOilRoom.extractVisualEvents()` | 特有字段(angle/length/anchorId/targetId/stacks等)是否从 metadata 提取 | 前端收不到 |
+| ☐2 | `WeaponRangeConfig.ts` | 视觉参数是否有配置项(不依赖前端硬编码) | 数值不一致 |
+| ☐3 | `protocol.ts` VisualEventData | 协议类型定义是否包含新字段 | TypeScript 类型错误 |
+| ☐4 | `useFishOilBattle.onVisualEvent()` | switch 是否匹配所有新 VisualEventType | 收到事件不处理 |
+| ☐5 | `CyberFishRenderer.triggerSkillEffect()` 参数类型 | 是否为新技能添加了所需属性（targetId/frostbiteStacks 等） | TypeScript 类型错误 |
+| ☐6 | `CyberFishRenderer.triggerSkillEffect()` switch | switch 是否匹配所有新 type | 不触发渲染 |
+| ☐7 | `EffectRenderer.buildXxxVisualCfg()` | 是否从 WEAPON_RANGE_CONFIG 构建配置 | 前端数值与后端脱节 |
+| ☐8 | 子渲染器参数来源 | 参数默认值是否来自 buildXxxVisualCfg 返回的配置 | 参数魔法数散布 |
+| ☐9 | **子渲染器坐标变换** | **x/y 不乘 this.scale，尺寸(radius/length)乘 this.scale** | **特效位置偏移** |
 
 ---
 
@@ -242,7 +235,98 @@ if (opp && opp.hp > 0) {
 
 ---
 
-## 六、类型命名规范
+## 六、坐标变换管道与前端渲染器防错指南 ⭐
+
+### 6.1 坐标变换管道
+
+前端接收到的坐标是**后端逻辑坐标**（1280×720 虚拟画布），`CyberFishRenderer.mapX/mapY` 负责将逻辑坐标映射为**画布像素坐标**。所有子渲染器收到的 `x, y` 参数已经是画布像素坐标。
+
+```
+后端逻辑坐标 (1280×720) 
+    → CyberFishRenderer.mapX/mapY (uniformScale + offsetX)
+    → 画布像素坐标
+    → 子渲染器 trigger*(x, y, ...) 
+    → x, y 直接作为容器位置 / 绘制坐标使用
+```
+
+### 6.2 坐标缩放核心规则 🔥
+
+**这是最容易踩的坑，必须牢记：**
+
+| 值的类型 | 处理方式 | 说明 |
+|:---|:---|:---|
+| **位置坐标** (x, y, fromX, fromY, toX, toY) | **不乘** `this.scale` | 已由 mapX/mapY 映射为画布像素 |
+| **尺寸值** (radius, length, width, height, strokeWidth) | **必须乘** `this.scale` | 从逻辑 px 转为画布像素 |
+| **速度值** (flightSpeed 等) | **必须乘** `this.scale` | 从逻辑 px/s 转为画布像素/s |
+
+### ❌ 禁止模式 vs ✅ 正确模式
+
+```typescript
+// ❌ 禁止：对位置坐标乘 scale（双重缩放，特效偏移）
+triggerEffect(x: number, y: number, radius: number): void {
+  const s = this.scale;
+  container.position.set(x * s, y * s);  // ❌ 位置偏移！
+  g.circle(x * s, y * s, radius * s);     // ❌ 位置偏移！
+}
+
+// ✅ 正确：位置直接用，只对尺寸乘 scale
+triggerEffect(x: number, y: number, radius: number): void {
+  const s = this.scale;
+  container.position.set(x, y);           // ✅ 位置已是像素坐标
+  g.circle(0, 0, radius * s);             // ✅ 用相对(0,0)，尺寸缩放
+}
+```
+
+### 6.3 容器定位规范（防 resize 漂移）
+
+**关键原则：容器 `position.set(x, y)` + 子 Graphics 以 `(0, 0)` 为中心绘制**
+
+这样当 `setScale` 在 resize 时调用 `hexGraphics.scale.set(scale)`，Graphics 从本地原点 `(0,0)` 缩放不会导致位置漂移。
+
+```typescript
+// ✅ 正确：容器定位 + 子图形以 (0,0) 为中心
+triggerAura(playerId: string, x: number, y: number, radius: number): void {
+  const s = this.scale;
+  const container = new PIXI.Container();
+  container.position.set(x, y);           // 容器定位
+  const g = new PIXI.Graphics();
+  g.circle(0, 0, radius * s);            // (0,0) 相对绘制
+  container.addChild(g);
+  this.fieldContainer.addChild(container);
+}
+
+// setScale 中安全缩放：
+setScale(scale: number): void {
+  this.scale = scale;
+  this.activeAuras.forEach(aura => {
+    if (aura.graphics.destroyed) return;  // ⚠️ 必须检查 destroyed
+    aura.graphics.scale.set(scale);       // 从 (0,0) 缩放，位置不变
+  });
+}
+```
+
+### 6.4 硬编码像素常量
+
+任何直接写入的数值（如 `-20`）都要考虑是否需要缩放：
+
+```typescript
+// ❌ 硬编码常量不缩放 — 窗口缩放时比例失调
+this.showLabel(pid, x, y - (radius * s) - 20);
+
+// ✅ 常量也乘 scale
+this.showLabel(pid, x, y - (radius * s) - 20 * s);
+```
+
+### 6.5 已知曾出错的渲染器
+
+| 渲染器 | 问题 | 修复方式 |
+|:---|:---|:---|
+| EntropicTouchRenderer | `x * s`, `y * s` 双重缩放 + `setScale` 漂移 + 常量未缩放 + 缺 destroyed 检查 | 容器定位 + (0,0) 绘制 |
+| OpticalSlashEffectRenderer | `x * s + offsetX` 双重缩放 + 手动 offsetX/Y 计算 | 移除 offset 计算，x/y 直接使用 |
+
+---
+
+## 七、类型命名规范
 
 ### 6.1 核心原则
 
@@ -275,7 +359,7 @@ if (opp && opp.hp > 0) {
 
 ---
 
-## 七、特效设计模式
+## 八、特效设计模式
 
 常见的前端特效模式：
 
@@ -288,7 +372,7 @@ if (opp && opp.hp > 0) {
 
 ---
 
-## 八、关键文件速查表
+## 九、关键文件速查表
 
 | 文件 | 路径 |
 |:---|:---|
@@ -296,7 +380,7 @@ if (opp && opp.hp > 0) {
 | IBattleState 类型 | `game/backend/src/games/fish-oil-battle/core/types.ts` |
 | WeaponRegistry | `game/backend/src/games/fish-oil-battle/core/WeaponRegistry.ts` |
 | WeaponScheduler (PendingVisualEvent) | `game/backend/src/games/fish-oil-battle/core/WeaponScheduler.ts` |
-| FishOilRoom (VISUAL_TYPE_MAP) | `game/backend/src/games/fish-oil-battle/FishOilRoom.ts` |
+| FishOilRoom (extractVisualEvents) | `game/backend/src/games/fish-oil-battle/FishOilRoom.ts` |
 | GameEnums | `game/backend/src/games/fish-oil-battle/config/GameEnums.ts` |
 | WeaponRangeConfig | `game/backend/src/games/fish-oil-battle/config/WeaponRangeConfig.ts` |
 | 协议定义 | `game/backend/src/games/fish-oil-battle/shared/protocol.ts` |
@@ -308,7 +392,7 @@ if (opp && opp.hp > 0) {
 
 ---
 
-## 九、类型同步检查模板
+## 十、类型同步检查模板
 
 创建新武器时，确保前后端类型定义一致。**按顺序执行以下检查**：
 
@@ -378,7 +462,7 @@ npm run dev
 
 ---
 
-## 九、参考文档
+## 十一、参考文档
 
 - 框架 API 详解: 加载 `references/framework-api.md`
 - 视觉事件协议: 加载 `references/visual-event-protocol.md`

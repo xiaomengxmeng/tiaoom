@@ -63,8 +63,10 @@ export class EntropicTouchRenderer {
 
   setScale(scale: number): void {
     this.scale = scale;
-    // 更新所有活跃实例的缩放
+    // 更新所有活跃实例的缩放（hexGraphics 以 (0,0) 为中心绘制，
+    // 容器 position 已设为目标画布坐标，scale.set 不会产生位置漂移）
     this.activeAuras.forEach(aura => {
+      if (aura.hexGraphics.destroyed) return;
       aura.hexGraphics.scale.set(scale);
     });
   }
@@ -94,15 +96,17 @@ export class EntropicTouchRenderer {
       existing.x = x;
       existing.y = y;
       existing.radius = radius;
+      existing.container.position.set(x, y);
       return;
     }
 
     const s = this.scale;
     const container = new PIXI.Container();
+    container.position.set(x, y); // 容器定位到画布像素坐标
     const hexGraphics = new PIXI.Graphics();
 
-    // 绘制六边形低温场（x/y 已是画布像素坐标，仅 radius 需缩放）
-    this.drawAuraHex(hexGraphics, x, y, radius * s, themeColor);
+    // 以 (0,0) 为中心绘制（容器已定位到目标坐标，支持 resize 时 scale.set 不漂移）
+    this.drawAuraHex(hexGraphics, 0, 0, radius * s, themeColor);
 
     container.addChild(hexGraphics);
     this.fieldContainer.addChild(container);
@@ -124,7 +128,7 @@ export class EntropicTouchRenderer {
     this.spawnIceCrystals(x, y, radius * s, themeColor);
 
     // 显示温度标签（16℃ 恒温彩蛋）
-    this.showTempLabel(playerId, x, y - (radius * s) - 20, themeColor);
+    this.showTempLabel(playerId, x, y - (radius * s) - 20 * s, themeColor);
   }
 
   /** 移除低温场 */

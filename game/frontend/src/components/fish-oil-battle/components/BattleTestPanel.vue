@@ -703,6 +703,16 @@ function stopBattle(): void {
   showWeaponSelect.value = false;
   roomStatus.value = '已结束';
   roomId.value = '';
+
+  // 离开房间，确保下次能重新创建
+  const room = gameStore.roomPlayer?.room;
+  if (gameStore.game && room) {
+    try {
+      gameStore.game.leaveRoom(room.id);
+    } catch (err) {
+      console.warn('[BattleTest] leaveRoom failed:', err);
+    }
+  }
 }
 
 // ── 生命周期清理 ──────────────────────────────────

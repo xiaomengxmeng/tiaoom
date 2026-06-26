@@ -212,6 +212,32 @@ export class CyberFishRenderer {
     targetId?: string;
     /** 熵寂之触冻伤层数，entropic_frostbite 专用 */
     frostbiteStacks?: number;
+    /** 白猫：灵感墨水层数 */
+    inkStacks?: number;
+    /** 白猫：是否为肌肉兔形态 */
+    isMuscleRabbit?: boolean;
+    /** 白猫：小兔/肌肉兔位置 X */
+    rabbitX?: number;
+    /** 白猫：小兔/肌肉兔位置 Y */
+    rabbitY?: number;
+    /** 小金喵：电弧弹射次数 */
+    bounceCount?: number;
+    /** 小金喵：放电猫虚影位置 X */
+    catX?: number;
+    /** 小金喵：放电猫虚影位置 Y */
+    catY?: number;
+    /** 小金喵：电弧弹射链节点 */
+    arcNodes?: Array<{ x: number; y: number }>;
+    /** 风随：先见层数 */
+    foresightStacks?: number;
+    /** 风随：猫灵回响 ID */
+    echoId?: string;
+    /** Carzeye：落雷颜色阶段 */
+    weatherPhase?: number;
+    /** Carzeye：落雷颜色 */
+    weatherColor?: number;
+    /** 林澈：当前心境 */
+    currentMood?: string;
   }): void {
     // 映射所有坐标参数
     const mapCfg: typeof config & Record<string, any> = { ...config };
@@ -362,6 +388,172 @@ export class CyberFishRenderer {
             config.playerId ?? 'unknown',
             mapCfg.x, mapCfg.y,
             config.radius ?? 200,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.DRAWING_MANIFEST_INK:
+        // 小兔/肌肉兔状态同步（墨水层数 + 形态 + 位置）
+        {
+          const rx = config.rabbitX !== undefined ? this.mapX(config.rabbitX) : mapCfg.x;
+          const ry = config.rabbitY !== undefined ? this.mapY(config.rabbitY) : mapCfg.y;
+          if (rx !== undefined && ry !== undefined) {
+            this.effectRenderer.updateDrawingRabbit(
+              config.playerId ?? 'unknown',
+              rx, ry,
+              config.inkStacks ?? 0,
+              config.isMuscleRabbit ?? false,
+              themeColor,
+            );
+          }
+        }
+        break;
+      case VisualEventType.DRAWING_MANIFEST_BURST:
+        // 肌肉兔降临爆发
+        {
+          const bx = config.rabbitX !== undefined ? this.mapX(config.rabbitX) : mapCfg.x;
+          const by = config.rabbitY !== undefined ? this.mapY(config.rabbitY) : mapCfg.y;
+          if (bx !== undefined && by !== undefined) {
+            this.effectRenderer.triggerDrawingBurst(
+              config.playerId ?? 'unknown',
+              bx, by,
+              config.radius ?? 50,
+              themeColor,
+            );
+          }
+        }
+        break;
+      case VisualEventType.DRAWING_MANIFEST_DASH:
+        // 肌肉兔冲刺撞击
+        {
+          const isHit = (config as any).isHit ?? false;
+          if (mapCfg.x !== undefined && mapCfg.y !== undefined &&
+              config.toX !== undefined && config.toY !== undefined) {
+            this.effectRenderer.triggerDrawingDash(
+              mapCfg.x, mapCfg.y,
+              this.mapX(config.toX), this.mapY(config.toY),
+              isHit,
+              themeColor,
+            );
+          }
+        }
+        break;
+      case VisualEventType.DISCHARGE_CAT_ARC:
+        // 电弧弹射链
+        {
+          const isBurst = config.isBurst ?? false;
+          // 更新放电猫虚影位置
+          const cx = config.catX !== undefined ? this.mapX(config.catX) : mapCfg.x;
+          const cy = config.catY !== undefined ? this.mapY(config.catY) : mapCfg.y;
+          if (cx !== undefined && cy !== undefined) {
+            this.effectRenderer.updateDischargeCat(
+              config.playerId ?? 'unknown', cx, cy, isBurst, themeColor,
+            );
+          }
+          // 绘制电弧弹射链
+          if (config.arcNodes && config.arcNodes.length >= 2) {
+            const mappedNodes = config.arcNodes.map(n => ({
+              x: this.mapX(n.x),
+              y: this.mapY(n.y),
+            }));
+            this.effectRenderer.triggerDischargeArc(mappedNodes, isBurst, themeColor);
+          }
+        }
+        break;
+      case VisualEventType.DISCHARGE_CAT_BURST:
+        // 雷霆万钧爆发
+        {
+          const bx = config.catX !== undefined ? this.mapX(config.catX) : mapCfg.x;
+          const by = config.catY !== undefined ? this.mapY(config.catY) : mapCfg.y;
+          if (bx !== undefined && by !== undefined) {
+            this.effectRenderer.triggerDischargeBurst(
+              config.playerId ?? 'unknown',
+              bx, by,
+              config.radius ?? 120,
+              themeColor,
+            );
+          }
+        }
+        break;
+      case VisualEventType.PRECOGNITIVE_LENS_FORESIGHT:
+        // 先见层数同步
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.updatePrecognitiveForesight(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.foresightStacks ?? 0,
+            config.isBurst ?? false,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.PRECOGNITIVE_LENS_ECHO:
+        // 猫灵回响投射物
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined &&
+            config.toX !== undefined && config.toY !== undefined) {
+          this.effectRenderer.triggerPrecognitiveEcho(
+            mapCfg.x, mapCfg.y,
+            this.mapX(config.toX), this.mapY(config.toY),
+            config.isBurst ?? false,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.PRECOGNITIVE_LENS_BURST:
+        // 无限洞察爆发
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerPrecognitiveBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.EMOTIONAL_WEATHER_LIGHTNING:
+        // 落雷
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerWeatherLightning(
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 40,
+            config.weatherColor ?? 0x4DA6FF,
+          );
+        }
+        break;
+      case VisualEventType.EMOTIONAL_WEATHER_HAIL:
+        // 冰雹
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerWeatherHail(
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 30,
+          );
+        }
+        break;
+      case VisualEventType.EMOTIONAL_WEATHER_BURST:
+        // 极端气候爆发
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerWeatherBurst(
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 200,
+          );
+        }
+        break;
+      case VisualEventType.EMOTION_MASTERY_MOOD:
+        // 心境轮转同步
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.updateEmotionMood(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.currentMood ?? 'anger',
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.EMOTION_MASTERY_BURST:
+        // 情绪实体化爆发
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerEmotionBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
             themeColor,
           );
         }

@@ -121,6 +121,58 @@ export interface VisualEventData {
    * 熵寂之触：当前冻伤层数（ENTROPIC_TOUCH_FROSTBITE 事件专用）
    */
   frostbiteStacks?: number;
+  /**
+   * 白猫：灵感墨水层数（DRAWING_MANIFEST_INK 事件专用）
+   */
+  inkStacks?: number;
+  /**
+   * 白猫：是否为肌肉兔形态（DRAWING_MANIFEST_INK/BURST 事件专用）
+   */
+  isMuscleRabbit?: boolean;
+  /**
+   * 白猫：小兔/肌肉兔位置 X（DRAWING_MANIFEST 事件专用）
+   */
+  rabbitX?: number;
+  /**
+   * 白猫：小兔/肌肉兔位置 Y（DRAWING_MANIFEST 事件专用）
+   */
+  rabbitY?: number;
+  /**
+   * 小金喵：电弧弹射次数（DISCHARGE_CAT_ARC 事件专用）
+   */
+  bounceCount?: number;
+  /**
+   * 小金喵：放电猫虚影位置 X
+   */
+  catX?: number;
+  /**
+   * 小金喵：放电猫虚影位置 Y
+   */
+  catY?: number;
+  /**
+   * 小金喵：电弧弹射链节点（DISCHARGE_CAT_ARC 事件专用）
+   */
+  arcNodes?: Array<{ x: number; y: number; targetId?: string }>;
+  /**
+   * 风随：先见层数（PRECOGNITIVE_LENS_FORESIGHT 事件专用）
+   */
+  foresightStacks?: number;
+  /**
+   * 风随：猫灵回响 ID（PRECOGNITIVE_LENS_ECHO 事件专用）
+   */
+  echoId?: string;
+  /**
+   * Carzeye：落雷颜色阶段 (0=蓝, 1=橙, 2=紫)
+   */
+  weatherPhase?: number;
+  /**
+   * Carzeye：落雷颜色（数值色值）
+   */
+  weatherColor?: number;
+  /**
+   * 林澈：当前心境 ('anger'|'bliss'|'happy')
+   */
+  currentMood?: string;
 }
 
 // ─── 游戏统计（game_end 用）───────────────

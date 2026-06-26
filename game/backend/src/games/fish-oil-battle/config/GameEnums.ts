@@ -26,6 +26,11 @@ export enum WeaponId {
   // 扩展角色武器
   AIR_REPULSION_FIELD = 'air_repulsion_field', // 开摆 - 空气斥力场
   ENTROPIC_TOUCH = 'entropic_touch', // 闲乘月 - 熵寂之触
+  DRAWING_MANIFEST = 'drawing_manifest', // 白猫 - 画作实体化
+  DISCHARGE_CAT = 'discharge_cat', // 小金喵 - 放电猫猫
+  PRECOGNITIVE_LENS = 'precognitive_lens', // 风随 - 预知透镜
+  EMOTIONAL_WEATHER = 'emotional_weather', // Carzeye - 情绪天气
+  EMOTION_MASTERY = 'emotion_mastery', // 林澈 - 情绪掌控
 }
 
 // ── 武器名称 ─────────────────────────────────────
@@ -50,6 +55,11 @@ export enum WeaponName {
   OPTICAL_SLASH = '光学斩击', // Liya
   AIR_REPULSION_FIELD = '空气斥力场', // 开摆
   ENTROPIC_TOUCH = '熵寂之触', // 闲乘月
+  DRAWING_MANIFEST = '画作实体化', // 白猫
+  DISCHARGE_CAT = '放电猫猫', // 小金喵
+  PRECOGNITIVE_LENS = '预知透镜', // 风随
+  EMOTIONAL_WEATHER = '情绪天气', // Carzeye
+  EMOTION_MASTERY = '情绪掌控', // 林澈
 }
 
 // ── 流派 ─────────────────────────────────────────
@@ -105,6 +115,32 @@ export enum VisualEventType {
   ENTROPIC_TOUCH_FROSTBITE = 'entropic_touch_frostbite',
   /** 闲乘月 - 熵寂之触爆发（热力学奇点） */
   ENTROPIC_TOUCH_BURST = 'entropic_touch_burst',
+  /** 白猫 - 画作实体化·灵感墨水（小兔跟随 + 层数同步） */
+  DRAWING_MANIFEST_INK = 'drawing_manifest_ink',
+  /** 白猫 - 画作实体化·肌肉兔降临（爆发巨大化） */
+  DRAWING_MANIFEST_BURST = 'drawing_manifest_burst',
+  /** 白猫 - 画作实体化·肌肉兔冲刺撞击 */
+  DRAWING_MANIFEST_DASH = 'drawing_manifest_dash',
+  /** 小金喵 - 放电猫猫·电弧（碰撞触发弹射） */
+  DISCHARGE_CAT_ARC = 'discharge_cat_arc',
+  /** 小金喵 - 放电猫猫·雷霆万钧爆发 */
+  DISCHARGE_CAT_BURST = 'discharge_cat_burst',
+  /** 风随 - 预知透镜·猫灵回响（投射物飞行） */
+  PRECOGNITIVE_LENS_ECHO = 'precognitive_lens_echo',
+  /** 风随 - 预知透镜·先见层数同步 */
+  PRECOGNITIVE_LENS_FORESIGHT = 'precognitive_lens_foresight',
+  /** 风随 - 预知透镜·无限洞察爆发 */
+  PRECOGNITIVE_LENS_BURST = 'precognitive_lens_burst',
+  /** Carzeye - 情绪天气·落雷 */
+  EMOTIONAL_WEATHER_LIGHTNING = 'emotional_weather_lightning',
+  /** Carzeye - 情绪天气·冰雹（爆发持续 AOE） */
+  EMOTIONAL_WEATHER_HAIL = 'emotional_weather_hail',
+  /** Carzeye - 情绪天气·极端气候爆发 */
+  EMOTIONAL_WEATHER_BURST = 'emotional_weather_burst',
+  /** 林澈 - 情绪掌控·心境轮转同步 */
+  EMOTION_MASTERY_MOOD = 'emotion_mastery_mood',
+  /** 林澈 - 情绪掌控·情绪实体化爆发 */
+  EMOTION_MASTERY_BURST = 'emotion_mastery_burst',
   /** 形状特效（一次性） */
   SHAPE_EFFECT = 'shape',
   /** 持续形状特效（常驻，需 sustainedKey） */

@@ -404,6 +404,155 @@ export function useFishOilBattle(
           });
         }
         break;
+      case VisualEventType.DRAWING_MANIFEST_INK:
+        // 小兔/肌肉兔状态同步
+        rendererRef.value.triggerSkillEffect({
+          type: data.type,
+          x: data.x, y: data.y,
+          playerId: data.playerId,
+          inkStacks: data.inkStacks ?? 0,
+          isMuscleRabbit: data.isMuscleRabbit ?? false,
+          rabbitX: data.rabbitX,
+          rabbitY: data.rabbitY,
+        });
+        break;
+      case VisualEventType.DRAWING_MANIFEST_BURST:
+        // 肌肉兔降临爆发
+        rendererRef.value.triggerSkillEffect({
+          type: data.type,
+          x: data.x, y: data.y,
+          radius: data.radius ?? 50,
+          playerId: data.playerId,
+          rabbitX: data.rabbitX,
+          rabbitY: data.rabbitY,
+        });
+        break;
+      case VisualEventType.DRAWING_MANIFEST_DASH:
+        // 肌肉兔冲刺撞击
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            toX: data.tx,
+            toY: data.ty,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.DISCHARGE_CAT_ARC:
+        // 电弧弹射链
+        rendererRef.value.triggerSkillEffect({
+          type: data.type,
+          x: data.x, y: data.y,
+          playerId: data.playerId,
+          isBurst: data.isBurst ?? false,
+          catX: data.catX,
+          catY: data.catY,
+          arcNodes: data.arcNodes,
+        });
+        break;
+      case VisualEventType.DISCHARGE_CAT_BURST:
+        // 雷霆万钧爆发
+        rendererRef.value.triggerSkillEffect({
+          type: data.type,
+          x: data.x, y: data.y,
+          radius: data.radius ?? 120,
+          playerId: data.playerId,
+          catX: data.catX,
+          catY: data.catY,
+        });
+        break;
+      case VisualEventType.PRECOGNITIVE_LENS_FORESIGHT:
+        // 先见层数同步
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            playerId: data.playerId,
+            foresightStacks: data.foresightStacks ?? 0,
+            isBurst: data.isBurst ?? false,
+          });
+        }
+        break;
+      case VisualEventType.PRECOGNITIVE_LENS_ECHO:
+        // 猫灵回响投射物
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            toX: data.tx,
+            toY: data.ty,
+            playerId: data.playerId,
+            isBurst: data.isBurst ?? false,
+          });
+        }
+        break;
+      case VisualEventType.PRECOGNITIVE_LENS_BURST:
+        // 无限洞察爆发
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.EMOTIONAL_WEATHER_LIGHTNING:
+        // 落雷
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 40,
+            weatherColor: data.weatherColor,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.EMOTIONAL_WEATHER_HAIL:
+        // 冰雹
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 30,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.EMOTIONAL_WEATHER_BURST:
+        // 极端气候爆发
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.EMOTION_MASTERY_MOOD:
+        // 心境轮转同步
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            playerId: data.playerId,
+            currentMood: data.currentMood ?? 'anger',
+          });
+        }
+        break;
+      case VisualEventType.EMOTION_MASTERY_BURST:
+        // 情绪实体化爆发
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            playerId: data.playerId,
+            radius: data.radius ?? 80,
+          });
+        }
+        break;
       case VisualEventType.GLOBAL_EFFECT:
         if (rendererRef.value) {
           rendererRef.value.handleGlobalEffect(data);

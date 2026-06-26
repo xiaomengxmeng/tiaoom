@@ -99,9 +99,18 @@ export function easeInOutCubic(t: number): number {
 //  通用特效生命周期类型
 // ══════════════════════════════════════════════════════
 
-/** 活跃特效实例（通用接口，所有子渲染器共用） */
+/**
+ * 活跃特效实例（通用接口，所有子渲染器共用）
+ *
+ * 各子渲染器通过 `type` 字符串标识特效种类，由 EffectRenderer 的 update 循环
+ * 统一驱动生命周期。每新增武器只需在对应的 SubRenderer 中定义新的 type 常量，
+ * 无需修改此接口。
+ *
+ * 现有 type 示例：'shockwave', 'firewall', 'burst_flash', 'drawing_manifest_burst',
+ * 'discharge_cat_arc', 'precognitive_lens_echo', 'emotional_weather_lightning', ... 等。
+ */
 export interface ActiveEffect {
-  type: 'shockwave' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'sustained_shape' | 'optical_slash' | 'optical_slash_burst' | 'air_repulsion_anchor' | 'air_repulsion_burst' | 'entropic_touch_aura' | 'entropic_touch_frostbite' | 'entropic_touch_burst' | 'shape';
+  type: string;
   container: PIXI.Container;
   life: number;
   maxLife: number;

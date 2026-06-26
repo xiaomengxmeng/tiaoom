@@ -71,6 +71,8 @@ interface ShockwaveWavefront {
   totalBounceHits: number;
   /** 是否已结束 */
   isFinished: boolean;
+  /** 本波内每个对手的累计命中次数（跨所有射线共享，防止同一波超量命中） */
+  perOpponentHitCount: Map<string, number>;
 }
 
 export class ShockwaveGeneratorWeapon implements IWeapon {
@@ -125,7 +127,7 @@ export class ShockwaveGeneratorWeapon implements IWeapon {
 
         // 4. 命中玩家检测（仅在射线活跃时）
         if (ray.isActive) {
-          this.checkRayHits(ray, wf, allOpponents, effects);
+          this.checkRayHits(ray, wf, allOpponents, effects, wf.perOpponentHitCount);
         }
 
         // 5. 检查射线是否超出最大范围
@@ -189,6 +191,7 @@ export class ShockwaveGeneratorWeapon implements IWeapon {
         tickCount: 0,
         totalBounceHits: 0,
         isFinished: false,
+        perOpponentHitCount: new Map(),
       };
       this.activeWavefronts.push(wf);
 
@@ -279,19 +282,26 @@ export class ShockwaveGeneratorWeapon implements IWeapon {
    * 检测射线是否命中对手。
    * 使用扇形区域检测：对手在射线的扇形区域内（±半扇区角），
    * 且射线前沿刚好到达对手所在距离。
+   *
+   * @param sharedHitCount 跨所有射线共享的命中计数，确保 maxHitsPerWave 真正生效
    */
   private checkRayHits(
     ray: ShockwaveRay,
     wf: ShockwaveWavefront,
     opponents: { id: string; x: number; y: number }[],
     effects: WeaponEffect[],
+    sharedHitCount: Map<string, number>,
   ): void {
     const halfSectorAngle = Math.PI / wf.rays.length; // 半扇区角
-    const waveHitCount = new Map<string, number>(); // 本波累计命中数
+    const maxHits = CFG.maxHitsPerWave!;
 
     for (const opp of opponents) {
-      // 跳过已命中（本反射周期内）
+      // 跳过已命中（本射线周期内）
       if (ray.hitPlayers.has(opp.id)) continue;
+
+      // 检查跨所有射线的累计命中次数
+      const totalHits = sharedHitCount.get(opp.id) ?? 0;
+      if (totalHits >= maxHits) continue;
 
       // 计算对手相对射线起点的距离和角度
       const dx = opp.x - ray.originX;
@@ -308,13 +318,8 @@ export class ShockwaveGeneratorWeapon implements IWeapon {
 
       // 前沿到达检测：射线刚好从对手身边经过
       if (ray.prevLength < dist && ray.length >= dist) {
-        // 检查跨所有射线的累计命中次数
-        const totalHits = waveHitCount.get(opp.id) ?? 0;
-        const maxHits = CFG.maxHitsPerWave!;
-        if (totalHits >= maxHits) continue;
-
         ray.hitPlayers.add(opp.id);
-        waveHitCount.set(opp.id, totalHits + 1);
+        sharedHitCount.set(opp.id, totalHits + 1);
 
         effects.push({
           type: WeaponEffectType.AOE_DAMAGE as any,

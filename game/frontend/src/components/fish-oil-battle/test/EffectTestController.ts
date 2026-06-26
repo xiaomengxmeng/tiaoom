@@ -11,6 +11,11 @@ import { HiveEffectRenderer } from '../renderer/entities/HiveEffectRenderer';
 import { OpticalSlashEffectRenderer } from '../renderer/entities/OpticalSlashEffectRenderer';
 import { AirRepulsionFieldRenderer } from '../renderer/entities/AirRepulsionFieldRenderer';
 import { EntropicTouchRenderer } from '../renderer/entities/EntropicTouchRenderer';
+import { DrawingManifestRenderer } from '../renderer/entities/DrawingManifestRenderer';
+import { DischargeCatRenderer } from '../renderer/entities/DischargeCatRenderer';
+import { PrecognitiveLensRenderer } from '../renderer/entities/PrecognitiveLensRenderer';
+import { EmotionalWeatherRenderer } from '../renderer/entities/EmotionalWeatherRenderer';
+import { EmotionMasteryRenderer } from '../renderer/entities/EmotionMasteryRenderer';
 import type { ActiveEffect } from '../renderer/entities/VisualEffectUtils';
 
 /**
@@ -42,6 +47,16 @@ export interface EffectTestContext {
   opticalSlashRenderer: OpticalSlashEffectRenderer;
   airRepulsionRenderer: AirRepulsionFieldRenderer;
   entropicTouchRenderer: EntropicTouchRenderer;
+  /** 画作实体化渲染器 */
+  drawingManifestRenderer: DrawingManifestRenderer;
+  /** 放电猫猫渲染器 */
+  dischargeCatRenderer: DischargeCatRenderer;
+  /** 预知透镜渲染器 */
+  precognitiveLensRenderer: PrecognitiveLensRenderer;
+  /** 情绪天气渲染器 */
+  emotionalWeatherRenderer: EmotionalWeatherRenderer;
+  /** 情绪掌控渲染器 */
+  emotionMasteryRenderer: EmotionMasteryRenderer;
   /** 活跃特效列表 */
   activeEffects: ActiveEffect[];
   /** 添加活跃特效 */
@@ -115,6 +130,11 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
   const opticalSlashRenderer = new OpticalSlashEffectRenderer(l3Field, l5Hologram);
   const airRepulsionRenderer = new AirRepulsionFieldRenderer(l3Field);
   const entropicTouchRenderer = new EntropicTouchRenderer(l3Field, particlePool);
+  const drawingManifestRenderer = new DrawingManifestRenderer(l2Entity, l3Field);
+  const dischargeCatRenderer = new DischargeCatRenderer(l2Entity, l3Field);
+  const precognitiveLensRenderer = new PrecognitiveLensRenderer(l2Entity, l3Field);
+  const emotionalWeatherRenderer = new EmotionalWeatherRenderer(l3Field);
+  const emotionMasteryRenderer = new EmotionMasteryRenderer(l3Field, l2Entity);
 
   // 6. 活跃特效管理
   const activeEffects: ActiveEffect[] = [];
@@ -138,6 +158,10 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
     // 清理渲染器内部管理的特效
     airRepulsionRenderer.clear();
     entropicTouchRenderer.clear();
+    drawingManifestRenderer.clear();
+    dischargeCatRenderer.clear();
+    emotionalWeatherRenderer.clear();
+    emotionMasteryRenderer.clear();
   };
 
   // ═══════════════════════════════════════════════════
@@ -175,6 +199,11 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
     opticalSlashRenderer.setScale(s, canvasW, canvasH);
     airRepulsionRenderer.setScale(s);
     entropicTouchRenderer.setScale(s);
+    drawingManifestRenderer.setScale(s);
+    dischargeCatRenderer.setScale(s);
+    precognitiveLensRenderer.setScale(s);
+    emotionalWeatherRenderer.setScale(s);
+    emotionMasteryRenderer.setScale(s);
   }
 
   function setArenaConfig(config: { width: number; height: number; arenaRadius: number; shape?: string; arenaHalfW?: number; arenaHalfH?: number }): void {
@@ -238,6 +267,11 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
     opticalSlashRenderer,
     airRepulsionRenderer,
     entropicTouchRenderer,
+    drawingManifestRenderer,
+    dischargeCatRenderer,
+    precognitiveLensRenderer,
+    emotionalWeatherRenderer,
+    emotionMasteryRenderer,
     activeEffects,
     addEffect,
     clearEffects,
@@ -256,6 +290,11 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
       opticalSlashRenderer.destroy();
       airRepulsionRenderer.destroy();
       entropicTouchRenderer.destroy();
+      drawingManifestRenderer.destroy();
+      dischargeCatRenderer.destroy();
+      precognitiveLensRenderer.destroy();
+      emotionalWeatherRenderer.destroy();
+      emotionMasteryRenderer.destroy();
       particlePool.destroy();
       app.destroy(true, { children: true });
     },

@@ -15,6 +15,11 @@ import { HiveMotherWeapon } from '../skills/weapons/HiveMotherWeapon';
 import { OpticalSlashWeapon } from '../skills/weapons/OpticalSlashWeapon';
 import { AirRepulsionFieldWeapon } from '../skills/weapons/AirRepulsionFieldWeapon';
 import { EntropicTouchWeapon } from '../skills/weapons/EntropicTouchWeapon';
+import { DrawingManifestWeapon } from '../skills/weapons/DrawingManifestWeapon';
+import { DischargeCatWeapon } from '../skills/weapons/DischargeCatWeapon';
+import { PrecognitiveLensWeapon } from '../skills/weapons/PrecognitiveLensWeapon';
+import { EmotionalWeatherWeapon } from '../skills/weapons/EmotionalWeatherWeapon';
+import { EmotionMasteryWeapon } from '../skills/weapons/EmotionMasteryWeapon';
 
 // ── 武器元信息（工厂模式） ──────────────────────────────────
 export interface WeaponEntry {
@@ -143,6 +148,51 @@ export const REGISTRY: Record<string, WeaponEntry> = {
     difficulty: 2,
     iconId: 'game-icons:entropy-touch',
     factory: () => new EntropicTouchWeapon(),
+  },
+  // ── 白猫 - 画作实体化 ──────────────────────────
+  [WeaponId.DRAWING_MANIFEST]: {
+    id: WeaponId.DRAWING_MANIFEST,
+    name: WeaponName.DRAWING_MANIFEST,
+    school: School.WILD,
+    difficulty: 2,
+    iconId: 'game-icons:rabbit',
+    factory: () => new DrawingManifestWeapon(),
+  },
+  // ── 小金喵 - 放电猫猫 ──────────────────────────
+  [WeaponId.DISCHARGE_CAT]: {
+    id: WeaponId.DISCHARGE_CAT,
+    name: WeaponName.DISCHARGE_CAT,
+    school: School.WILD,
+    difficulty: 2,
+    iconId: 'game-icons:cat',
+    factory: () => new DischargeCatWeapon(),
+  },
+  // ── 风随 - 预知透镜 ──────────────────────────
+  [WeaponId.PRECOGNITIVE_LENS]: {
+    id: WeaponId.PRECOGNITIVE_LENS,
+    name: WeaponName.PRECOGNITIVE_LENS,
+    school: School.WILD,
+    difficulty: 3,
+    iconId: 'game-icons:eye',
+    factory: () => new PrecognitiveLensWeapon(),
+  },
+  // ── Carzeye - 情绪天气 ──────────────────────────
+  [WeaponId.EMOTIONAL_WEATHER]: {
+    id: WeaponId.EMOTIONAL_WEATHER,
+    name: WeaponName.EMOTIONAL_WEATHER,
+    school: School.WILD,
+    difficulty: 2,
+    iconId: 'game-icons:lightning-storm',
+    factory: () => new EmotionalWeatherWeapon(),
+  },
+  // ── 林澈 - 情绪掌控 ──────────────────────────
+  [WeaponId.EMOTION_MASTERY]: {
+    id: WeaponId.EMOTION_MASTERY,
+    name: WeaponName.EMOTION_MASTERY,
+    school: School.WILD,
+    difficulty: 2,
+    iconId: 'game-icons:sparkles',
+    factory: () => new EmotionMasteryWeapon(),
   },
 };
 

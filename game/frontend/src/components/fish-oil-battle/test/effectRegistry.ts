@@ -46,6 +46,19 @@ const VISUAL_EVENT_TYPE_NAMES: Record<VisualEventType, string> = {
   [VisualEventType.ENTROPIC_TOUCH_AURA]: '熵寂之触·低温场',
   [VisualEventType.ENTROPIC_TOUCH_FROSTBITE]: '熵寂之触·冻伤',
   [VisualEventType.ENTROPIC_TOUCH_BURST]: '熵寂之触·热力学奇点',
+  [VisualEventType.DRAWING_MANIFEST_INK]: '画作实体化·灵感墨水',
+  [VisualEventType.DRAWING_MANIFEST_BURST]: '画作实体化·肌肉兔降临',
+  [VisualEventType.DRAWING_MANIFEST_DASH]: '画作实体化·肌肉兔冲刺',
+  [VisualEventType.DISCHARGE_CAT_ARC]: '放电猫猫·电弧弹射',
+  [VisualEventType.DISCHARGE_CAT_BURST]: '放电猫猫·雷霆万钧',
+  [VisualEventType.PRECOGNITIVE_LENS_ECHO]: '预知透镜·猫灵回响',
+  [VisualEventType.PRECOGNITIVE_LENS_FORESIGHT]: '预知透镜·先见层数',
+  [VisualEventType.PRECOGNITIVE_LENS_BURST]: '预知透镜·无限洞察',
+  [VisualEventType.EMOTIONAL_WEATHER_LIGHTNING]: '情绪天气·落雷',
+  [VisualEventType.EMOTIONAL_WEATHER_HAIL]: '情绪天气·冰雹',
+  [VisualEventType.EMOTIONAL_WEATHER_BURST]: '情绪天气·极端气候',
+  [VisualEventType.EMOTION_MASTERY_MOOD]: '情绪掌控·心境轮转',
+  [VisualEventType.EMOTION_MASTERY_BURST]: '情绪掌控·实体化爆发',
   [VisualEventType.SHAPE_EFFECT]: '形状特效',
   [VisualEventType.SUSTAINED_SHAPE]: '持续形状特效',
 };
@@ -213,6 +226,82 @@ export function autoRegisterFromEnum(): void {
             ctx.entropicTouchRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
             break;
           }
+          // ── 预知透镜 ───────────────────────────────
+          case VisualEventType.PRECOGNITIVE_LENS_ECHO: {
+            const result = ctx.precognitiveLensRenderer?.triggerEcho(x - 100, y, x + 100, y, false, color);
+            if (result?.effect) ctx.activeEffects.push(result.effect);
+            break;
+          }
+          case VisualEventType.PRECOGNITIVE_LENS_FORESIGHT: {
+            ctx.precognitiveLensRenderer?.updateForesight(`player_${Date.now()}`, x, y, 4, false, color);
+            break;
+          }
+          case VisualEventType.PRECOGNITIVE_LENS_BURST: {
+            const result = ctx.precognitiveLensRenderer?.triggerBurst(`player_${Date.now()}`, x, y, duration, color);
+            if (result?.effect) ctx.activeEffects.push(result.effect);
+            break;
+          }
+
+          // ── 画作实体化 ─────────────────────────────
+          case VisualEventType.DRAWING_MANIFEST_INK: {
+            ctx.drawingManifestRenderer?.updateRabbit(`player_${Date.now()}`, x, y, 4, false, color);
+            break;
+          }
+          case VisualEventType.DRAWING_MANIFEST_BURST: {
+            const result = ctx.drawingManifestRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size, duration, color);
+            if (result?.effect) ctx.activeEffects.push(result.effect);
+            break;
+          }
+          case VisualEventType.DRAWING_MANIFEST_DASH: {
+            const result = ctx.drawingManifestRenderer?.triggerDash(x - 100, y, x + 100, y, true, color);
+            if (result?.effect) ctx.activeEffects.push(result.effect);
+            break;
+          }
+
+          // ── 放电猫猫 ───────────────────────────────
+          case VisualEventType.DISCHARGE_CAT_ARC: {
+            const result = ctx.dischargeCatRenderer?.triggerArc(
+              [{ x, y }, { x: x + 80, y: y - 40 }, { x: x - 60, y: y + 60 }],
+              false,
+              color,
+            );
+            if (result?.effect) ctx.activeEffects.push(result.effect);
+            break;
+          }
+          case VisualEventType.DISCHARGE_CAT_BURST: {
+            const result = ctx.dischargeCatRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size, duration, color);
+            if (result?.effect) ctx.activeEffects.push(result.effect);
+            break;
+          }
+
+          // ── 情绪天气 ───────────────────────────────
+          case VisualEventType.EMOTIONAL_WEATHER_LIGHTNING: {
+            const result = ctx.emotionalWeatherRenderer?.triggerLightning(x, y, size, color);
+            if (result?.effect) ctx.activeEffects.push(result.effect);
+            break;
+          }
+          case VisualEventType.EMOTIONAL_WEATHER_HAIL: {
+            const result = ctx.emotionalWeatherRenderer?.triggerHail(x, y, size);
+            if (result?.effect) ctx.activeEffects.push(result.effect);
+            break;
+          }
+          case VisualEventType.EMOTIONAL_WEATHER_BURST: {
+            const result = ctx.emotionalWeatherRenderer?.triggerBurst(x, y, size * 2, duration);
+            if (result?.effect) ctx.activeEffects.push(result.effect);
+            break;
+          }
+
+          // ── 情绪掌控 ───────────────────────────────
+          case VisualEventType.EMOTION_MASTERY_MOOD: {
+            ctx.emotionMasteryRenderer?.updateMood(`player_${Date.now()}`, x, y, 'anger', color);
+            break;
+          }
+          case VisualEventType.EMOTION_MASTERY_BURST: {
+            const result = ctx.emotionMasteryRenderer?.triggerBurst(`player_${Date.now()}`, x, y, duration, color);
+            if (result?.effect) ctx.activeEffects.push(result.effect);
+            break;
+          }
+
           default:
             console.log(`[EffectTest] Playing ${visualType}`, v);
         }

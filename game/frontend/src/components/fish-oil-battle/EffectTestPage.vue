@@ -635,9 +635,12 @@ function resetArena(): void {
 
 function playOnce(): void {
   if (!ctx || !currentEffect.value) return;
-  clearEffectById(currentEffect.value.id);
-  currentEffect.value.play(ctx, { ...paramValues.value });
-  updateActiveCount();
+  clearAll();
+  // 等一帧确保清理完成
+  requestAnimationFrame(() => {
+    currentEffect.value?.play(ctx!, { ...paramValues.value });
+    updateActiveCount();
+  });
 }
 
 function clearEffectById(effectId: string): void {

@@ -75,17 +75,18 @@ export class AirRepulsionFieldRenderer {
     anchorId: string,
     themeColor?: number,
     maxLifeMs = 5000,
+    radius = 55,
   ): { effect: ActiveEffect | null; anchorId: string } {
     const g = this.acquire();
     if (!g) return { effect: null, anchorId };
 
     const color = themeColor ?? 0xFFD700; // 品黄
     const s = this.scale;
-    const radius = 55 * s;
+    const r = radius * s;
 
     // 初始帧：小圆圈
     g.clear();
-    g.circle(x, y, radius * 0.2);
+    g.circle(x, y, r * 0.2);
     g.fill({ color, alpha: 0.6 });
 
     let rotationAngle = 0;
@@ -100,7 +101,7 @@ export class AirRepulsionFieldRenderer {
         // 生长动画：0-400ms
         const growT = Math.min(1, _ef.life / 400);
         const grow = easeOutCubic(growT);
-        const currentR = radius * Math.max(0.2, grow);
+        const currentR = r * Math.max(0.2, grow);
 
         g.clear();
 

@@ -60,6 +60,8 @@ export interface WeaponFieldConfig {
   frostbiteSlowPerStack?: number;
   /** 每层冻伤每秒伤害，熵寂之触专用 */
   frostbiteDamagePerStack?: number;
+  /** 标记伤害加成倍率（如预知透镜猎物标记，0.5 = +50%） */
+  damageModifier?: number;
 }
 
 /** 蜂巢母体专用数值配置 */
@@ -298,6 +300,117 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
     },
     triggerCooldowns: {
       hitTargetSec: 0.3,   // 斩击限频：每 0.3s 最多触发 1 次（比冲击波快，因为是近战）
+    },
+  },
+
+  // ── 白猫 - 画作实体化 ──────────────────────────
+  [WeaponId.DRAWING_MANIFEST]: {
+    damage: 2,                 // 小兔互撞伤害
+    burstDamage: 12,           // 肌肉兔碰撞伤害
+    maxEnergy: 6,              // 灵感墨水层数上限（爆发阈值）
+    damageRadius: 20,          // 小兔判定半径
+    aoeMaxRadius: 50,          // 肌肉兔巨大化半径
+    burstDurationSec: 5,       // 肌肉兔持续 5 秒
+    visualRadius: 50,
+    visualDurationMs: 5000,
+    projectile: {
+      speed: 200,              // 肌肉兔冲刺速度
+      maxBounces: 0,
+      maxLifetimeSec: 1.5,     // 冲刺存活上限
+      hitRadius: 20,           // 冲刺命中判定
+    },
+    triggerCooldowns: {
+      hitTargetSec: 0.5,       // 小兔互撞伤害限频
+      wallHitSec: 1.0,         // 撞墙触发冲刺 CD
+    },
+  },
+
+  // ── 小金喵 - 放电猫猫 ──────────────────────────
+  [WeaponId.DISCHARGE_CAT]: {
+    damage: 4,                 // 电弧基础伤害
+    burstDamage: 8,            // 爆发电弧伤害
+    maxEnergy: 6,              // 弹射次数上限（爆发阈值）
+    damageRadius: 120,         // 电弧判定范围
+    visualRadius: 30,          // 放电猫虚影半径
+    visualDurationMs: 4000,    // 爆发持续 4 秒
+    burstDurationSec: 4,
+    field: {
+      maxCount: 1,             // 放电猫实体（爆发时实体化）
+      durationSec: 4,
+      radius: 120,             // 爆发电弧距离
+      contactDamage: 8,
+    },
+    triggerCooldowns: {
+      hitTargetSec: 0.5,       // 电弧触发限频
+    },
+  },
+
+  // ── 风随 - 预知透镜 ──────────────────────────
+  [WeaponId.PRECOGNITIVE_LENS]: {
+    damage: 1,                 // 每层先见增加的碰撞伤害
+    burstDamage: 14,           // 爆发回响伤害
+    maxEnergy: 6,              // 先见层数上限（爆发阈值）
+    damageRadius: 30,          // 回响命中判定
+    visualRadius: 30,
+    visualDurationMs: 2000,    // 回响持续 2 秒
+    burstDurationSec: 4,       // 无限洞察持续 4 秒
+    projectile: {
+      speed: 500,              // 猫灵回响飞行速度
+      maxBounces: 0,
+      maxLifetimeSec: 2,       // 回响存活 2 秒
+      hitRadius: 30,
+    },
+    field: {
+      maxCount: 2,             // 场上最多 2 只回响（爆发 3 只）
+      durationSec: 4,          // 猎物标记持续
+      radius: 30,
+      damageModifier: 0.5,     // 标记伤害加成 50%
+    },
+    triggerCooldowns: {
+      wallHitSec: 0.3,         // 撞墙触发限频
+    },
+  },
+
+  // ── 林澈 - 情绪掌控 ──────────────────────────
+  [WeaponId.EMOTION_MASTERY]: {
+    damage: 0,                   // 常驻无基础伤害（心境决定效果）
+    burstDamage: 10,             // 愤怒恶魔碰撞伤害
+    maxEnergy: 3,                // 3 种心境（完整轮转 = 充能满）
+    damageRadius: 80,            // 情绪实体公转半径
+    visualRadius: 80,
+    visualDurationMs: 4000,      // 爆发持续 4 秒
+    burstDurationSec: 4,
+    field: {
+      maxCount: 3,               // 三个情绪实体
+      durationSec: 4,
+      radius: 80,                // 实体公转半径
+      contactDamage: 10,         // 愤怒恶魔碰撞伤害
+      slowPercent: 20,           // 幸福老者减速
+    },
+    triggerCooldowns: {
+      hitTargetSec: 0.3,         // 碰撞效果限频
+    },
+  },
+
+  // ── Carzeye - 情绪天气 ──────────────────────────
+  [WeaponId.EMOTIONAL_WEATHER]: {
+    damage: 6,                 // 落雷伤害
+    burstDamage: 4,            // 冰雹每颗伤害
+    maxEnergy: 5,              // 落雷命中次数上限（爆发阈值）
+    damageRadius: 40,          // 落雷判定半径
+    aoeMaxRadius: 200,         // 爆发冰雹范围
+    visualRadius: 40,
+    visualDurationMs: 4000,    // 爆发持续 4 秒
+    burstDurationSec: 4,
+    field: {
+      maxCount: 1,
+      durationSec: 4,
+      radius: 30,              // 冰雹每颗半径
+      contactDamage: 4,
+      slowPercent: 20,         // 冰雹减速
+    },
+    triggerCooldowns: {
+      hitTargetSec: 1.5,       // 落雷 CD 1.5 秒
     },
   },
 };

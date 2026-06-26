@@ -27,12 +27,31 @@ import {
 import {
   EntropicTouchRenderer,
 } from './EntropicTouchRenderer';
+import {
+  DrawingManifestRenderer,
+} from './DrawingManifestRenderer';
+import {
+  DischargeCatRenderer,
+} from './DischargeCatRenderer';
+import {
+  PrecognitiveLensRenderer,
+} from './PrecognitiveLensRenderer';
+import {
+  EmotionalWeatherRenderer,
+} from './EmotionalWeatherRenderer';
+import {
+  EmotionMasteryRenderer,
+} from './EmotionMasteryRenderer';
 import type {
   ShockwaveVisualConfig,
   FirewallVisualConfig,
   HiveVisualConfig,
   OpticalSlashVisualConfig,
 } from './VisualEffectUtils';
+import type { DrawingManifestVisualConfig } from './DrawingManifestRenderer';
+import type { DischargeCatVisualConfig } from './DischargeCatRenderer';
+import type { PrecognitiveLensVisualConfig } from './PrecognitiveLensRenderer';
+import type { EmotionMasteryVisualConfig } from './EmotionMasteryRenderer';
 
 /**
  * 技能特效渲染总协调器
@@ -56,6 +75,11 @@ export class EffectRenderer {
   private opticalSlashRenderer: OpticalSlashEffectRenderer;
   private airRepulsionFieldRenderer: AirRepulsionFieldRenderer;
   private entropicTouchRenderer: EntropicTouchRenderer;
+  private drawingManifestRenderer: DrawingManifestRenderer;
+  private dischargeCatRenderer: DischargeCatRenderer;
+  private precognitiveLensRenderer: PrecognitiveLensRenderer;
+  private emotionalWeatherRenderer: EmotionalWeatherRenderer;
+  private emotionMasteryRenderer: EmotionMasteryRenderer;
 
   // ── 形状特效池 ────────────────────────────────────────
   private shapeEffectPool: ShapeEffectPool;
@@ -96,6 +120,21 @@ export class EffectRenderer {
     // 熵寂之触渲染器
     this.entropicTouchRenderer = new EntropicTouchRenderer(fieldContainer, particlePool);
 
+    // 画作实体化渲染器
+    this.drawingManifestRenderer = new DrawingManifestRenderer(entityContainer, fieldContainer);
+
+    // 放电猫猫渲染器
+    this.dischargeCatRenderer = new DischargeCatRenderer(entityContainer, fieldContainer);
+
+    // 预知透镜渲染器
+    this.precognitiveLensRenderer = new PrecognitiveLensRenderer(entityContainer, fieldContainer);
+
+    // 情绪天气渲染器
+    this.emotionalWeatherRenderer = new EmotionalWeatherRenderer(fieldContainer);
+
+    // 情绪掌控渲染器
+    this.emotionMasteryRenderer = new EmotionMasteryRenderer(fieldContainer, entityContainer);
+
     // 初始化形状特效池
     this.shapeEffectPool = new ShapeEffectPool(fieldContainer, 20);
   }
@@ -114,6 +153,11 @@ export class EffectRenderer {
     this.opticalSlashRenderer.setScale(s, w, h);
     this.airRepulsionFieldRenderer.setScale(s);
     this.entropicTouchRenderer.setScale(s);
+    this.drawingManifestRenderer.setScale(s);
+    this.dischargeCatRenderer.setScale(s);
+    this.precognitiveLensRenderer.setScale(s);
+    this.emotionalWeatherRenderer.setScale(s);
+    this.emotionMasteryRenderer.setScale(s);
   }
 
   // ════════════════════════════════════════
@@ -126,7 +170,10 @@ export class EffectRenderer {
     themeColor?: number,
     durationMs?: number,
   ): void {
-    const ef = this.airRepulsionFieldRenderer.triggerAnchor(x, y, anchorId, themeColor, durationMs);
+    const cfg = this.buildAirRepulsionVisualCfg();
+    const ef = this.airRepulsionFieldRenderer.triggerAnchor(
+      x, y, anchorId, themeColor, durationMs ?? cfg.anchorDurationMs,
+    );
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
 
@@ -136,8 +183,24 @@ export class EffectRenderer {
     themeColor?: number,
     durationMs?: number,
   ): void {
-    const ef = this.airRepulsionFieldRenderer.triggerBurst(x, y, radius, themeColor, durationMs);
+    const cfg = this.buildAirRepulsionVisualCfg();
+    const ef = this.airRepulsionFieldRenderer.triggerBurst(
+      x, y, radius ?? cfg.burstRadius, themeColor, durationMs ?? cfg.burstDurationMs,
+    );
     if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  /**
+   * 从 WeaponRangeConfig 构建空气斥力场视觉配置
+   */
+  private buildAirRepulsionVisualCfg() {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.AIR_REPULSION_FIELD];
+    return {
+      anchorRadius: rc?.field?.radius ?? 55,
+      anchorDurationMs: (rc?.field?.durationSec ?? 5) * 1000,
+      burstRadius: rc?.aoeMaxRadius ?? 180,
+      burstDurationMs: (rc?.burstDurationSec ?? 4) * 1000,
+    };
   }
 
   // ══════════════════════════════════════════════════════
@@ -451,6 +514,297 @@ export class EffectRenderer {
   }
 
   // ══════════════════════════════════════════════════════
+  //  公开 API：画作实体化
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * 更新小兔/肌肉兔状态（墨水层数 + 形态 + 位置）
+   */
+  updateDrawingRabbit(
+    playerId: string,
+    x: number,
+    y: number,
+    inkStacks: number,
+    isMuscle: boolean,
+    themeColor?: number,
+  ): void {
+    const cfg = this.buildDrawingManifestVisualCfg();
+    this.drawingManifestRenderer.updateRabbit(playerId, x, y, inkStacks, isMuscle, themeColor, cfg);
+  }
+
+  /**
+   * 触发肌肉兔降临爆发
+   */
+  triggerDrawingBurst(
+    playerId: string,
+    x: number,
+    y: number,
+    radius: number,
+    themeColor?: number,
+  ): void {
+    const cfg = this.buildDrawingManifestVisualCfg();
+    const ef = this.drawingManifestRenderer.triggerBurst(
+      playerId, x, y, radius, cfg.burstDurationMs ?? 5000, themeColor,
+    );
+    if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  /**
+   * 触发肌肉兔冲刺撞击特效
+   */
+  triggerDrawingDash(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    isHit: boolean,
+    themeColor?: number,
+  ): void {
+    const ef = this.drawingManifestRenderer.triggerDash(
+      fromX, fromY, toX, toY, isHit, themeColor,
+    );
+    if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  /**
+   * 移除玩家兔子
+   */
+  removeDrawingRabbit(playerId: string): void {
+    this.drawingManifestRenderer.removeRabbit(playerId);
+  }
+
+  /**
+   * 从 WeaponRangeConfig 构建 DrawingManifestVisualConfig
+   */
+  private buildDrawingManifestVisualCfg(): DrawingManifestVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.DRAWING_MANIFEST];
+    return {
+      rabbitRadius: rc?.damageRadius ?? 20,
+      muscleRadius: rc?.aoeMaxRadius ?? 50,
+      dashSpeed: rc?.projectile?.speed ?? 200,
+      burstDurationMs: (rc?.burstDurationSec ?? 5) * 1000,
+    };
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  公开 API：放电猫猫
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * 更新放电猫虚影位置
+   */
+  updateDischargeCat(
+    playerId: string,
+    x: number,
+    y: number,
+    isBurst: boolean,
+    themeColor?: number,
+  ): void {
+    this.dischargeCatRenderer.updateCat(playerId, x, y, isBurst, themeColor);
+  }
+
+  /**
+   * 触发电弧弹射链特效
+   */
+  triggerDischargeArc(
+    arcNodes: Array<{ x: number; y: number }>,
+    isBurst: boolean,
+    themeColor?: number,
+  ): void {
+    const ef = this.dischargeCatRenderer.triggerArc(arcNodes, isBurst, themeColor);
+    if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  /**
+   * 触发雷霆万钧爆发
+   */
+  triggerDischargeBurst(
+    playerId: string,
+    x: number,
+    y: number,
+    radius: number,
+    themeColor?: number,
+  ): void {
+    const cfg = this.buildDischargeCatVisualCfg();
+    const ef = this.dischargeCatRenderer.triggerBurst(
+      playerId, x, y, radius, cfg.burstDurationMs ?? 4000, themeColor,
+    );
+    if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  /**
+   * 移除玩家放电猫
+   */
+  removeDischargeCat(playerId: string): void {
+    this.dischargeCatRenderer.removeCat(playerId);
+  }
+
+  /**
+   * 从 WeaponRangeConfig 构建 DischargeCatVisualConfig
+   */
+  private buildDischargeCatVisualCfg(): DischargeCatVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.DISCHARGE_CAT];
+    return {
+      catRadius: rc?.visualRadius ?? 15,
+      arcRange: rc?.damageRadius ?? 120,
+      burstDurationMs: (rc?.burstDurationSec ?? 4) * 1000,
+    };
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  公开 API：预知透镜
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * 更新先见层数光环
+   */
+  updatePrecognitiveForesight(
+    playerId: string,
+    x: number,
+    y: number,
+    stacks: number,
+    isBurst: boolean,
+    themeColor?: number,
+  ): void {
+    this.precognitiveLensRenderer.updateForesight(playerId, x, y, stacks, isBurst, themeColor);
+  }
+
+  /**
+   * 触发猫灵回响飞行特效
+   */
+  triggerPrecognitiveEcho(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    isBurst: boolean,
+    themeColor?: number,
+  ): void {
+    const ef = this.precognitiveLensRenderer.triggerEcho(
+      fromX, fromY, toX, toY, isBurst, themeColor,
+    );
+    if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  /**
+   * 触发无限洞察爆发
+   */
+  triggerPrecognitiveBurst(
+    playerId: string,
+    x: number,
+    y: number,
+    themeColor?: number,
+  ): void {
+    const cfg = this.buildPrecognitiveLensVisualCfg();
+    const ef = this.precognitiveLensRenderer.triggerBurst(
+      playerId, x, y, cfg.burstDurationMs ?? 4000, themeColor,
+    );
+    if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  /**
+   * 移除玩家先见光环
+   */
+  removePrecognitiveForesight(playerId: string): void {
+    this.precognitiveLensRenderer.removeForesight(playerId);
+  }
+
+  /**
+   * 从 WeaponRangeConfig 构建 PrecognitiveLensVisualConfig
+   */
+  private buildPrecognitiveLensVisualCfg(): PrecognitiveLensVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.PRECOGNITIVE_LENS];
+    return {
+      echoSpeed: rc?.projectile?.speed ?? 500,
+      echoRadius: rc?.projectile?.hitRadius ?? 30,
+      burstDurationMs: (rc?.burstDurationSec ?? 4) * 1000,
+    };
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  公开 API：情绪天气
+  // ══════════════════════════════════════════════════════
+
+  triggerWeatherLightning(
+    x: number, y: number,
+    radius: number,
+    color: number,
+  ): void {
+    const ef = this.emotionalWeatherRenderer.triggerLightning(x, y, radius, color);
+    if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  triggerWeatherHail(
+    x: number, y: number,
+    radius: number,
+  ): void {
+    const ef = this.emotionalWeatherRenderer.triggerHail(x, y, radius);
+    if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  triggerWeatherBurst(
+    x: number, y: number,
+    radius: number,
+  ): void {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.EMOTIONAL_WEATHER];
+    const ef = this.emotionalWeatherRenderer.triggerBurst(
+      x, y, radius, (rc?.burstDurationSec ?? 4) * 1000,
+    );
+    if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  公开 API：情绪掌控
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * 更新心境指示文字
+   */
+  updateEmotionMood(
+    playerId: string,
+    x: number,
+    y: number,
+    mood: string,
+    themeColor?: number,
+  ): void {
+    this.emotionMasteryRenderer.updateMood(playerId, x, y, mood, themeColor);
+  }
+
+  /**
+   * 移除玩家心境显示
+   */
+  removeEmotionMood(playerId: string): void {
+    this.emotionMasteryRenderer.removeMood(playerId);
+  }
+
+  /**
+   * 触发情绪实体化爆发
+   */
+  triggerEmotionBurst(
+    playerId: string,
+    x: number,
+    y: number,
+    themeColor?: number,
+  ): void {
+    const cfg = this.buildEmotionMasteryVisualCfg();
+    const ef = this.emotionMasteryRenderer.triggerBurst(
+      playerId, x, y, cfg.burstDurationMs ?? 4000, themeColor,
+    );
+    if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  /**
+   * 从 WeaponRangeConfig 构建 EmotionMasteryVisualConfig
+   */
+  private buildEmotionMasteryVisualCfg(): EmotionMasteryVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.EMOTION_MASTERY];
+    return {
+      orbitRadius: rc?.damageRadius ?? 80,
+      burstDurationMs: (rc?.burstDurationSec ?? 4) * 1000,
+    };
+  }
+
+  // ══════════════════════════════════════════════════════
   //  生命周期
   // ══════════════════════════════════════════════════════
 
@@ -485,6 +839,11 @@ export class EffectRenderer {
     this.hiveRenderer.clear();
     this.shapeEffectPool.clear();
     this.sustainedShapes.clear();
+    this.drawingManifestRenderer.clear();
+    this.dischargeCatRenderer.clear();
+    this.precognitiveLensRenderer.clear();
+    this.emotionalWeatherRenderer.clear();
+    this.emotionMasteryRenderer.clear();
   }
 
   destroy(): void {
@@ -498,6 +857,11 @@ export class EffectRenderer {
     this.opticalSlashRenderer.destroy();
     this.airRepulsionFieldRenderer.destroy();
     this.entropicTouchRenderer.destroy();
+    this.drawingManifestRenderer.destroy();
+    this.dischargeCatRenderer.destroy();
+    this.precognitiveLensRenderer.destroy();
+    this.emotionalWeatherRenderer.destroy();
+    this.emotionMasteryRenderer.destroy();
     this.shapeEffectPool.destroy();
   }
 }

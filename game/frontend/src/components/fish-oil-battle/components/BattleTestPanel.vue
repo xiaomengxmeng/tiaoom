@@ -454,7 +454,7 @@ function handleVisualEvent(data: any): void {
     case VisualEventType.SHOCKWAVE_TRIGGER:
       if (data.x !== undefined && data.y !== undefined) {
         rendererRef.value.triggerSkillEffect({
-          type: 'shockwave', x: data.x, y: data.y,
+          type: data.type, x: data.x, y: data.y,
           isBurst: data.isBurst ?? false, radius: data.radius,
           playerId: data.playerId,
         });
@@ -463,7 +463,7 @@ function handleVisualEvent(data: any): void {
     case VisualEventType.FIREWALL_SPAWN:
       if (data.x !== undefined && data.y !== undefined) {
         rendererRef.value.triggerSkillEffect({
-          type: 'firewall', x: data.x, y: data.y,
+          type: data.type, x: data.x, y: data.y,
           isBurst: data.isBurst ?? false, radius: data.radius,
           visualWidth: data.visualWidth, visualHeight: data.visualHeight,
           durationSec: data.durationSec, playerId: data.playerId,
@@ -474,7 +474,7 @@ function handleVisualEvent(data: any): void {
       if (data.x !== undefined && data.y !== undefined &&
           data.tx !== undefined && data.ty !== undefined) {
         rendererRef.value.triggerSkillEffect({
-          type: 'hive_sting',
+          type: data.type,
           fromX: data.x, fromY: data.y,
           toX: data.tx, toY: data.ty,
           playerId: data.playerId,
@@ -484,7 +484,7 @@ function handleVisualEvent(data: any): void {
     case VisualEventType.HIVE_STING_BOUNCE:
       if (data.x !== undefined && data.y !== undefined) {
         rendererRef.value.triggerSkillEffect({
-          type: 'hive_sting_bounce',
+          type: data.type,
           x: data.x, y: data.y,
           playerId: data.playerId,
         });
@@ -492,7 +492,7 @@ function handleVisualEvent(data: any): void {
       break;
     case VisualEventType.BURST_TRIGGER:
       rendererRef.value.triggerSkillEffect({
-        type: 'burst_flash', playerId: data.playerId,
+        type: data.type, playerId: data.playerId,
       });
       if (data.playerId) {
         rendererRef.value.playBurstEffect(data.playerId);
@@ -513,7 +513,7 @@ function handleVisualEvent(data: any): void {
     case VisualEventType.OPTICAL_SLASH_TRIGGER:
       if (data.x !== undefined && data.y !== undefined) {
         rendererRef.value.triggerSkillEffect({
-          type: 'optical_slash',
+          type: data.type,
           x: data.x, y: data.y,
           radius: data.length ?? 100,
           angle: data.angle ?? 0,
@@ -521,18 +521,71 @@ function handleVisualEvent(data: any): void {
         });
       }
       break;
-    case VisualEventType.OPTICAL_SLASH_BURST:
-      if (data.x !== undefined && data.y !== undefined) {
-        rendererRef.value.triggerSkillEffect({
-          type: 'optical_slash_burst',
-          x: data.x, y: data.y,
-          radius: data.length ?? 150,
-          playerId: data.playerId,
-        });
-      }
-      break;
+      case VisualEventType.OPTICAL_SLASH_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.length ?? 150,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.AIR_REPULSION_ANCHOR:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            anchorId: data.anchorId,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.AIR_REPULSION_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 180,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.ENTROPIC_TOUCH_AURA:
+        // 低温场 aura
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value?.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 50,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.ENTROPIC_TOUCH_FROSTBITE:
+        // 冻伤叠加
+        if (data.targetId && data.x !== undefined && data.y !== undefined) {
+          rendererRef.value?.triggerSkillEffect({
+            type: data.type,
+            targetId: data.targetId,
+            frostbiteStacks: data.frostbiteStacks ?? 1,
+            x: data.x, y: data.y,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.ENTROPIC_TOUCH_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            playerId: data.playerId,
+          });
+        }
+        break;
+    }
   }
-}
 
 function handleGameEnd(data: { winnerId?: string; winnerName?: string; reason?: string; stats?: Record<string, PlayerStats> }): void {
   battleHudVisible.value = false;

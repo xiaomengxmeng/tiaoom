@@ -118,7 +118,7 @@ export interface IWeapon {
   /** 自身碰撞对手时调用 */
   onHitTarget(state: IBattleState, physics: IPhysicsQuery): WeaponEffect[];
   /** 被对手碰撞时调用 */
-  onHitByAttacker(state: IBattleState, physics: IPhysicsQuery): WeaponEffect[];
+  onHitByAttacker(attackerId: string, state: IBattleState, physics: IPhysicsQuery): WeaponEffect[];
   /** 碰撞墙壁时调用（可选） */
   onWallHit?(state: IBattleState, physics: IPhysicsQuery): WeaponEffect[];
   /**

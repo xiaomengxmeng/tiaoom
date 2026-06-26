@@ -219,7 +219,7 @@ export class OpticalSlashWeapon implements IWeapon {
     return effects;
   }
 
-  onHitByAttacker(_state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
+  onHitByAttacker(_attackerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
     return [];
   }
 

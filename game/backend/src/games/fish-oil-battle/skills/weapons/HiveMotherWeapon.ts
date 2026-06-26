@@ -181,7 +181,7 @@ export class HiveMotherWeapon implements IWeapon {
           value: 0,
           position: { x: startX, y: startY },
           metadata: {
-            visualType: VisualEventType.HIVE_STING_FLIGHT,
+            visualType: VisualEventType.HIVE_STING,
             tx: target.x,
             ty: target.y,
             stingId: `sting_${Date.now()}_${i}`,
@@ -246,7 +246,7 @@ export class HiveMotherWeapon implements IWeapon {
           value: 0,
           aoe: { x: proj.x, y: proj.y, radius: 0 },
           metadata: {
-            visualType: VisualEventType.HIVE_STING_HIT,
+            visualType: VisualEventType.HIVE_STING,
             targetId: proj.targetId,
             tx: proj.x,
             ty: proj.y,
@@ -315,7 +315,7 @@ export class HiveMotherWeapon implements IWeapon {
     return [];
   }
 
-  onHitByAttacker(_state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
+  onHitByAttacker(_attackerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
     const effects: WeaponEffect[] = [];
     const HM = CFG.hiveMother!;
 

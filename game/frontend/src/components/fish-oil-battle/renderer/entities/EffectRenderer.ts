@@ -21,6 +21,12 @@ import {
 import {
   OpticalSlashEffectRenderer,
 } from './OpticalSlashEffectRenderer';
+import {
+  AirRepulsionFieldRenderer,
+} from './AirRepulsionFieldRenderer';
+import {
+  EntropicTouchRenderer,
+} from './EntropicTouchRenderer';
 import type {
   ShockwaveVisualConfig,
   FirewallVisualConfig,
@@ -48,6 +54,8 @@ export class EffectRenderer {
   private firewallRenderer: FirewallEffectRenderer;
   private hiveRenderer: HiveEffectRenderer;
   private opticalSlashRenderer: OpticalSlashEffectRenderer;
+  private airRepulsionFieldRenderer: AirRepulsionFieldRenderer;
+  private entropicTouchRenderer: EntropicTouchRenderer;
 
   // ── 形状特效池 ────────────────────────────────────────
   private shapeEffectPool: ShapeEffectPool;
@@ -82,6 +90,12 @@ export class EffectRenderer {
     // 光学斩击渲染器
     this.opticalSlashRenderer = new OpticalSlashEffectRenderer(fieldContainer, hologramContainer);
 
+    // 空气斥力场渲染器
+    this.airRepulsionFieldRenderer = new AirRepulsionFieldRenderer(fieldContainer);
+
+    // 熵寂之触渲染器
+    this.entropicTouchRenderer = new EntropicTouchRenderer(fieldContainer, particlePool);
+
     // 初始化形状特效池
     this.shapeEffectPool = new ShapeEffectPool(fieldContainer, 20);
   }
@@ -98,6 +112,32 @@ export class EffectRenderer {
     this.firewallRenderer.setScale(s);
     this.hiveRenderer.setScale(s, w, h);
     this.opticalSlashRenderer.setScale(s, w, h);
+    this.airRepulsionFieldRenderer.setScale(s);
+    this.entropicTouchRenderer.setScale(s);
+  }
+
+  // ════════════════════════════════════════
+  //  公开 API：空气斥力场
+  // ════════════════════════════════════════
+
+  triggerAirAnchor(
+    x: number, y: number,
+    anchorId: string,
+    themeColor?: number,
+    durationMs?: number,
+  ): void {
+    const ef = this.airRepulsionFieldRenderer.triggerAnchor(x, y, anchorId, themeColor, durationMs);
+    if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  triggerAirBurst(
+    x: number, y: number,
+    radius?: number,
+    themeColor?: number,
+    durationMs?: number,
+  ): void {
+    const ef = this.airRepulsionFieldRenderer.triggerBurst(x, y, radius, themeColor, durationMs);
+    if (ef.effect) this.activeEffects.push(ef.effect);
   }
 
   // ══════════════════════════════════════════════════════
@@ -361,10 +401,63 @@ export class EffectRenderer {
   }
 
   // ══════════════════════════════════════════════════════
+  //  公开 API：熵寂之触
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * 触发低温场 aura 视觉效果
+   */
+  triggerEntropicAura(
+    playerId: string,
+    x: number,
+    y: number,
+    radius: number,
+    themeColor?: number,
+  ): void {
+    this.entropicTouchRenderer.triggerAura(playerId, x, y, radius, themeColor);
+  }
+
+  /**
+   * 触发冻伤叠加视觉效果
+   */
+  triggerEntropicFrostbite(
+    targetId: string,
+    stacks: number,
+    x: number,
+    y: number,
+    themeColor?: number,
+  ): void {
+    this.entropicTouchRenderer.triggerFrostbite(targetId, stacks, x, y, themeColor);
+  }
+
+  /**
+   * 触发爆发视觉效果（热力学奇点）
+   */
+  triggerEntropicBurst(
+    playerId: string,
+    x: number,
+    y: number,
+    radius: number,
+    themeColor?: number,
+  ): void {
+    this.entropicTouchRenderer.triggerBurst(playerId, x, y, radius, themeColor);
+  }
+
+  /**
+   * 移除低温场
+   */
+  removeEntropicAura(playerId: string): void {
+    this.entropicTouchRenderer.removeAura(playerId);
+  }
+
+  // ══════════════════════════════════════════════════════
   //  生命周期
   // ══════════════════════════════════════════════════════
 
   update(dt: number): void {
+    // 更新熵寂之触渲染器
+    this.entropicTouchRenderer.update(dt);
+
     // 更新形状特效池
     this.shapeEffectPool.tick(dt);
 
@@ -403,6 +496,8 @@ export class EffectRenderer {
     this.firewallRenderer.destroy();
     this.hiveRenderer.destroy();
     this.opticalSlashRenderer.destroy();
+    this.airRepulsionFieldRenderer.destroy();
+    this.entropicTouchRenderer.destroy();
     this.shapeEffectPool.destroy();
   }
 }

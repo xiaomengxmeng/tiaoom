@@ -109,6 +109,18 @@ export interface VisualEventData {
    * 全局效果持续时间（毫秒），如古今观察者闪白 100ms
    */
   durationMs?: number;
+  /**
+   * 空气斥力场锚点 ID（AIR_REPULSION_ANCHOR / AIR_REPULSION_BURST 事件专用）
+   */
+  anchorId?: string;
+  /**
+   * 熵寂之触：冻伤目标玩家 ID（ENTROPIC_TOUCH_FROSTBITE 事件专用）
+   */
+  frostbiteTargetId?: string;
+  /**
+   * 熵寂之触：当前冻伤层数（ENTROPIC_TOUCH_FROSTBITE 事件专用）
+   */
+  frostbiteStacks?: number;
 }
 
 // ─── 游戏统计（game_end 用）───────────────

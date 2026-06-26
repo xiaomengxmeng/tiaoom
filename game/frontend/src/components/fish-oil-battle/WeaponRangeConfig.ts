@@ -29,6 +29,10 @@ export interface WeaponFieldConfig {
   slowPercent?: number;
   damagePerEnergy?: number;
   burstHardenDamage?: number;
+  /** 每层冻伤减速百分比（0-100），熵寂之触专用 */
+  frostbiteSlowPerStack?: number;
+  /** 每层冻伤每秒伤害，熵寂之触专用 */
+  frostbiteDamagePerStack?: number;
 }
 
 export interface WeaponProjectileConfig {
@@ -41,6 +45,15 @@ export interface WeaponProjectileConfig {
   visualBladeHalfWidth?: number;
   /** 斩击命中角度容差（rad），光学斩击专用，默认 0.1 */
   slashAngleTolerance?: number;
+}
+
+export interface WeaponTriggerCooldowns {
+  /** onHitTarget 冷却时间（秒），0 或不填 = 无限制 */
+  hitTargetSec?: number;
+  /** onHitByAttacker 冷却时间（秒），0 或不填 = 无限制 */
+  hitByAttackerSec?: number;
+  /** onWallHit 冷却时间（秒），0 或不填 = 无限制 */
+  wallHitSec?: number;
 }
 
 export interface WeaponRangeConfig {
@@ -60,6 +73,8 @@ export interface WeaponRangeConfig {
   burstWaves?: number;
   burstBounces?: number;
   maxHitsPerWave?: number;
+  /** 触发冷却配置（数据驱动，防止极端连击） */
+  triggerCooldowns?: WeaponTriggerCooldowns;
 }
 
 // ══════════════════════════════════════════════════════
@@ -81,6 +96,9 @@ export const LOCAL_WEAPON_CONFIG: Record<string, WeaponRangeConfig> = {
     burstWaves: 3,
     burstBounces: 2,
     maxHitsPerWave: 2,
+    triggerCooldowns: {
+      hitTargetSec: 0.5,
+    },
   },
 
   // ── 防火墙协议 ───────────────────────────────────
@@ -103,6 +121,9 @@ export const LOCAL_WEAPON_CONFIG: Record<string, WeaponRangeConfig> = {
       damagePerEnergy: 15,
       burstHardenDamage: 4.2,
     },
+    triggerCooldowns: {
+      hitByAttackerSec: 0.5,
+    },
   },
 
   // ── 光学斩击 (Liya) ──────────────────────────────
@@ -123,6 +144,53 @@ export const LOCAL_WEAPON_CONFIG: Record<string, WeaponRangeConfig> = {
       visualBladeHalfWidth: 20,
       slashAngleTolerance: 0.15,   // 斩击命中锥角 (rad)，100px处有效宽度≈30px
     },
+    triggerCooldowns: {
+      hitTargetSec: 0.3,
+    },
+  },
+
+  // ── 熵寂之触 - 闲乘月 ──────────────────────────
+  [WeaponId.ENTROPIC_TOUCH]: {
+    damage: 0,
+    burstDamage: 10,
+    maxEnergy: 6,
+    damageRadius: 50,
+    aoeMaxRadius: 200,
+    burstDurationSec: 5,
+    visualRadius: 200,
+    visualDurationMs: 5000,
+    field: {
+      maxCount: 3,
+      durationSec: 5,
+      radius: 50,
+      slowPercent: 8,
+      frostbiteSlowPerStack: 10,
+      frostbiteDamagePerStack: 2,
+    },
+    triggerCooldowns: {
+      hitByAttackerSec: 0.5,
+    },
+  },
+
+  // ── 空气斥力场 - 开摆 ─────────────────────────────
+  [WeaponId.AIR_REPULSION_FIELD]: {
+    damage: 4,
+    burstDamage: 6,
+    maxEnergy: 6,
+    damageRadius: 35,
+    aoeMaxRadius: 180,
+    burstDurationSec: 4,
+    visualRadius: 180,
+    visualDurationMs: 4000,
+    field: {
+      maxCount: 3,
+      durationSec: 5,
+      radius: 55,
+      contactDamage: 4,
+    },
+    triggerCooldowns: {
+      hitTargetSec: 0.5,
+    },
   },
 
   // ── 蜂巢母体 ─────────────────────────────────────
@@ -134,6 +202,9 @@ export const LOCAL_WEAPON_CONFIG: Record<string, WeaponRangeConfig> = {
       maxBounces: 0,
       maxLifetimeSec: 4,
       hitRadius: 30,
+    },
+    triggerCooldowns: {
+      hitByAttackerSec: 1.0,
     },
   },
 };

@@ -101,7 +101,7 @@ export function easeInOutCubic(t: number): number {
 
 /** 活跃特效实例（通用接口，所有子渲染器共用） */
 export interface ActiveEffect {
-  type: 'shockwave' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'sustained_shape' | 'optical_slash' | 'optical_slash_burst';
+  type: 'shockwave' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'sustained_shape' | 'optical_slash' | 'optical_slash_burst' | 'air_repulsion_anchor' | 'air_repulsion_burst' | 'entropic_touch_aura' | 'entropic_touch_frostbite' | 'entropic_touch_burst' | 'shape';
   container: PIXI.Container;
   life: number;
   maxLife: number;

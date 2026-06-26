@@ -88,10 +88,6 @@ export class OpticalSlashEffectRenderer {
     if (!g) return null;
 
     const s = this.scale;
-    const offsetX = (this.canvasW - this.canvasW * s) / 2;
-    const offsetY = (this.canvasH - this.canvasH * s) / 2;
-    const sx = x * s + offsetX;
-    const sy = y * s + offsetY;
     const maxDist = length * s;
     const maxLife = isBurst ? 1000 : 800;
     // 飞行阶段时长（到达终点后滞留渐隐）
@@ -111,8 +107,8 @@ export class OpticalSlashEffectRenderer {
         const flightT = Math.min(ef.life / flightDurMs, 1);
 
         // 当前位置沿飞行方向
-        const cx = sx + Math.cos(angle) * flightDist * flightT;
-        const cy = sy + Math.sin(angle) * flightDist * flightT;
+        const cx = x + Math.cos(angle) * flightDist * flightT;
+        const cy = y + Math.sin(angle) * flightDist * flightT;
 
         // 透明度：飞行期间满，到达后渐隐
         let alpha: number;
@@ -290,10 +286,6 @@ export class OpticalSlashEffectRenderer {
 
     // 十字准星锁定特效
     const crosshair = new PIXI.Graphics();
-    const offsetX = (this.canvasW - this.canvasW * s) / 2;
-    const offsetY = (this.canvasH - this.canvasH * s) / 2;
-    const sx = x * s + offsetX;
-    const sy = y * s + offsetY;
     const screenDiag = Math.sqrt(this.canvasW ** 2 + this.canvasH ** 2);
 
     return [
@@ -314,33 +306,33 @@ export class OpticalSlashEffectRenderer {
           crosshair.clear();
 
           // 水平线
-          crosshair.moveTo(sx - screenDiag, sy);
-          crosshair.lineTo(sx + screenDiag, sy);
+          crosshair.moveTo(x - screenDiag, y);
+          crosshair.lineTo(x + screenDiag, y);
           crosshair.stroke({ color: CROSSHAIR_COLOR, width: 2, alpha: alpha * 0.3 });
 
           // 垂直线
-          crosshair.moveTo(sx, sy - screenDiag);
-          crosshair.lineTo(sx, sy + screenDiag);
+          crosshair.moveTo(x, y - screenDiag);
+          crosshair.lineTo(x, y + screenDiag);
           crosshair.stroke({ color: CROSSHAIR_COLOR, width: 2, alpha: alpha * 0.3 });
 
           // 中心十字
           const crossSize = 20 * s;
-          crosshair.moveTo(sx - crossSize, sy);
-          crosshair.lineTo(sx - crossSize * 0.3, sy);
+          crosshair.moveTo(x - crossSize, y);
+          crosshair.lineTo(x - crossSize * 0.3, y);
           crosshair.stroke({ color: CROSSHAIR_COLOR, width: 3 * s, alpha });
-          crosshair.moveTo(sx + crossSize * 0.3, sy);
-          crosshair.lineTo(sx + crossSize, sy);
+          crosshair.moveTo(x + crossSize * 0.3, y);
+          crosshair.lineTo(x + crossSize, y);
           crosshair.stroke({ color: CROSSHAIR_COLOR, width: 3 * s, alpha });
-          crosshair.moveTo(sx, sy - crossSize);
-          crosshair.lineTo(sx, sy - crossSize * 0.3);
+          crosshair.moveTo(x, y - crossSize);
+          crosshair.lineTo(x, y - crossSize * 0.3);
           crosshair.stroke({ color: CROSSHAIR_COLOR, width: 3 * s, alpha });
-          crosshair.moveTo(sx, sy + crossSize * 0.3);
-          crosshair.lineTo(sx, sy + crossSize);
+          crosshair.moveTo(x, y + crossSize * 0.3);
+          crosshair.lineTo(x, y + crossSize);
           crosshair.stroke({ color: CROSSHAIR_COLOR, width: 3 * s, alpha });
 
           // 中心锁环
           const ringRadius = 15 * s;
-          crosshair.circle(sx, sy, ringRadius);
+          crosshair.circle(x, y, ringRadius);
           crosshair.stroke({ color: CROSSHAIR_COLOR, width: 2 * s, alpha: alpha * 0.8 });
         },
         onDecay: () => {

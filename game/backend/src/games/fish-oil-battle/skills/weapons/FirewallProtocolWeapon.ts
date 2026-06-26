@@ -153,7 +153,7 @@ export class FirewallProtocolWeapon implements IWeapon {
     return [];
   }
 
-  onHitByAttacker(state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
+  onHitByAttacker(_attackerId: string, state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
     const effects: WeaponEffect[] = [];
     const player = state.getPlayer(this.playerId);
     if (!player) return effects;

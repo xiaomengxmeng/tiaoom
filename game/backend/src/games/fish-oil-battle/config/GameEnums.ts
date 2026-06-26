@@ -23,6 +23,9 @@ export enum WeaponId {
   RICOCHET_CORE = 'ricochet_core',
   // ── 角色武器（按角色名命名）────────────────────
   OPTICAL_SLASH = 'optical_slash', // Liya - 光学斩击
+  // 扩展角色武器
+  AIR_REPULSION_FIELD = 'air_repulsion_field', // 开摆 - 空气斥力场
+  ENTROPIC_TOUCH = 'entropic_touch', // 闲乘月 - 熵寂之触
 }
 
 // ── 武器名称 ─────────────────────────────────────
@@ -45,6 +48,8 @@ export enum WeaponName {
   RICOCHET_CORE = '弹射核心',
   // ── 角色武器 ─────────────────────────────────
   OPTICAL_SLASH = '光学斩击', // Liya
+  AIR_REPULSION_FIELD = '空气斥力场', // 开摆
+  ENTROPIC_TOUCH = '熵寂之触', // 闲乘月
 }
 
 // ── 流派 ─────────────────────────────────────────
@@ -90,6 +95,20 @@ export enum VisualEventType {
   OPTICAL_SLASH_TRIGGER = 'optical_slash_trigger',
   /** Liya - 光学斩击爆发（无限剑制） */
   OPTICAL_SLASH_BURST = 'optical_slash_burst',
+  /** 开摆 - 空气斥力场锚点生成 */
+  AIR_REPULSION_ANCHOR = 'air_repulsion_anchor',
+  /** 开摆 - 空气斥力场爆发（重力反转场） */
+  AIR_REPULSION_BURST = 'air_repulsion_burst',
+  /** 闲乘月 - 熵寂之触低温场 */
+  ENTROPIC_TOUCH_AURA = 'entropic_touch_aura',
+  /** 闲乘月 - 熵寂之触冻伤叠加 */
+  ENTROPIC_TOUCH_FROSTBITE = 'entropic_touch_frostbite',
+  /** 闲乘月 - 熵寂之触爆发（热力学奇点） */
+  ENTROPIC_TOUCH_BURST = 'entropic_touch_burst',
+  /** 形状特效（一次性） */
+  SHAPE_EFFECT = 'shape',
+  /** 持续形状特效（常驻，需 sustainedKey） */
+  SUSTAINED_SHAPE = 'sustained_shape',
 }
 
 // ── 全局彩蛋效果类型（前后端共享）────────────────

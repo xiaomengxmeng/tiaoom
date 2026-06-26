@@ -128,6 +128,7 @@ import type { GameCore } from '@/core/game';
 import { CyberFishRenderer } from './renderer/CyberFishRenderer';
 import { useFishOilBattle, type SelectableWeapon } from './useFishOilBattle';
 import type { ArenaConfig } from '$/backend/src/games/fish-oil-battle/shared/protocol';
+import { VisualEventType } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
 import { computeRadialHudLayout, hudPositionToStyle } from './utils/hudLayout';
 
 const props = withDefaults(defineProps<{
@@ -409,7 +410,7 @@ function initDemo(ren: CyberFishRenderer): void {
 
     if (demoTick % 3 === 0) {
       ren.triggerSkillEffect({
-        type: 'shockwave',
+        type: VisualEventType.SHOCKWAVE_TRIGGER,
         x: cx, y: cy,
         isBurst: demoTick % 9 === 0,
       });
@@ -417,7 +418,7 @@ function initDemo(ren: CyberFishRenderer): void {
 
     if (demoTick % 5 === 0) {
       ren.triggerSkillEffect({
-        type: 'firewall',
+        type: VisualEventType.FIREWALL_SPAWN,
         x: 320 + Math.random() * 600,
         y: 360 + Math.random() * 300,
         isBurst: false,
@@ -426,7 +427,7 @@ function initDemo(ren: CyberFishRenderer): void {
 
     if (demoTick % 2 === 0) {
       ren.triggerSkillEffect({
-        type: 'hive_sting',
+        type: VisualEventType.HIVE_STING,
         fromX: 200, fromY: 360,
         toX: 1080, toY: 360,
       });

@@ -10,6 +10,49 @@
 
 ---
 
+## 触发冷却机制 (Cooldown)
+
+### 设计目的
+
+物理引擎以 20fps 检测球体碰撞，两球紧贴时 `processHit` 每帧触发一次（1 秒 20 次），导致武器 DPS 爆表。全局冷却守卫确保每种武器的碰撞触发频率受控。
+
+### 架构：两层冷却
+
+| 层级 | 位置 | 作用 |
+|:---|:---|:---|
+| **第一层 — 全局守卫** | `SkillScheduler.CooldownTracker` | 防止极端连击，所有武器自动保护 |
+| **第二层 — 子冷却** | 各武器内部实现（如蜂巢母体轮流发射） | 精细化节奏控制，与全局守卫叠加 |
+
+### 配置驱动
+
+每种武器在 `WeaponRangeConfig.triggerCooldowns` 中定义独立冷却：
+
+```typescript
+interface WeaponTriggerCooldowns {
+  hitTargetSec?: number;      // onHitTarget 冷却（秒），0 = 无限制
+  hitByAttackerSec?: number;  // onHitByAttacker 冷却
+  wallHitSec?: number;        // onWallHit 冷却
+}
+```
+
+### 各武器冷却配置值
+
+| 武器 | hitTarget | hitByAttacker | 说明 |
+|:---|:---|:---|:---|
+| 冲击波发生器 | **0.5s** | — | 冲击波主伤害限频 |
+| 光学斩击 | **0.3s** | — | 斩击近战快于远程 |
+| 防火墙协议 | — | **0.5s** | 被击中充能限频 |
+| 蜂巢母体 | — | **1.0s** | 被击充能 + 内部已有 0.4s 全局 CD |
+
+### 实现细节
+
+- 使用 tick 序号计时（`TICKS_PER_SEC = 20`），避免浮点精度问题
+- 冷却为 0 或未配置 → 不限制（完全向后兼容）
+- `SkillScheduler.resetCooldowns()` 在新对局开始时清空所有冷却
+- 新武器只需在配置表中添加 `triggerCooldowns` 字段即可接入
+
+---
+
 ## 能量/爆发方式总览
 
 12 把武器使用 12 种不同的爆发触发方式，没有重复：

@@ -13,6 +13,8 @@ import { ShockwaveGeneratorWeapon } from '../skills/weapons/ShockwaveGeneratorWe
 import { FirewallProtocolWeapon } from '../skills/weapons/FirewallProtocolWeapon';
 import { HiveMotherWeapon } from '../skills/weapons/HiveMotherWeapon';
 import { OpticalSlashWeapon } from '../skills/weapons/OpticalSlashWeapon';
+import { AirRepulsionFieldWeapon } from '../skills/weapons/AirRepulsionFieldWeapon';
+import { EntropicTouchWeapon } from '../skills/weapons/EntropicTouchWeapon';
 
 // ── 武器元信息（工厂模式） ──────────────────────────────────
 export interface WeaponEntry {
@@ -40,7 +42,7 @@ export class StubWeapon implements IWeapon {
 
   onTick(_state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] { return []; }
   onHitTarget(_state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] { return []; }
-  onHitByAttacker(_state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] { return []; }
+  onHitByAttacker(_attackerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] { return []; }
   getEnergy(): number { return 0; }
   getMaxEnergy(): number { return 100; }
   isBurstReady(): boolean { return false; }
@@ -126,6 +128,21 @@ export const REGISTRY: Record<string, WeaponEntry> = {
     id: WeaponId.OPTICAL_SLASH, name: WeaponName.OPTICAL_SLASH,
     school: School.AGGRESSOR, difficulty: 2, iconId: 'game-icons:sword-cut',
     factory: () => new OpticalSlashWeapon(),
+  },
+  // ── 扩展角色武器 ──────────────────────────────
+  [WeaponId.AIR_REPULSION_FIELD]: {
+    id: WeaponId.AIR_REPULSION_FIELD, name: WeaponName.AIR_REPULSION_FIELD,
+    school: School.WILD, difficulty: 1, iconId: 'game-icons:air-repulsion',
+    factory: () => new AirRepulsionFieldWeapon(),
+  },
+  // ── 闲乘月 - 熵寂之触 ──────────────────────────
+  [WeaponId.ENTROPIC_TOUCH]: {
+    id: WeaponId.ENTROPIC_TOUCH,
+    name: WeaponName.ENTROPIC_TOUCH,
+    school: School.WILD,
+    difficulty: 2,
+    iconId: 'game-icons:entropy-touch',
+    factory: () => new EntropicTouchWeapon(),
   },
 };
 

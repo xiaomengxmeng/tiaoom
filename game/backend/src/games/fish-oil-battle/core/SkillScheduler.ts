@@ -17,6 +17,10 @@ import {
 import type { IWeapon, IPhysicsQuery, WeaponEffect, WeaponRuntimeState } from './IWeapon';
 import { TICKS_PER_SEC } from './IWeapon';
 import { WeaponEffectType } from '../config/GameEnums';
+import { WEAPON_RANGE_CONFIG } from '../config/WeaponRangeConfig';
+
+// ─── 触发冷却类型 ──────────────────────────────────────
+type TriggerType = 'hitTarget' | 'hitByAttacker' | 'wallHit';
 
 // ─── BattleState 实现 ────────────────────────────────
 export class BattleState implements IBattleState {
@@ -105,6 +109,8 @@ export class SkillScheduler {
   private physicsQuery: IPhysicsQuery;
   /** expireEffects 秒级计数器：每 TICKS_PER_SEC 个 tick 减一次 duration */
   private expireCounter = 0;
+  /** 全局冷却追踪器 */
+  private cdTracker = new CooldownTracker();
 
   constructor(physicsQuery: IPhysicsQuery) {
     this.physicsQuery = physicsQuery;
@@ -168,19 +174,27 @@ export class SkillScheduler {
 
   /**
    * 处理碰撞：attacker 命中 target
-   * 即使 target 未注册武器，仍触发 attacker.onHitTarget
+   * 即使 target 未注册武器，仍触发 attacker.onHitTarget（受全局冷却守卫保护）
    */
   processHit(attackerId: string, targetId: string, state: BattleState): WeaponEffect[] {
     const allEffects: WeaponEffect[] = [];
 
+    // 攻击者 onHitTarget — 带冷却守卫
     const attackerWeapon = this.bindings.get(attackerId);
     if (attackerWeapon) {
-      allEffects.push(...attackerWeapon.onHitTarget(state, this.physicsQuery));
+      const cdSec = WEAPON_RANGE_CONFIG[attackerWeapon.id]?.triggerCooldowns?.hitTargetSec ?? 0;
+      if (this.cdTracker.tryTrigger(attackerId, 'hitTarget', cdSec, state.tick)) {
+        allEffects.push(...attackerWeapon.onHitTarget(state, this.physicsQuery));
+      }
     }
 
+    // 目标 onHitByAttacker — 带冷却守卫
     const targetWeapon = this.bindings.get(targetId);
     if (targetWeapon) {
-      allEffects.push(...targetWeapon.onHitByAttacker(state, this.physicsQuery));
+      const cdSec = WEAPON_RANGE_CONFIG[targetWeapon.id]?.triggerCooldowns?.hitByAttackerSec ?? 0;
+      if (this.cdTracker.tryTrigger(targetId, 'hitByAttacker', cdSec, state.tick)) {
+        allEffects.push(...targetWeapon.onHitByAttacker(attackerId, state, this.physicsQuery));
+      }
     }
 
     this.applyWeaponEffects(state, allEffects);
@@ -273,5 +287,58 @@ export class SkillScheduler {
       };
     }
     return result;
+  }
+
+  /** 重置所有冷却（新对局开始时调用） */
+  resetCooldowns(): void {
+    this.cdTracker.clearAll();
+  }
+}
+
+// ─── CooldownTracker（全局冷却守卫）─────────────────────
+/**
+ * 防止极端条件下武器被连续触发的冷却追踪器。
+ *
+ * 使用 tick 序号计时（与 TICKS_PER_SEC=20 对齐），避免浮点精度问题。
+ * 每个玩家维护 3 种触发类型的独立冷却结束 tick。
+ * cooldownSec = 0 或未配置 → tryTrigger 始终返回 true（无限制）。
+ */
+class CooldownTracker {
+  /** key = playerId, value = 各触发类型的冷却结束 tick */
+  private cdEndTicks = new Map<string, { hitTarget: number; hitByAttacker: number; wallHit: number }>();
+
+  /**
+   * 尝试触发。冷却到期返回 true 并自动刷新冷却；冷却中返回 false。
+   * @param playerId 玩家 ID
+   * @param type 触发类型
+   * @param cooldownSec 冷却时间（秒），0 = 无限制
+   * @param currentTick 当前 tick 序号
+   */
+  tryTrigger(playerId: string, type: TriggerType, cooldownSec: number, currentTick: number): boolean {
+    // 冷却为 0 → 不限制
+    if (cooldownSec <= 0) return true;
+
+    let entry = this.cdEndTicks.get(playerId);
+    if (!entry) {
+      entry = { hitTarget: 0, hitByAttacker: 0, wallHit: 0 };
+      this.cdEndTicks.set(playerId, entry);
+    }
+
+    const endTick = entry[type];
+    if (currentTick < endTick) return false;
+
+    // 允许触发，记录新的冷却结束 tick
+    entry[type] = currentTick + Math.ceil(cooldownSec * TICKS_PER_SEC);
+    return true;
+  }
+
+  /** 清除指定玩家所有冷却 */
+  reset(playerId: string): void {
+    this.cdEndTicks.delete(playerId);
+  }
+
+  /** 清除所有冷却 */
+  clearAll(): void {
+    this.cdEndTicks.clear();
   }
 }

@@ -12,6 +12,7 @@ import { GlobalEffectRenderer } from './GlobalEffectRenderer';
 import type { ShapeDescriptor } from './systems/ShapeRenderer';
 import type { ShapeEffectConfig } from './entities/ShapeEffect';
 import type { VisualEventData } from '$/backend/src/games/fish-oil-battle/shared/protocol';
+import { VisualEventType } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
 
 /**
  * 赛博鱼油主渲染器（编排层）
@@ -171,7 +172,7 @@ export class CyberFishRenderer {
    * @param config.radius 后端传入的技能生效范围（逻辑 px），前端用此值绘特效
    */
   triggerSkillEffect(config: {
-    type: 'shockwave' | 'firewall' | 'hive_sting' | 'hive_sting_bounce' | 'burst_flash' | 'optical_slash' | 'optical_slash_burst' | 'shape' | 'sustained_shape';
+    type: VisualEventType;
     x?: number; y?: number;
     isBurst?: boolean;
     radius?: number;
@@ -205,6 +206,12 @@ export class CyberFishRenderer {
     sustainedPartial?: Partial<ShapeEffectConfig>;
     /** sustained_shape 专用：移除操作 */
     sustainedRemove?: boolean;
+    /** 空气斥力场锚点 ID，air_anchor/air_burst 专用 */
+    anchorId?: string;
+    /** 目标玩家 ID，entropic_frostbite 等效果专用 */
+    targetId?: string;
+    /** 熵寂之触冻伤层数，entropic_frostbite 专用 */
+    frostbiteStacks?: number;
   }): void {
     // 映射所有坐标参数
     const mapCfg: typeof config & Record<string, any> = { ...config };
@@ -221,13 +228,13 @@ export class CyberFishRenderer {
       : undefined;
 
     switch (config.type) {
-      case 'shockwave':
+      case VisualEventType.SHOCKWAVE_TRIGGER:
         if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
           const shockRadius = config.radius ?? SHOCKWAVE_MAX_RADIUS;
           this.effectRenderer.triggerShockwave(mapCfg.x, mapCfg.y, config.isBurst ?? false, -1, themeColor, shockRadius);
         }
         break;
-      case 'firewall':
+      case VisualEventType.FIREWALL_SPAWN:
         if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
           const fwRadius = config.radius ?? FIREWALL_HEX_RADIUS;
           this.effectRenderer.triggerFirewall(
@@ -246,7 +253,7 @@ export class CyberFishRenderer {
           }
         }
         break;
-      case 'hive_sting':
+      case VisualEventType.HIVE_STING:
         if (mapCfg.fromX !== undefined && mapCfg.fromY !== undefined &&
             mapCfg.toX !== undefined && mapCfg.toY !== undefined) {
           this.effectRenderer.triggerHiveSting(
@@ -255,15 +262,15 @@ export class CyberFishRenderer {
           );
         }
         break;
-      case 'hive_sting_bounce':
+      case VisualEventType.HIVE_STING_BOUNCE:
         if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
           this.effectRenderer.triggerHiveStingBounce(mapCfg.x, mapCfg.y, themeColor);
         }
         break;
-      case 'burst_flash':
+      case VisualEventType.BURST_TRIGGER:
         this.effectRenderer.triggerBurstFlash(themeColor ?? config.factionColor ?? 0xFF00FF);
         break;
-      case 'optical_slash':
+      case VisualEventType.OPTICAL_SLASH_TRIGGER:
         if (mapCfg.x !== undefined && mapCfg.y !== undefined && config.radius !== undefined) {
           this.effectRenderer.triggerOpticalSlash(
             mapCfg.x, mapCfg.y,
@@ -273,7 +280,7 @@ export class CyberFishRenderer {
           );
         }
         break;
-      case 'optical_slash_burst':
+      case VisualEventType.OPTICAL_SLASH_BURST:
         if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
           this.effectRenderer.triggerOpticalSlashBurst(
             mapCfg.x, mapCfg.y,
@@ -282,7 +289,7 @@ export class CyberFishRenderer {
           );
         }
         break;
-      case 'shape':
+      case VisualEventType.SHAPE_EFFECT:
         if (mapCfg.x !== undefined && mapCfg.y !== undefined && config.shapeDesc) {
           this.effectRenderer.triggerShapeEffect(
             config.shapeDesc,
@@ -291,7 +298,7 @@ export class CyberFishRenderer {
           );
         }
         break;
-      case 'sustained_shape':
+      case VisualEventType.SUSTAINED_SHAPE:
         if (config.sustainedRemove && config.sustainedKey) {
           // 移除操作
           this.effectRenderer.removeSustainedShape(config.sustainedKey);
@@ -305,6 +312,57 @@ export class CyberFishRenderer {
             config.shapeDesc,
             mapCfg.x, mapCfg.y,
             config.sustainedCfg,
+          );
+        }
+        break;
+      case VisualEventType.AIR_REPULSION_ANCHOR:
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerAirAnchor(
+            mapCfg.x, mapCfg.y,
+            (config as any).anchorId ?? `anchor_${Date.now()}`,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.AIR_REPULSION_BURST:
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerAirBurst(
+            mapCfg.x, mapCfg.y,
+            config.radius,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.ENTROPIC_TOUCH_AURA:
+        // 低温场 aura 视觉效果
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerEntropicAura(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 50,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.ENTROPIC_TOUCH_FROSTBITE:
+        // 冻伤叠加视觉效果
+        if (config.targetId && mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerEntropicFrostbite(
+            config.targetId,
+            config.frostbiteStacks ?? 1,
+            mapCfg.x, mapCfg.y,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.ENTROPIC_TOUCH_BURST:
+        // 爆发视觉效果（热力学奇点）
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerEntropicBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 200,
+            themeColor,
           );
         }
         break;

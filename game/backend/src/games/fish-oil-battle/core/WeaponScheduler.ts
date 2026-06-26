@@ -120,7 +120,7 @@ export class WeaponScheduler {
 
     const targetWeapon = this.bindings.get(targetId);
     if (targetWeapon) {
-      allEffects.push(...targetWeapon.onHitByAttacker(state, this.physicsQuery));
+      allEffects.push(...targetWeapon.onHitByAttacker(attackerId, state, this.physicsQuery));
     }
 
     this.applyWeaponEffects(state, allEffects);

@@ -36,19 +36,23 @@ VisualEventData (协议)                           │
       │                                          │
       │ WebSocket → 前端                         │
       ▼                                          │
-⚠️ 检查点3: useFishOilBattle.onVisualEvent()     │
+⚠️ 检查点3: protocol.ts VisualEventData          │
+  协议类型定义是否包含新字段                       │
+      │                                          │
+      ▼                                          │
+⚠️ 检查点4: useFishOilBattle.onVisualEvent()     │
   switch(data.type) → Case 路由                  │
       │                                          │
       ▼                                          │
-⚠️ 检查点4: CyberFishRenderer.triggerSkillEffect()│
-  switch(config.type) → EffectRenderer API       │
+⚠️ 检查点5: CyberFishRenderer.triggerSkillEffect()│
+  参数类型定义 + switch(config.type) → EffectRenderer API
       │                                          │
       ▼                                          │
-⚠️ 检查点5: EffectRenderer.buildXxxVisualCfg()   │
+⚠️ 检查点6: EffectRenderer.buildXxxVisualCfg()   │
   从 WEAPON_RANGE_CONFIG 构建配置 ───────────────┘
       │
       ▼
-⚠️ 检查点6: 子渲染器接收 config 参数
+⚠️ 检查点7: 子渲染器接收 config 参数
   禁止文件顶部 const 硬编码
 ```
 
@@ -127,26 +131,35 @@ result.push({
 
 在 `onVisualEvent` 的 switch 中添加新的 `VisualEventType` case。
 
-#### ⚠️ Step 5: CyberFishRenderer 事件路由 (`CyberFishRenderer.ts`)
+#### ⚠️ Step 5: CyberFishRenderer 类型定义 + 事件路由 (`CyberFishRenderer.ts`)
 
-在 `triggerSkillEffect` 的 switch 中添加新的 type case。
-**重要**：始终传递 `themeColor ?? config.factionColor` 给特效渲染器。
+**类型定义更新**（必须首先完成）：
+1. 在 `triggerSkillEffect` 方法的参数类型定义中添加新技能所需的属性
+2. 例如：目标ID (`targetId`)、层数 (`frostbiteStacks`)、锚点ID (`anchorId`) 等
+3. 确保类型定义与 `VisualEventData` 接口保持一致
+
+**事件路由**（类型定义完成后）：
+1. 在 `triggerSkillEffect` 的 switch 中添加新的 type case
+2. **重要**：始终传递 `themeColor ?? config.factionColor` 给特效渲染器
+3. 确保从 `config` 参数中正确读取所有新增的属性
 
 ---
 
 ## 三、数据驱动强制检查清单
 
-新建武器后，逐项核查以下 7 个检查点：
+新建武器后，逐项核查以下 8 个检查点：
 
 | # | 检查位置 | 检查内容 | 遗漏后果 |
 |:---:|:---|:---|:---|
 | ☐1 | `FishOilRoom.VISUAL_TYPE_MAP` | 每个新 VisualEventType 是否已注册 | 事件静默丢弃 |
 | ☐2 | `FishOilRoom.extractVisualEvents()` | 特有字段(angle/length/beeCount等)是否从 metadata 提取 | 前端收不到 |
 | ☐3 | `WeaponRangeConfig.ts` | 视觉参数是否有配置项(不依赖前端硬编码) | 数值不一致 |
-| ☐4 | `EffectRenderer.buildXxxVisualCfg()` | 是否从 WEAPON_RANGE_CONFIG 构建配置 | 前端数值与后端脱节 |
+| ☐4 | `protocol.ts` VisualEventData | 协议类型定义是否包含新字段 | TypeScript 类型错误 |
 | ☐5 | `useFishOilBattle.onVisualEvent()` | switch 是否匹配所有新 VisualEventType | 收到事件不处理 |
-| ☐6 | `CyberFishRenderer.triggerSkillEffect()` | switch 是否匹配所有新 type | 不触发渲染 |
-| ☐7 | 子渲染器参数来源 | 参数默认值是否来自 buildXxxVisualCfg 返回的配置 | 参数魔法数散布 |
+| ☐6 | `CyberFishRenderer.triggerSkillEffect()` 参数类型 | 是否为新技能添加了所需属性（targetId/frostbiteStacks 等） | TypeScript 类型错误 |
+| ☐7 | `CyberFishRenderer.triggerSkillEffect()` switch | switch 是否匹配所有新 type | 不触发渲染 |
+| ☐8 | `EffectRenderer.buildXxxVisualCfg()` | 是否从 WEAPON_RANGE_CONFIG 构建配置 | 前端数值与后端脱节 |
+| ☐9 | 子渲染器参数来源 | 参数默认值是否来自 buildXxxVisualCfg 返回的配置 | 参数魔法数散布 |
 
 ---
 
@@ -193,7 +206,76 @@ private buildOpticalSlashVisualCfg(): OpticalSlashVisualConfig {
 
 ---
 
-## 五、特效设计模式
+## 五、PIXI.js API 使用规范
+
+### 5.1 常见类型错误及正确用法
+
+| API | 错误用法 | 正确用法 | 说明 |
+|:---|:---|:---|:---|
+| `PIXI.Text` 样式 | `{ alpha: 0.7 }` | `label.alpha = 0.7` | `alpha` 不是 `TextStyle` 的属性，应在 `Text` 对象上设置 |
+| `PIXI.Text` 创建 | `new PIXI.Text(text, style)` | `new PIXI.Text(text, style as Partial<TextStyle>)` | 新版本 PIXI.js 中构造函数已弃用，建议使用 `PIXI.Text` 类 |
+| 对象属性访问 | `player.x` / `player.y` | `player.position.x` / `player.position.y` | 玩家坐标嵌套在 `position` 对象中 |
+| 玩家存活判断 | `player.isAlive` | `player.hp > 0` | `PlayerState` 没有 `isAlive` 属性 |
+
+### 5.2 正确代码示例
+
+```typescript
+// ✅ 正确：创建文本并设置透明度
+const label = new PIXI.Text('16℃', {
+  fontFamily: 'monospace',
+  fontSize: 10,
+  fill: color,
+});
+label.anchor.set(0.5);
+label.position.set(x, y);
+label.alpha = 0.7;  // ← alpha 在对象上设置，不在样式中
+
+// ✅ 正确：访问玩家坐标
+const dx = opp.position.x - self.position.x;
+const dy = opp.position.y - self.position.y;
+
+// ✅ 正确：判断玩家是否存活
+if (opp && opp.hp > 0) {
+  // 玩家存活
+}
+```
+
+---
+
+## 六、类型命名规范
+
+### 6.1 核心原则
+
+**必须使用完整的 `VisualEventType` 枚举值，避免使用简写或缩写。**
+
+| ✅ 正确 | ❌ 错误 | 说明 |
+|:---|:---|:---|
+| `'air_repulsion_anchor'` | `'air_anchor'` | 使用完整的枚举值 |
+| `'entropic_touch_aura'` | `'entropic_aura'` | 使用完整的枚举值 |
+| `'burst_trigger'` | `'burst_flash'` | 与 `VisualEventType` 枚举值一致 |
+
+### 6.2 类型定义同步清单
+
+创建新武器时，**必须同时更新**以下文件的类型定义：
+
+| 文件 | 位置 | 更新内容 |
+|:---|:---|:---|
+| `GameEnums.ts` | `VisualEventType` 枚举 | 添加新的视觉效果类型 |
+| `VisualEffectUtils.ts` | `ActiveEffect` 接口 | 更新 `type` 联合类型 |
+| `CyberFishRenderer.ts` | `triggerSkillEffect` 参数 | 更新 `type` 联合类型 + switch case |
+| `useFishOilBattle.ts` | `onVisualEvent` switch | 使用完整的枚举值调用 `triggerSkillEffect` |
+| `BattleTestPanel.vue` | 测试事件处理 | 使用完整的枚举值调用 `triggerSkillEffect` |
+
+### 6.3 常见类型错误
+
+| 错误信息 | 原因 | 修复方法 |
+|:---|:---|:---|
+| 不能将类型"X"分配给类型"Y" | 使用了简写类型字符串 | 改为完整的 `VisualEventType` 枚举值 |
+| 类型"X"上不存在属性"Y" | 类型定义不完整 | 更新所有相关文件的类型定义 |
+
+---
+
+## 七、特效设计模式
 
 常见的前端特效模式：
 
@@ -206,7 +288,7 @@ private buildOpticalSlashVisualCfg(): OpticalSlashVisualConfig {
 
 ---
 
-## 六、关键文件速查表
+## 八、关键文件速查表
 
 | 文件 | 路径 |
 |:---|:---|
@@ -226,7 +308,77 @@ private buildOpticalSlashVisualCfg(): OpticalSlashVisualConfig {
 
 ---
 
-## 七、参考文档
+## 九、类型同步检查模板
+
+创建新武器时，确保前后端类型定义一致。**按顺序执行以下检查**：
+
+### 9.1 后端类型定义
+
+```typescript
+// 1. GameEnums.ts - 添加枚举
+export enum VisualEventType {
+  YOUR_EVENT = 'your_event',
+  // ...
+}
+
+// 2. protocol.ts - 更新 VisualEventData 接口
+export interface VisualEventData {
+  // ... 现有字段
+  /** 你的新字段描述 */
+  yourField?: string;
+  yourNumberField?: number;
+}
+```
+
+### 9.2 前端类型定义
+
+```typescript
+// 1. protocol.ts - 确保与后端完全一致（共享文件）
+//  already imported from backend
+
+// 2. CyberFishRenderer.ts - 更新 triggerSkillEffect 参数类型
+triggerSkillEffect(config: {
+  type: 'shockwave' | 'firewall' | ... | 'your_new_type';
+  // ... 现有属性
+  /** 你的新属性 */
+  yourField?: string;
+  yourNumberField?: number;
+}): void {
+  // 在 switch 中添加 case
+  case 'your_new_type':
+    // 调用特效渲染器
+    break;
+}
+```
+
+### 9.3 类型检查命令
+
+创建新武器后，运行以下命令检查类型错误：
+
+```bash
+# 检查后端类型
+cd game/backend && npx tsc --noEmit
+
+# 检查前端类型
+cd game/frontend && npx tsc --noEmit
+
+# 或者运行 Vue 开发服务器（会自动显示类型错误）
+npm run dev
+```
+
+### 9.4 常见类型错误及修复
+
+| 错误信息 | 原因 | 修复方法 |
+|:---|:---|:---|
+| 类型"X"上不存在属性"Y" | `triggerSkillEffect` 参数类型缺少属性 | 在 `CyberFishRenderer.ts` 第173行附近添加属性 |
+| 对象字面量只能指定已知属性 | 传递给 `triggerSkillEffect` 的对象包含未定义属性 | 确保对象所有属性都在类型定义中声明 |
+| 类型"X"不能赋值给类型"Y" | `VisualEventData` 与 `triggerSkillEffect` 参数类型不匹配 | 确保两者字段名和类型完全一致 |
+| 类型"X"上不存在属性"isAlive" | 使用了不存在的属性 | 使用 `hp > 0` 判断玩家是否存活 |
+| 对象字面量只能指定已知属性（alpha） | 在 TextStyle 中使用了 alpha | 在 PIXI.Text 对象上设置 `alpha` 属性 |
+
+---
+
+## 九、参考文档
 
 - 框架 API 详解: 加载 `references/framework-api.md`
 - 视觉事件协议: 加载 `references/visual-event-protocol.md`

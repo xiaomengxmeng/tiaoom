@@ -100,6 +100,12 @@
         v-show="sidebarOpen"
         class="flex w-56 shrink-0 flex-col border-r border-base-300 bg-base-200/40 overflow-hidden"
       >
+        <div class="flex items-center justify-between px-3 py-2 border-b border-base-300">
+          <span class="text-xs font-semibold opacity-60">特效列表</span>
+          <button class="btn btn-ghost btn-xs" @click="refreshRegistry" title="刷新注册表">
+            <Icon icon="ph:arrow-clockwise" />
+          </button>
+        </div>
         <ul class="menu menu-sm flex-1 overflow-y-auto p-2">
           <li v-for="ef in EFFECT_REGISTRY" :key="ef.id">
             <a
@@ -414,7 +420,7 @@ import {
   createEffectTestController,
   type EffectTestContext,
 } from './test/EffectTestController';
-import { EFFECT_REGISTRY, type EffectDefinition, type EffectParam } from './test/effectRegistry';
+import { EFFECT_REGISTRY, type EffectDefinition, type EffectParam, autoRegisterFromEnum } from './test/effectRegistry';
 import { ArenaShape } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
 import { WallStyle } from './renderer/systems/ArenaRenderer';
 import type { WallStyle as WallStyleType } from './renderer/systems/ArenaRenderer';
@@ -423,7 +429,7 @@ import BattleTestPanel from './components/BattleTestPanel.vue';
 // ── 状态 ────────────────────────────────────────────
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
-const selectedId = ref(EFFECT_REGISTRY[0]?.id ?? '');
+const selectedId = ref(EFFECT_REGISTRY.value[0]?.id ?? '');
 const loopEnabled = ref(false);
 const loopInterval = ref(1500);
 const activeCount = ref(0);
@@ -459,7 +465,7 @@ let loopTimer: ReturnType<typeof setInterval> | null = null;
 // ── 计算属性 ────────────────────────────────────────
 
 const currentEffect = computed<EffectDefinition | undefined>(() =>
-  EFFECT_REGISTRY.find(e => e.id === selectedId.value),
+  EFFECT_REGISTRY.value.find(e => e.id === selectedId.value),
 );
 
 /** 位置类参数 (X, Y, 起点/终点) */
@@ -515,6 +521,18 @@ function selectEffect(id: string): void {
   resetParams();
   // 切换特效时自动播放预览
   setTimeout(() => playOnce(), 50);
+}
+
+/** 刷新注册表（自动同步新增的 VisualEventType） */
+function refreshRegistry(): void {
+  // 清空注册表，重新自动注册
+  EFFECT_REGISTRY.value = [];
+  autoRegisterFromEnum();
+  // 如果当前选中的特效已被移除，则选中第一个
+  if (!EFFECT_REGISTRY.value.some(e => e.id === selectedId.value)) {
+    selectedId.value = EFFECT_REGISTRY.value[0]?.id ?? '';
+  }
+  showToast('注册表已刷新');
 }
 
 // ── 参数更新 ────────────────────────────────────────

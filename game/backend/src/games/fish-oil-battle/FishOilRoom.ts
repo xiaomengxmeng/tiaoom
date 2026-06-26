@@ -569,7 +569,7 @@ export default class FishOilRoom extends GameRoom {
         this.battleTick, this.battleState, this.physics,
       );
       for (const evt of globalEvents) {
-        // GLOBAL_EFFECT 事件直接透传，不在 VISUAL_TYPE_MAP 里查
+        // GLOBAL_EFFECT 事件直接透传
         visualEvents.push(evt);
       }
     }
@@ -644,33 +644,14 @@ export default class FishOilRoom extends GameRoom {
     }
   }
 
-  /**
-   * visualType → VisualEventData.type 映射表。
-   * 1:1 透传的事件直接列出，合并映射的（如 HIVE_STING_HIT/FLIGHT → HIVE_STING）显式标注。
-   * 不在表中的 visualType 会被过滤掉。
-   */
-  private static readonly VISUAL_TYPE_MAP: Partial<Record<VisualEventType, VisualEventType>> = {
-    [VisualEventType.SHOCKWAVE_TRIGGER]:     VisualEventType.SHOCKWAVE_TRIGGER,
-    [VisualEventType.FIREWALL_SPAWN]:        VisualEventType.FIREWALL_SPAWN,
-    [VisualEventType.HIVE_STING_HIT]:        VisualEventType.HIVE_STING,
-    [VisualEventType.HIVE_STING_FLIGHT]:     VisualEventType.HIVE_STING,
-    [VisualEventType.HIVE_STING_BOUNCE]:     VisualEventType.HIVE_STING_BOUNCE,
-    [VisualEventType.BURST_TRIGGER]:         VisualEventType.BURST_TRIGGER,
-    [VisualEventType.BEE_COUNT_CHANGE]:      VisualEventType.BEE_COUNT_CHANGE,
-    [VisualEventType.OPTICAL_SLASH_TRIGGER]: VisualEventType.OPTICAL_SLASH_TRIGGER,
-    [VisualEventType.OPTICAL_SLASH_BURST]:   VisualEventType.OPTICAL_SLASH_BURST,
-  };
-
   /** 从 WeaponScheduler 的 PendingVisualEvent 转换为 VisualEventData */
   private extractVisualEvents(events: PendingVisualEvent[]): VisualEventData[] {
     const result: VisualEventData[] = [];
     for (const evt of events) {
       if (evt.visualType === undefined) continue;
-      const mappedType = FishOilRoom.VISUAL_TYPE_MAP[evt.visualType];
-      if (mappedType === undefined) continue;
 
       result.push({
-        type: mappedType,
+        type: evt.visualType,
         playerId: evt.playerId,
         weaponId: evt.weaponId,
         x: evt.x,
@@ -685,6 +666,11 @@ export default class FishOilRoom extends GameRoom {
         durationSec: evt.metadata?.durationSec,
         angle: evt.metadata?.angle,
         length: evt.metadata?.length,
+        // 空气斥力场
+        anchorId: evt.metadata?.anchorId,
+        // 熵寂之触
+        frostbiteTargetId: evt.metadata?.targetId,
+        frostbiteStacks: evt.metadata?.stacks,
       });
     }
     return result;

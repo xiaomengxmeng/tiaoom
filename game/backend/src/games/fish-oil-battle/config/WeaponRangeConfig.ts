@@ -56,6 +56,10 @@ export interface WeaponFieldConfig {
   damagePerEnergy?: number;
   /** 硬化碰墙伤害（每次碰撞） */
   burstHardenDamage?: number;
+  /** 每层冻伤减速百分比（0-100），熵寂之触专用 */
+  frostbiteSlowPerStack?: number;
+  /** 每层冻伤每秒伤害，熵寂之触专用 */
+  frostbiteDamagePerStack?: number;
 }
 
 /** 蜂巢母体专用数值配置 */
@@ -90,6 +94,16 @@ export interface ShockwaveVisualParams {
   strokeWidth: number;
 }
 
+/** 武器触发冷却配置（数据驱动，防止极端条件下连续触发） */
+export interface WeaponTriggerCooldowns {
+  /** onHitTarget 冷却时间（秒），0 或不填 = 无限制 */
+  hitTargetSec?: number;
+  /** onHitByAttacker 冷却时间（秒），0 或不填 = 无限制 */
+  hitByAttackerSec?: number;
+  /** onWallHit 冷却时间（秒），0 或不填 = 无限制 */
+  wallHitSec?: number;
+}
+
 export interface WeaponRangeConfig {
   /** 主要伤害/效果作用半径（逻辑 px） */
   damageRadius?: number;
@@ -116,6 +130,9 @@ export interface WeaponRangeConfig {
 
   /** 冲击波视觉参数（数据驱动） */
   shockwaveVisual?: ShockwaveVisualParams;
+
+  /** 触发冷却配置（数据驱动，防止极端连击） */
+  triggerCooldowns?: WeaponTriggerCooldowns;
 
   /** 普通伤害（冲击波等） */
   damage?: number;
@@ -151,6 +168,9 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
     maxEnergy: 4,
     burstWaves: 3,
     maxHitsPerWave: 2,
+    triggerCooldowns: {
+      hitTargetSec: 0.5,   // 冲击波主伤害限频：每 0.5s 最多触发 1 次
+    },
   },
 
   // ═══ 控制者 Controller (#00BFFF) ══════════════════
@@ -174,6 +194,9 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
       slowPercent: 40,
       damagePerEnergy: 15,
       burstHardenDamage: 4.2,
+    },
+    triggerCooldowns: {
+      hitByAttackerSec: 0.5,   // 被击中充能限频
     },
   },
 
@@ -202,9 +225,58 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
       orbitRadius: 50,
       ballRadius: 40,
     },
+    triggerCooldowns: {
+      hitByAttackerSec: 1.0,   // 被击中充能限频（内部已有 0.4s 全局 CD，此为额外保险）
+    },
   },
 
   // ── 角色武器 ──────────────────────────────────────
+
+  // ── 扩展角色武器 ──────────────────────────────
+
+  /** 空气斥力场 - 开摆 */
+  [WeaponId.AIR_REPULSION_FIELD]: {
+    damage: 4,
+    burstDamage: 6,
+    maxEnergy: 6,
+    damageRadius: 35,           // 气罩半径
+    aoeMaxRadius: 180,        // 爆发范围
+    burstDurationSec: 4,
+    visualRadius: 180,
+    visualDurationMs: 4000,
+    field: {
+      maxCount: 3,             // 锚点上限
+      durationSec: 5,           // 锚点持续 5 秒
+      radius: 55,              // 锚点作用半径
+      contactDamage: 4,         // 锚点接触伤害
+    },
+    triggerCooldowns: {
+      hitTargetSec: 0.5,    // 碰撞生成锚点限频
+    },
+  },
+
+  // ── 闲乘月 - 熵寂之触 ──────────────────────────
+  [WeaponId.ENTROPIC_TOUCH]: {
+    damage: 0,                   // 常驻无直接伤害
+    burstDamage: 10,             // 爆发每秒伤害
+    maxEnergy: 6,                // 冻伤伤害计数（6次 = 充能满）
+    damageRadius: 50,            // 低温场半径
+    aoeMaxRadius: 200,           // 爆发范围
+    burstDurationSec: 5,
+    visualRadius: 200,
+    visualDurationMs: 5000,
+    field: {
+      maxCount: 3,               // 冻伤上限层数
+      durationSec: 5,            // 冻伤持续 5 秒
+      radius: 50,                // 低温场半径（同 damageRadius）
+      slowPercent: 8,            // 每秒减速 8%
+      frostbiteSlowPerStack: 10, // 每层冻伤减速 10%
+      frostbiteDamagePerStack: 2, // 每层冻伤每秒伤害
+    },
+    triggerCooldowns: {
+      hitByAttackerSec: 0.5,     // 受击加冻伤限频
+    },
+  },
 
   /** 光学斩击 - Liya */
   [WeaponId.OPTICAL_SLASH]: {
@@ -223,6 +295,9 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
       visualArcBow: 28,
       visualBladeHalfWidth: 20,
       slashAngleTolerance: 0.15,   // 斩击命中锥角 (rad)，100px处有效宽度≈30px
+    },
+    triggerCooldowns: {
+      hitTargetSec: 0.3,   // 斩击限频：每 0.3s 最多触发 1 次（比冲击波快，因为是近战）
     },
   },
 };

@@ -97,7 +97,7 @@ export interface ISkill {
   /** 自身碰撞对手时调用 */
   onHitTarget(state: IBattleState): SkillEffect[];
   /** 被对手碰撞时调用 */
-  onHitByAttacker(state: IBattleState): SkillEffect[];
+  onHitByAttacker(attackerId: string, state: IBattleState): SkillEffect[];
 
   // ── 能量爆发 ──
   /** 当前能量值 */

@@ -59,6 +59,46 @@ const VISUAL_EVENT_TYPE_NAMES: Record<VisualEventType, string> = {
   [VisualEventType.EMOTIONAL_WEATHER_BURST]: '情绪天气·极端气候',
   [VisualEventType.EMOTION_MASTERY_MOOD]: '情绪掌控·心境轮转',
   [VisualEventType.EMOTION_MASTERY_BURST]: '情绪掌控·实体化爆发',
+
+  // ── KE - 流体操控 ───────────────────────────────
+  [VisualEventType.FLUID_MASTERY_TRAIL]: '流体操控·水流尾迹',
+  [VisualEventType.FLUID_MASTERY_VORTEX]: '流体操控·漩涡牵引',
+  [VisualEventType.FLUID_MASTERY_BURST]: '流体操控·水龙卷',
+
+  // ── 梦 - 记忆回廊 ───────────────────────────────
+  [VisualEventType.MEMORY_CORRIDOR_ECHO]: '记忆回廊·回响',
+  [VisualEventType.MEMORY_CORRIDOR_RESONANCE]: '记忆回廊·历史共振',
+  [VisualEventType.MEMORY_CORRIDOR_BURST]: '记忆回廊·记忆洪流',
+
+  // ── 陈厌孑 - 无限折叠 ───────────────────────────
+  [VisualEventType.INFINITE_FOLD_DODGE]: '无限折叠·概率闪避',
+  [VisualEventType.INFINITE_FOLD_REASSEMBLE]: '无限折叠·空间重组',
+  [VisualEventType.INFINITE_FOLD_BURST]: '无限折叠·维度坍缩',
+
+  // ── 沐里 - 植物伙伴派对 ─────────────────────────
+  [VisualEventType.BOTANICAL_PLANT_SPAWN]: '植物伙伴·生成',
+  [VisualEventType.BOTANICAL_PLANT_DECAY]: '植物伙伴·枯萎',
+  [VisualEventType.BOTANICAL_BURST]: '植物伙伴·派对爆发',
+
+  // ── 基础流派武器 ─────────────────────────────────
+  [VisualEventType.NANO_RIPPER_FIELD]: '纳米撕裂者·撕裂场',
+  [VisualEventType.NANO_RIPPER_BURST]: '纳米撕裂者·爆发',
+  [VisualEventType.PURSUIT_PROTOCOL_MARK]: '追猎协议·标记',
+  [VisualEventType.PURSUIT_PROTOCOL_BURST]: '追猎协议·爆发',
+  [VisualEventType.GRAVITY_WELL_CORE]: '重力阱·核心',
+  [VisualEventType.GRAVITY_WELL_BURST]: '重力阱·爆发',
+  [VisualEventType.ENTROPY_DIFFUSER_FIELD]: '熵增扩散器·扩散场',
+  [VisualEventType.ENTROPY_DIFFUSER_BURST]: '熵增扩散器·爆发',
+  [VisualEventType.BASTION_BUILDER_SHIELD]: '堡垒构筑者·护盾',
+  [VisualEventType.BASTION_BUILDER_BURST]: '堡垒构筑者·爆发',
+  [VisualEventType.CIRCUIT_WEAVER_NETWORK]: '电路编织者·网络',
+  [VisualEventType.CIRCUIT_WEAVER_BURST]: '电路编织者·爆发',
+  [VisualEventType.QUANTUM_RIFT_FISSURE]: '量子裂隙·裂缝',
+  [VisualEventType.QUANTUM_RIFT_BURST]: '量子裂隙·爆发',
+  [VisualEventType.SIZE_WARP_FIELD]: '体积扭曲·扭曲场',
+  [VisualEventType.SIZE_WARP_BURST]: '体积扭曲·爆发',
+  [VisualEventType.RICOCHET_CORE_TRAIL]: '弹射核心·弹射轨迹',
+  [VisualEventType.RICOCHET_CORE_BURST]: '弹射核心·爆发',
   [VisualEventType.SHAPE_EFFECT]: '形状特效',
   [VisualEventType.SUSTAINED_SHAPE]: '持续形状特效',
 };
@@ -299,6 +339,139 @@ export function autoRegisterFromEnum(): void {
           case VisualEventType.EMOTION_MASTERY_BURST: {
             const result = ctx.emotionMasteryRenderer?.triggerBurst(`player_${Date.now()}`, x, y, duration, color);
             if (result?.effect) ctx.activeEffects.push(result.effect);
+            break;
+          }
+
+          // ── KE - 流体操控 ───────────────────────────────
+          case VisualEventType.FLUID_MASTERY_TRAIL: {
+            ctx.fluidMasteryRenderer?.triggerTrail(`player_${Date.now()}`, x, y, size, 0, color);
+            break;
+          }
+          case VisualEventType.FLUID_MASTERY_VORTEX: {
+            ctx.fluidMasteryRenderer?.triggerVortex(`target_${Date.now()}`, x, y, size, 0.5, color);
+            break;
+          }
+          case VisualEventType.FLUID_MASTERY_BURST: {
+            ctx.fluidMasteryRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            break;
+          }
+
+          // ── 梦 - 记忆回廊 ───────────────────────────────
+          case VisualEventType.MEMORY_CORRIDOR_ECHO: {
+            ctx.memoryCorridorRenderer?.triggerEcho(`player_${Date.now()}`, x, y, size, 3, 0, color);
+            break;
+          }
+          case VisualEventType.MEMORY_CORRIDOR_RESONANCE: {
+            ctx.memoryCorridorRenderer?.triggerResonance(`target_${Date.now()}`, x, y, 3, color);
+            break;
+          }
+          case VisualEventType.MEMORY_CORRIDOR_BURST: {
+            ctx.memoryCorridorRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, 3, color);
+            break;
+          }
+
+          // ── 陈厌孑 - 无限折叠 ───────────────────────────
+          case VisualEventType.INFINITE_FOLD_DODGE: {
+            ctx.infiniteFoldRenderer?.triggerDodge(`player_${Date.now()}`, x, y, size, 1, true, color);
+            break;
+          }
+          case VisualEventType.INFINITE_FOLD_REASSEMBLE: {
+            ctx.infiniteFoldRenderer?.triggerReassemble(`target_${Date.now()}`, x, y, 1, color);
+            break;
+          }
+          case VisualEventType.INFINITE_FOLD_BURST: {
+            ctx.infiniteFoldRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            break;
+          }
+
+          // ── 沐里 - 植物伙伴派对 ─────────────────────────
+          case VisualEventType.BOTANICAL_PLANT_SPAWN: {
+            // 随机选择性格
+            const personalities = ['gentle', 'fierce', 'curious'] as const;
+            const personality = personalities[Math.floor(Math.random() * personalities.length)];
+            ctx.botanicalPartyRenderer?.triggerPlantSpawn(`plant_${Date.now()}`, x, y, personality, size, color);
+            break;
+          }
+          case VisualEventType.BOTANICAL_PLANT_DECAY: {
+            ctx.botanicalPartyRenderer?.triggerPlantDecay(`plant_${Date.now()}`);
+            break;
+          }
+          case VisualEventType.BOTANICAL_BURST: {
+            ctx.botanicalPartyRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, 3, color);
+            break;
+          }
+
+          // ── 基础流派武器 ─────────────────────────────────
+          case VisualEventType.NANO_RIPPER_FIELD: {
+            ctx.nanoRipperRenderer?.triggerRipperField(`player_${Date.now()}`, x, y, size, color);
+            break;
+          }
+          case VisualEventType.NANO_RIPPER_BURST: {
+            ctx.nanoRipperRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            break;
+          }
+          case VisualEventType.PURSUIT_PROTOCOL_MARK: {
+            ctx.pursuitProtocolRenderer?.triggerPursuitMark(`target_${Date.now()}`, x, y, x - 100, y - 100, size, color);
+            break;
+          }
+          case VisualEventType.PURSUIT_PROTOCOL_BURST: {
+            ctx.pursuitProtocolRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            break;
+          }
+          case VisualEventType.GRAVITY_WELL_CORE: {
+            ctx.gravityWellRenderer?.triggerGravityCore(`player_${Date.now()}`, x, y, size, color);
+            break;
+          }
+          case VisualEventType.GRAVITY_WELL_BURST: {
+            ctx.gravityWellRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            break;
+          }
+          case VisualEventType.ENTROPY_DIFFUSER_FIELD: {
+            ctx.entropyDiffuserRenderer?.triggerEntropyField(`player_${Date.now()}`, x, y, size, color);
+            break;
+          }
+          case VisualEventType.ENTROPY_DIFFUSER_BURST: {
+            ctx.entropyDiffuserRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            break;
+          }
+          case VisualEventType.BASTION_BUILDER_SHIELD: {
+            ctx.bastionBuilderRenderer?.triggerBastion(`player_${Date.now()}`, x, y, size, color);
+            break;
+          }
+          case VisualEventType.BASTION_BUILDER_BURST: {
+            ctx.bastionBuilderRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            break;
+          }
+          case VisualEventType.CIRCUIT_WEAVER_NETWORK: {
+            ctx.circuitWeaverRenderer?.triggerCircuit(`player_${Date.now()}`, x, y, size, color);
+            break;
+          }
+          case VisualEventType.CIRCUIT_WEAVER_BURST: {
+            ctx.circuitWeaverRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            break;
+          }
+          case VisualEventType.QUANTUM_RIFT_FISSURE: {
+            ctx.quantumRiftRenderer?.triggerRift(`player_${Date.now()}`, x, y, size, color);
+            break;
+          }
+          case VisualEventType.QUANTUM_RIFT_BURST: {
+            ctx.quantumRiftRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            break;
+          }
+          case VisualEventType.SIZE_WARP_FIELD: {
+            ctx.sizeWarpRenderer?.triggerWarp(`player_${Date.now()}`, x, y, size, color);
+            break;
+          }
+          case VisualEventType.SIZE_WARP_BURST: {
+            ctx.sizeWarpRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            break;
+          }
+          case VisualEventType.RICOCHET_CORE_TRAIL: {
+            ctx.ricochetCoreRenderer?.triggerRicochet(`player_${Date.now()}`, x, y, size, color);
+            break;
+          }
+          case VisualEventType.RICOCHET_CORE_BURST: {
+            ctx.ricochetCoreRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
             break;
           }
 

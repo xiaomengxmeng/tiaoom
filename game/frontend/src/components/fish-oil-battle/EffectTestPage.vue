@@ -98,7 +98,7 @@
       <!-- 侧边栏 -->
       <aside
         v-show="sidebarOpen"
-        class="flex w-56 shrink-0 flex-col border-r border-base-300 bg-base-200/40 overflow-hidden"
+        class="flex w-64 shrink-0 flex-col border-r border-base-300 bg-base-200/40 overflow-hidden"
       >
         <div class="flex items-center justify-between px-3 py-2 border-b border-base-300">
           <span class="text-xs font-semibold opacity-60">特效列表</span>
@@ -106,15 +106,36 @@
             <Icon icon="ph:arrow-clockwise" />
           </button>
         </div>
+        <!-- 搜索框 -->
+        <div class="px-3 py-2 border-b border-base-300">
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜索特效..."
+            class="input input-bordered input-xs w-full"
+          />
+        </div>
+        <!-- 分组列表 -->
         <ul class="menu menu-sm flex-1 overflow-y-auto p-2">
-          <li v-for="ef in EFFECT_REGISTRY" :key="ef.id">
-            <a
-              :class="{ active: selectedId === ef.id }"
-              class="text-sm"
-              @click="selectEffect(ef.id)"
-            >
-              {{ ef.name }}
-            </a>
+          <li v-for="group in groupedEffects" :key="group.title">
+            <div class="text-[10px] font-semibold opacity-40 px-2 py-1 uppercase tracking-wider">
+              {{ group.title }}
+              <span class="ml-1 opacity-60">({{ group.items.length }})</span>
+            </div>
+            <ul>
+              <li v-for="ef in group.items" :key="ef.id">
+                <a
+                  :class="{ active: selectedId === ef.id }"
+                  class="text-sm"
+                  @click="selectEffect(ef.id)"
+                >
+                  {{ ef.name }}
+                </a>
+              </li>
+            </ul>
+          </li>
+          <li v-if="groupedEffects.length === 0" class="px-2 py-4 text-center text-xs opacity-40">
+            未找到匹配的特效
           </li>
         </ul>
       </aside>
@@ -438,6 +459,86 @@ const paramsOpen = ref(true);
 const currentTab = ref<'effect' | 'battle'>('effect');
 
 const paramValues = ref<Record<string, any>>({});
+
+// ── 搜索与分组 ────────────────────────────────────────
+const searchQuery = ref('');
+
+/** ID 前缀到分组中文名的映射表（用于无"·"分隔的名称） */
+const ID_PREFIX_GROUPS: { pattern: string; title: string }[] = [
+  { pattern: 'fluid_mastery', title: '流体操控' },
+  { pattern: 'memory_corridor', title: '记忆回廊' },
+  { pattern: 'infinite_fold', title: '无限折叠' },
+  { pattern: 'botanical', title: '植物伙伴' },
+  { pattern: 'shockwave', title: '冲击波' },
+  { pattern: 'firewall', title: '防火墙' },
+  { pattern: 'hive', title: '蜂巢' },
+  { pattern: 'optical_slash', title: '光学斩击' },
+  { pattern: 'air_repulsion', title: '空气斥力场' },
+  { pattern: 'entropic_touch', title: '熵寂之触' },
+  { pattern: 'drawing_manifest', title: '画作实体化' },
+  { pattern: 'discharge_cat', title: '放电猫猫' },
+  { pattern: 'precognitive_lens', title: '预知透镜' },
+  { pattern: 'emotional_weather', title: '情绪天气' },
+  { pattern: 'emotion_mastery', title: '情绪掌控' },
+  { pattern: 'nano_ripper', title: '纳米撕裂者' },
+  { pattern: 'pursuit_protocol', title: '追猎协议' },
+  { pattern: 'gravity_well', title: '重力阱' },
+  { pattern: 'entropy_diffuser', title: '熵增扩散器' },
+  { pattern: 'bastion_builder', title: '堡垒构筑者' },
+  { pattern: 'circuit_weaver', title: '电路编织者' },
+  { pattern: 'quantum_rift', title: '量子裂隙' },
+  { pattern: 'size_warp', title: '体积扭曲' },
+  { pattern: 'ricochet_core', title: '弹射核心' },
+  { pattern: 'burst_flash', title: '爆发闪屏' },
+  { pattern: 'shape_effect', title: '形状特效' },
+  { pattern: 'sustained_shape', title: '形状特效' },
+];
+
+/** 根据特效名称/ID 推断分组标题 */
+function resolveGroupTitle(ef: EffectDefinition): string {
+  const name = ef.name;
+  // 优先用"·"分隔的第一段作为组名（如"光学斩击·无限剑制" → "光学斩击"）
+  if (name.includes('·')) {
+    return name.split('·')[0].trim();
+  }
+  // 兼容带括号的角色标注（如"光学斩击 (Liya)" → "光学斩击"）
+  const parenIdx = name.indexOf('(');
+  if (parenIdx > 0) {
+    const head = name.slice(0, parenIdx).trim();
+    if (head) return head;
+  }
+  // 通过 ID 前缀匹配分组
+  for (const rule of ID_PREFIX_GROUPS) {
+    if (ef.id.includes(rule.pattern)) return rule.title;
+  }
+  return '其他';
+}
+
+/** 分组+搜索过滤后的特效列表 */
+const groupedEffects = computed<{ title: string; items: EffectDefinition[] }[]>(() => {
+  const keyword = searchQuery.value.trim().toLowerCase();
+  // 1. 关键字过滤
+  const filtered = EFFECT_REGISTRY.value.filter(ef =>
+    !keyword ||
+    ef.name.toLowerCase().includes(keyword) ||
+    ef.id.toLowerCase().includes(keyword),
+  );
+  // 2. 按组名聚合，保持插入顺序
+  const groupMap = new Map<string, EffectDefinition[]>();
+  for (const ef of filtered) {
+    const title = resolveGroupTitle(ef);
+    if (!groupMap.has(title)) groupMap.set(title, []);
+    groupMap.get(title)!.push(ef);
+  }
+  // 3. "其他"组排到末尾
+  const groups = Array.from(groupMap, ([title, items]) => ({ title, items }));
+  groups.sort((a, b) => {
+    if (a.title === '其他') return 1;
+    if (b.title === '其他') return -1;
+    return a.title.localeCompare(b.title, 'zh-CN');
+  });
+  return groups;
+});
 
 // ── 地图参数 ──────────────────────────────────────────
 const arenaW = ref(1280);

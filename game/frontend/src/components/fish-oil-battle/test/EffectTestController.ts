@@ -16,6 +16,19 @@ import { DischargeCatRenderer } from '../renderer/entities/DischargeCatRenderer'
 import { PrecognitiveLensRenderer } from '../renderer/entities/PrecognitiveLensRenderer';
 import { EmotionalWeatherRenderer } from '../renderer/entities/EmotionalWeatherRenderer';
 import { EmotionMasteryRenderer } from '../renderer/entities/EmotionMasteryRenderer';
+import { FluidMasteryRenderer } from '../renderer/entities/FluidMasteryRenderer';
+import { MemoryCorridorRenderer } from '../renderer/entities/MemoryCorridorRenderer';
+import { InfiniteFoldRenderer } from '../renderer/entities/InfiniteFoldRenderer';
+import { BotanicalPartyRenderer } from '../renderer/entities/BotanicalPartyRenderer';
+import { NanoRipperRenderer } from '../renderer/entities/NanoRipperRenderer';
+import { PursuitProtocolRenderer } from '../renderer/entities/PursuitProtocolRenderer';
+import { GravityWellRenderer } from '../renderer/entities/GravityWellRenderer';
+import { EntropyDiffuserRenderer } from '../renderer/entities/EntropyDiffuserRenderer';
+import { BastionBuilderRenderer } from '../renderer/entities/BastionBuilderRenderer';
+import { CircuitWeaverRenderer } from '../renderer/entities/CircuitWeaverRenderer';
+import { QuantumRiftRenderer } from '../renderer/entities/QuantumRiftRenderer';
+import { SizeWarpRenderer } from '../renderer/entities/SizeWarpRenderer';
+import { RicochetCoreRenderer } from '../renderer/entities/RicochetCoreRenderer';
 import type { ActiveEffect } from '../renderer/entities/VisualEffectUtils';
 
 /**
@@ -57,6 +70,32 @@ export interface EffectTestContext {
   emotionalWeatherRenderer: EmotionalWeatherRenderer;
   /** 情绪掌控渲染器 */
   emotionMasteryRenderer: EmotionMasteryRenderer;
+  /** KE - 流体操控渲染器 */
+  fluidMasteryRenderer: FluidMasteryRenderer;
+  /** 梦 - 记忆回廊渲染器 */
+  memoryCorridorRenderer: MemoryCorridorRenderer;
+  /** 陈厌孑 - 无限折叠渲染器 */
+  infiniteFoldRenderer: InfiniteFoldRenderer;
+  /** 沐里 - 植物伙伴派对渲染器 */
+  botanicalPartyRenderer: BotanicalPartyRenderer;
+  /** 纳米撕裂者渲染器 */
+  nanoRipperRenderer: NanoRipperRenderer;
+  /** 追猎协议渲染器 */
+  pursuitProtocolRenderer: PursuitProtocolRenderer;
+  /** 重力阱渲染器 */
+  gravityWellRenderer: GravityWellRenderer;
+  /** 熵增扩散器渲染器 */
+  entropyDiffuserRenderer: EntropyDiffuserRenderer;
+  /** 堡垒构筑者渲染器 */
+  bastionBuilderRenderer: BastionBuilderRenderer;
+  /** 电路编织者渲染器 */
+  circuitWeaverRenderer: CircuitWeaverRenderer;
+  /** 量子裂隙渲染器 */
+  quantumRiftRenderer: QuantumRiftRenderer;
+  /** 体积扭曲渲染器 */
+  sizeWarpRenderer: SizeWarpRenderer;
+  /** 弹射核心渲染器 */
+  ricochetCoreRenderer: RicochetCoreRenderer;
   /** 活跃特效列表 */
   activeEffects: ActiveEffect[];
   /** 添加活跃特效 */
@@ -135,6 +174,19 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
   const precognitiveLensRenderer = new PrecognitiveLensRenderer(l2Entity, l3Field);
   const emotionalWeatherRenderer = new EmotionalWeatherRenderer(l3Field);
   const emotionMasteryRenderer = new EmotionMasteryRenderer(l3Field, l2Entity);
+  const fluidMasteryRenderer = new FluidMasteryRenderer(l3Field, particlePool);
+  const memoryCorridorRenderer = new MemoryCorridorRenderer(l3Field, particlePool);
+  const infiniteFoldRenderer = new InfiniteFoldRenderer(l3Field, particlePool);
+  const botanicalPartyRenderer = new BotanicalPartyRenderer(l3Field, particlePool);
+  const nanoRipperRenderer = new NanoRipperRenderer(l3Field, particlePool);
+  const pursuitProtocolRenderer = new PursuitProtocolRenderer(l3Field, particlePool);
+  const gravityWellRenderer = new GravityWellRenderer(l3Field, particlePool);
+  const entropyDiffuserRenderer = new EntropyDiffuserRenderer(l3Field, particlePool);
+  const bastionBuilderRenderer = new BastionBuilderRenderer(l3Field, particlePool);
+  const circuitWeaverRenderer = new CircuitWeaverRenderer(l3Field, particlePool);
+  const quantumRiftRenderer = new QuantumRiftRenderer(l3Field, particlePool);
+  const sizeWarpRenderer = new SizeWarpRenderer(l3Field, particlePool);
+  const ricochetCoreRenderer = new RicochetCoreRenderer(l3Field, particlePool);
 
   // 6. 活跃特效管理
   const activeEffects: ActiveEffect[] = [];
@@ -162,6 +214,19 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
     dischargeCatRenderer.clear();
     emotionalWeatherRenderer.clear();
     emotionMasteryRenderer.clear();
+    fluidMasteryRenderer.clear();
+    memoryCorridorRenderer.clear();
+    infiniteFoldRenderer.clear();
+    botanicalPartyRenderer.clear();
+    nanoRipperRenderer.clear();
+    pursuitProtocolRenderer.clear();
+    gravityWellRenderer.clear();
+    entropyDiffuserRenderer.clear();
+    bastionBuilderRenderer.clear();
+    circuitWeaverRenderer.clear();
+    quantumRiftRenderer.clear();
+    sizeWarpRenderer.clear();
+    ricochetCoreRenderer.clear();
   };
 
   // ═══════════════════════════════════════════════════
@@ -204,6 +269,19 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
     precognitiveLensRenderer.setScale(s);
     emotionalWeatherRenderer.setScale(s);
     emotionMasteryRenderer.setScale(s);
+    fluidMasteryRenderer.setScale(s);
+    memoryCorridorRenderer.setScale(s);
+    infiniteFoldRenderer.setScale(s);
+    botanicalPartyRenderer.setScale(s);
+    nanoRipperRenderer.setScale(s);
+    pursuitProtocolRenderer.setScale(s);
+    gravityWellRenderer.setScale(s);
+    entropyDiffuserRenderer.setScale(s);
+    bastionBuilderRenderer.setScale(s);
+    circuitWeaverRenderer.setScale(s);
+    quantumRiftRenderer.setScale(s);
+    sizeWarpRenderer.setScale(s);
+    ricochetCoreRenderer.setScale(s);
   }
 
   function setArenaConfig(config: { width: number; height: number; arenaRadius: number; shape?: string; arenaHalfW?: number; arenaHalfH?: number }): void {
@@ -240,6 +318,21 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
     // 更新粒子
     particlePool.update(dt);
 
+    // 更新新增渲染器内部状态（在活跃特效之前调用）
+    fluidMasteryRenderer.update(dt);
+    memoryCorridorRenderer.update(dt);
+    infiniteFoldRenderer.update(dt);
+    botanicalPartyRenderer.update(dt);
+    nanoRipperRenderer.update(dt);
+    pursuitProtocolRenderer.update(dt);
+    gravityWellRenderer.update(dt);
+    entropyDiffuserRenderer.update(dt);
+    bastionBuilderRenderer.update(dt);
+    circuitWeaverRenderer.update(dt);
+    quantumRiftRenderer.update(dt);
+    sizeWarpRenderer.update(dt);
+    ricochetCoreRenderer.update(dt);
+
     // 更新活跃特效
     for (let i = activeEffects.length - 1; i >= 0; i--) {
       const ef = activeEffects[i];
@@ -272,6 +365,19 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
     precognitiveLensRenderer,
     emotionalWeatherRenderer,
     emotionMasteryRenderer,
+    fluidMasteryRenderer,
+    memoryCorridorRenderer,
+    infiniteFoldRenderer,
+    botanicalPartyRenderer,
+    nanoRipperRenderer,
+    pursuitProtocolRenderer,
+    gravityWellRenderer,
+    entropyDiffuserRenderer,
+    bastionBuilderRenderer,
+    circuitWeaverRenderer,
+    quantumRiftRenderer,
+    sizeWarpRenderer,
+    ricochetCoreRenderer,
     activeEffects,
     addEffect,
     clearEffects,
@@ -295,6 +401,19 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
       precognitiveLensRenderer.destroy();
       emotionalWeatherRenderer.destroy();
       emotionMasteryRenderer.destroy();
+      fluidMasteryRenderer.destroy();
+      memoryCorridorRenderer.destroy();
+      infiniteFoldRenderer.destroy();
+      botanicalPartyRenderer.destroy();
+      nanoRipperRenderer.destroy();
+      pursuitProtocolRenderer.destroy();
+      gravityWellRenderer.destroy();
+      entropyDiffuserRenderer.destroy();
+      bastionBuilderRenderer.destroy();
+      circuitWeaverRenderer.destroy();
+      quantumRiftRenderer.destroy();
+      sizeWarpRenderer.destroy();
+      ricochetCoreRenderer.destroy();
       particlePool.destroy();
       app.destroy(true, { children: true });
     },

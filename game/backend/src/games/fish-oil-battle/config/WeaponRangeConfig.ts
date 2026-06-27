@@ -522,4 +522,196 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
     },
     triggerCooldowns: { minIntervalMs: 500 }, // 生成冷却 0.5 秒
   },
+
+  // ═══ 基础流派武器扩展（StubWeapon → 真实实现）════════
+
+  // ── 侵略者 - 纳米撕裂者（机械触手）──────────────
+  [WeaponId.NANO_RIPPER]: {
+    damage: 4,                    // 触手额外撕裂伤害
+    burstDamage: 6,               // 每层撕裂爆发伤害
+    maxEnergy: 4,                 // 撕裂层数上限（爆发阈值）
+    energyPerHit: 1,              // 每次扫荡 +1 层
+    burstEnergyCost: 4,           // 4 层满触发
+    damageRadius: 40,             // 触手覆盖半径
+    aoeMaxRadius: 60,             // 爆发影响范围
+    visualRadius: 40,
+    visualDurationMs: 2000,       // 扫荡特效持续 2s
+    burstDurationSec: 2,          // 减速持续 2s
+    cooldownMs: 6000,             // 扫荡 CD 6s
+    field: {
+      maxCount: 1,                // 单一撕裂场
+      radius: 40,
+      durationSec: 2,
+      contactDamage: 4,           // 触手触碰伤害
+      slowPercent: 30,            // 爆发减速 30%
+    },
+    triggerCooldowns: { hitTargetSec: 0.5 },
+  },
+
+  // ── 侵略者 - 追猎协议（追击印记 + 鱼雷）──────────
+  [WeaponId.PURSUIT_PROTOCOL]: {
+    damage: 3,                    // 每层追击额外伤害
+    burstDamage: 20,              // 鱼雷伤害
+    maxEnergy: 5,                 // 追击层数上限
+    energyPerHit: 1,
+    burstEnergyCost: 5,
+    damageRadius: 60,             // 追踪线判定
+    aoeMaxRadius: 200,            // 鱼雷溅射范围
+    visualRadius: 60,
+    visualDurationMs: 2000,       // 印记特效 2s
+    burstDurationSec: 4,          // 鱼雷飞行 4s
+    cooldownMs: 2000,             // 追击印记持续 2s
+    field: {
+      maxCount: 1,
+      radius: 60,
+      durationSec: 2,
+    },
+    triggerCooldowns: { hitTargetSec: 0.5 },
+  },
+
+  // ── 控制者 - 重力阱（微重力场 + 黑洞）────────────
+  [WeaponId.GRAVITY_WELL]: {
+    damage: 0,                    // 常驻无直接伤害
+    burstDamage: 22,               // 黑洞中心伤害
+    maxEnergy: 15,                 // 15 秒自动充满（时间制）
+    damageRadius: 60,              // 微重力场半径
+    aoeMaxRadius: 200,             // 黑洞影响范围
+    visualRadius: 60,
+    visualDurationMs: 3000,        // 黑洞持续 3s
+    burstDurationSec: 3,
+    cooldownMs: 8000,              // 锚点生成 CD
+    field: {
+      maxCount: 2,                 // 最多 2 个锚点
+      radius: 80,                  // 锚点牵引半径
+      durationSec: 6,              // 锚点持续 6s
+      slowPercent: 15,             // 微重力场减速 15%
+    },
+    triggerCooldowns: { minIntervalMs: 500 },
+  },
+
+  // ── 控制者 - 熵增扩散器（油膜 + 凝固）────────────
+  [WeaponId.ENTROPY_DIFFUSER]: {
+    damage: 0,                    // 常驻无直接伤害
+    burstDamage: 5,                // 凝固每秒伤害
+    maxEnergy: 20,                  // 油膜段数阈值（爆发）
+    energyPerHit: 1,
+    burstEnergyCost: 20,
+    damageRadius: 40,               // 油膜宽度
+    aoeMaxRadius: 200,              // 凝固影响范围
+    visualRadius: 40,
+    visualDurationMs: 4000,         // 油膜持续 4s
+    burstDurationSec: 3,            // 凝固持续 3s
+    cooldownMs: 12000,              // 检测 CD
+    field: {
+      maxCount: 20,                 // 油膜段上限
+      radius: 40,
+      durationSec: 4,
+    },
+    triggerCooldowns: { minIntervalMs: 500 },
+  },
+
+  // ── 工程师 - 堡垒构筑者（方块部署）──────────────
+  [WeaponId.BASTION_BUILDER]: {
+    damage: 4,                      // 方块碰撞伤害
+    burstDamage: 12,                // 墙壁碰撞伤害
+    maxEnergy: 6,                   // 方块上限 = 爆发阈值
+    energyPerHit: 1,
+    burstEnergyCost: 6,
+    damageRadius: 50,               // 方块边长
+    aoeMaxRadius: 200,               // 墙壁长度
+    visualRadius: 50,
+    visualDurationMs: 12000,         // 方块持续 12s
+    burstDurationSec: 5,             // 墙壁持续 5s
+    cooldownMs: 5000,               // 尖刺 CD
+    field: {
+      maxCount: 6,                   // 最多 6 个方块
+      radius: 50,
+      durationSec: 12,
+      contactDamage: 4,
+    },
+    triggerCooldowns: { wallHitSec: 0.5 },
+  },
+
+  // ── 工程师 - 电路编织者（回路网络）──────────────
+  [WeaponId.CIRCUIT_WEAVER]: {
+    damage: 8,                      // 通电每秒伤害
+    burstDamage: 12,                // 过载每秒伤害
+    maxEnergy: 600,                  // 回路长度阈值
+    energyPerHit: 30,                // 每段回路 ~30px
+    burstEnergyCost: 600,
+    damageRadius: 20,                // 回路宽度
+    aoeMaxRadius: 200,
+    visualRadius: 20,
+    visualDurationMs: 6000,          // 回路持续 6s
+    burstDurationSec: 4,             // 过载持续 4s
+    cooldownMs: 2000,                // 通电 CD
+    field: {
+      maxCount: 20,                   // 回路段上限
+      radius: 20,
+      durationSec: 6,
+    },
+    triggerCooldowns: { minIntervalMs: 500 },
+  },
+
+  // ── 变奏者 - 量子裂隙（量子态传送）──────────────
+  [WeaponId.QUANTUM_RIFT]: {
+    damage: 6,                       // 裂隙传送伤害
+    burstDamage: 10,                 // 连接线伤害
+    maxEnergy: 4,                    // 穿越次数阈值
+    energyPerHit: 1,
+    burstEnergyCost: 4,
+    damageRadius: 40,                // 裂隙判定半径
+    aoeMaxRadius: 200,
+    visualRadius: 40,
+    visualDurationMs: 8000,          // 裂隙持续 8s
+    burstDurationSec: 2,
+    cooldownMs: 5000,                 // 量子态 CD
+    field: {
+      maxCount: 4,                    // 最多 4 个裂隙（2 对）
+      radius: 40,
+      durationSec: 8,
+      contactDamage: 6,
+    },
+    triggerCooldowns: { minIntervalMs: 500 },
+  },
+
+  // ── 变奏者 - 体积扭曲（尺寸切换）────────────────
+  [WeaponId.SIZE_WARP]: {
+    damage: 0,                        // 常驻无直接伤害
+    burstDamage: 18,                  // 巨型化碰撞伤害
+    maxEnergy: 3,                     // 切换次数阈值
+    energyPerHit: 1,
+    burstEnergyCost: 3,
+    damageRadius: 60,                 // 扭曲场半径
+    aoeMaxRadius: 200,
+    visualRadius: 60,
+    visualDurationMs: 3000,           // 巨型化持续 3s
+    burstDurationSec: 3,
+    cooldownMs: 8000,                 // 切换 CD
+    field: {
+      maxCount: 1,
+      radius: 60,
+      durationSec: 8,
+    },
+    triggerCooldowns: { minIntervalMs: 500 },
+  },
+
+  // ── 变奏者 - 弹射核心（速度递增）────────────────
+  [WeaponId.RICOCHET_CORE]: {
+    damage: 0,                        // 常驻无直接伤害（靠速度加成）
+    burstDamage: 8,                   // 弹射碎片伤害
+    maxEnergy: 200,                   // 速度阈值 200%
+    damageRadius: 40,                 // 弹射轨迹半径
+    aoeMaxRadius: 200,
+    visualRadius: 40,
+    visualDurationMs: 4000,           // 超音速持续 4s
+    burstDurationSec: 4,
+    cooldownMs: 1000,                 // 撞墙 CD
+    field: {
+      maxCount: 1,
+      radius: 40,
+      durationSec: 4,
+    },
+    triggerCooldowns: { wallHitSec: 0.3 },
+  },
 };

@@ -2,95 +2,85 @@
  * 弹射核心 (Ricochet Core) - 变奏者流派
  * 前端视觉渲染器
  *
- * 视觉设计（变奏者金青双色调）：
- * - 弹射轨迹 Ricochet：弹射核心（8 层径向渐变）+ 多层叠加发光反弹线 + 弹射粒子
- * - 爆发 Burst：弹射核心（8 层渐变）+ 反弹线爆发 + 弹射环 + 三阶段动画（蓄射→弹射→消散）
+ * 视觉设计（变奏者橙金系 —— 多段反射与弹道齐射）：
+ * - 反弹场 RicochetField：6 条多段反射折线（每条 3 段反射，端点带反射角标记弧）
+ *   + 弹道余晖粒子（沿反射路径喷射）
+ *   + 中心反射核心（8 层径向渐变 + 白色核心）
+ * - 爆发 Burst：三阶段动画
+ *   · 蓄压（0-15%T）：反射线收缩汇聚，核心蓄压显现
+ *   · 弹射（15%-30%T）：12 条弹道齐射 + 反射网络（连接外端点）+ 中心爆炸
+ *   · 余波（30%-100%T）：弹道消散，反射网络淡出
+ *
+ * API：triggerRicochet / removeRicochet / triggerBurst / update / setScale / clear / destroy
  */
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
+import { BaseWeaponEffectRenderer, type ActiveBurstBase, type Palette } from './BaseWeaponEffectRenderer';
 
 // ══════════════════════════════════════════════════════
-//  颜色常量（变奏者金青）
+//  颜色常量（变奏者橙金系）
 // ══════════════════════════════════════════════════════
 
-const RICOCHET_DEEP = 0x2a1a0a; // 深褐橙（渐变外缘）
-const RICOCHET_MAIN = 0xcc8800; // 主橙金（弹射主色）
-const RICOCHET_LIGHT = 0xffbb22; // 浅亮橙（中层渐变）
-const RICOCHET_HIGHLIGHT = 0xffdd77; // 高亮浅橙（内层渐变）
-const RICOCHET_WHITE = 0xffffff; // 白色（核心高亮）
-const RICOCHET_CYAN = 0x00ffcc; // 弹射青（反弹线/弹射色）
+const RICO_TRAIL = 0xff8800;   // 弹道余晖橙
+const RICO_NODE = 0xffcc00;    // 反射节点金
+const RICO_ANGLE = 0xff4400;   // 反射角标记红橙
+const RICO_WHITE = 0xffffff;   // 中心核高亮白
 
-/** 反弹线数量（多层叠加） */
-const RICOCHET_LINE_COUNT = 6;
-/** 每条反弹线的弹射段数 */
-const RICOCHET_BOUNCE_SEGMENTS = 3;
+/** 反弹线数量 */
+const RICO_LINE_COUNT = 6;
+/** 每条反弹线的反射段数 */
+const RICO_BOUNCE_SEGMENTS = 3;
+/** 弹道齐射数量 */
+const RICO_SALVO_COUNT = 12;
 
 // ══════════════════════════════════════════════════════
 //  数据结构
 // ══════════════════════════════════════════════════════
 
-/** 活跃弹射轨迹实例（常驻） */
-interface ActiveRicochet {
+/** 活跃反弹场实例（常驻） */
+interface ActiveRicochetField {
   container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 弹射核心（8 层径向渐变）
-  ricochetGraphics: PIXI.Graphics; // 多层叠加发光反弹线（独立旋转）
+  lineGraphics: PIXI.Graphics;     // 6 条多段反射折线 + 端点节点 + 反射角标记
+  coreGraphics: PIXI.Graphics;    // 中心反射核心（8 层径向渐变）
   particleTimer: number;
-  life: number; // ms 累计
+  life: number;
   maxLife: number;
   x: number;
   y: number;
   radius: number;
-}
-
-/** 活跃爆发特效（蓄射→弹射→消散 三阶段） */
-interface ActiveBurst {
-  container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 弹射核心（8 层渐变）
-  ricochetGraphics: PIXI.Graphics; // 反弹线爆发
-  ringGraphics: PIXI.Graphics; // 弹射环
-  life: number;
-  maxLife: number;
   themeColor: number;
-  radius: number;
+  palette: Palette;
 }
 
-export class RicochetCoreRenderer {
-  private fieldContainer: PIXI.Container;
-  private particlePool: ParticlePool;
-  private scale = 1;
+/** 活跃爆发特效（蓄压→弹射→余波 三阶段） */
+interface ActiveRicochetBurst extends ActiveBurstBase {
+  bladeGraphics: PIXI.Graphics;   // 12 条弹道齐射 + 反射网络
+  coreGraphics: PIXI.Graphics;    // 中心爆炸
+  x: number;
+  y: number;
+}
 
-  // 活跃实例池
-  private activeRicochets: Map<string, ActiveRicochet> = new Map();
-  private activeBursts: Map<string, ActiveBurst> = new Map();
+// ══════════════════════════════════════════════════════
+//  RicochetCoreRenderer
+// ══════════════════════════════════════════════════════
+
+export class RicochetCoreRenderer extends BaseWeaponEffectRenderer {
+  private activeFields = new Map<string, ActiveRicochetField>();
+  private activeBursts = new Map<string, ActiveRicochetBurst>();
 
   constructor(fieldContainer: PIXI.Container, particlePool: ParticlePool) {
-    this.fieldContainer = fieldContainer;
-    this.particlePool = particlePool;
+    super(fieldContainer, particlePool);
   }
 
-  setScale(scale: number): void {
-    this.scale = scale;
-    this.activeRicochets.forEach((r) => {
-      if (r.container.destroyed) return;
-      r.container.scale.set(scale);
-    });
-    this.activeBursts.forEach((b) => {
-      if (b.container.destroyed) return;
-      b.container.scale.set(scale);
-    });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  弹射轨迹 Ricochet（常驻）
-  // ══════════════════════════════════════════════════════
+  // ═══ 反弹场 ═══
 
   /**
-   * 触发弹射轨迹视觉效果
+   * 触发反弹场视觉效果
    * @param playerId 玩家 ID
    * @param x 逻辑坐标 X
    * @param y 逻辑坐标 Y
-   * @param radius 弹射半径（逻辑 px）
+   * @param radius 反弹场半径（逻辑 px）
    * @param themeColor 主题色（默认变奏者橙金）
    */
   triggerRicochet(
@@ -98,10 +88,10 @@ export class RicochetCoreRenderer {
     x: number,
     y: number,
     radius: number,
-    themeColor = RICOCHET_MAIN,
+    themeColor: number = RICO_TRAIL,
   ): void {
     // 已存在则仅更新位置与半径
-    const existing = this.activeRicochets.get(playerId);
+    const existing = this.activeFields.get(playerId);
     if (existing) {
       existing.x = x;
       existing.y = y;
@@ -110,441 +100,310 @@ export class RicochetCoreRenderer {
       return;
     }
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 弹射核心（8 层径向渐变 + 主环 + 中心核）
+    const lineGraphics = new PIXI.Graphics();
     const coreGraphics = new PIXI.Graphics();
-    this.drawRicochetCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
+    container.addChild(lineGraphics, coreGraphics);
 
-    // 多层叠加发光反弹线（独立旋转）
-    const ricochetGraphics = new PIXI.Graphics();
-    this.drawRicochetLines(ricochetGraphics, radius);
-    container.addChild(ricochetGraphics);
-
-    this.fieldContainer.addChild(container);
-
-    const ricochet: ActiveRicochet = {
-      container,
-      coreGraphics,
-      ricochetGraphics,
-      particleTimer: 0,
-      life: 0,
-      maxLife: Number.POSITIVE_INFINITY, // 常驻，直到手动移除
-      x,
-      y,
-      radius,
+    const field: ActiveRicochetField = {
+      container, lineGraphics, coreGraphics,
+      particleTimer: 0, life: 0, maxLife: Infinity,
+      x, y, radius, themeColor, palette,
     };
-    this.activeRicochets.set(playerId, ricochet);
-
-    // 触发首帧弹射粒子
-    this.spawnRicochetParticles(x, y, radius, RICOCHET_CYAN);
-    void themeColor;
+    this.drawFieldCore(coreGraphics, radius, palette);
+    this.activeFields.set(playerId, field);
   }
 
-  /** 移除弹射轨迹 */
+  /** 移除反弹场 */
   removeRicochet(playerId: string): void {
-    const ricochet = this.activeRicochets.get(playerId);
-    if (ricochet) {
-      this.fieldContainer.removeChild(ricochet.container);
-      ricochet.container.destroy({ children: true });
-      this.activeRicochets.delete(playerId);
-    }
+    const f = this.activeFields.get(playerId);
+    if (!f) return;
+    this.container.removeChild(f.container);
+    f.container.destroy({ children: true });
+    this.activeFields.delete(playerId);
   }
 
   /**
-   * 绘制弹射核心：8 层同心圆径向渐变（白→高亮→浅橙→主橙金→深褐橙）+ 主环 + 中心核
-   * 以 (0,0) 为中心绘制
+   * 绘制 6 条多段反射折线：每条 3 段反射，端点带反射角标记弧
+   * - 反射规则：每段后角度 +90° 偏转（带 ±0.3 rad 扰动，依线号奇偶）
+   * - 端点节点：金色高亮圆点（RICO_NODE）
+   * - 反射角标记：以端点为圆心的小弧（RICO_ANGLE）
    */
-  private drawRicochetCore(g: PIXI.Graphics, radius: number): void {
+  private drawRicochetLines(g: PIXI.Graphics, radius: number, palette: Palette, life: number): void {
     g.clear();
-
-    // 8 层同心圆叠加模拟径向渐变
-    for (let i = 0; i < 8; i++) {
-      const t = i / 7; // 0 → 1
-      const r = radius * (0.15 + 0.85 * t);
-      // 颜色分段：白 → 高亮 → 浅橙 → 主橙金 → 深褐橙
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(RICOCHET_WHITE, RICOCHET_HIGHLIGHT, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(
-          RICOCHET_HIGHLIGHT,
-          RICOCHET_LIGHT,
-          (t - 0.25) / 0.25,
-        );
-      } else if (t < 0.75) {
-        color = this.interpolateColor(
-          RICOCHET_LIGHT,
-          RICOCHET_MAIN,
-          (t - 0.5) / 0.25,
-        );
-      } else {
-        color = this.interpolateColor(
-          RICOCHET_MAIN,
-          RICOCHET_DEEP,
-          (t - 0.75) / 0.25,
-        );
+    const rotation = life * 0.0005 * Math.PI;
+    for (let i = 0; i < RICO_LINE_COUNT; i++) {
+      const startAngle = (i * Math.PI * 2) / RICO_LINE_COUNT + rotation;
+      // 起点：距中心 0.3R
+      let x = Math.cos(startAngle) * radius * 0.3;
+      let y = Math.sin(startAngle) * radius * 0.3;
+      let angle = startAngle;
+      // 3 段反射
+      for (let seg = 0; seg < RICO_BOUNCE_SEGMENTS; seg++) {
+        const len = radius * 0.25;
+        const endX = x + Math.cos(angle) * len;
+        const endY = y + Math.sin(angle) * len;
+        // 反射线（弹道发光）
+        g.moveTo(x, y);
+        g.lineTo(endX, endY);
+        g.stroke({ color: palette.glow, width: 1.5, alpha: 0.7 });
+        // 端点节点（金色）
+        g.circle(endX, endY, Math.max(0.5, 2));
+        g.fill({ color: RICO_NODE, alpha: 0.85 });
+        // 反射角标记（在端点画小弧）
+        g.arc(endX, endY, Math.max(0.5, 4), angle - 0.5, angle + 0.5);
+        g.stroke({ color: RICO_ANGLE, width: 1, alpha: 0.5 });
+        // 反射（角度 + 90° 偏转，奇偶线号反向扰动）
+        angle = angle + Math.PI / 2 + (i % 2 === 0 ? 0.3 : -0.3);
+        x = endX; y = endY;
       }
-      const alpha = (1 - t) * 0.22;
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
     }
-
-    // 弹射主环：深褐橙描边 + 主橙金主环 + 高亮内环
-    g.circle(0, 0, radius);
-    g.stroke({ color: RICOCHET_DEEP, width: 1.5, alpha: 0.6 });
-    g.circle(0, 0, radius * 0.97);
-    g.stroke({ color: RICOCHET_MAIN, width: 1, alpha: 0.7 });
-    g.circle(0, 0, radius * 0.93);
-    g.stroke({ color: RICOCHET_HIGHLIGHT, width: 0.4, alpha: 0.5 });
-
-    // 中心核：白色实心圆 r=4 + 弹射青外环 r=6
-    g.circle(0, 0, 6);
-    g.stroke({ color: RICOCHET_CYAN, width: 1, alpha: 0.8 });
-    g.circle(0, 0, 4);
-    g.fill({ color: RICOCHET_WHITE, alpha: 1 });
   }
 
-  /**
-   * 绘制多层叠加发光反弹线：6 条弹射轨迹（每条多段反弹），双层叠加发光
-   * 由 ricochetGraphics 独立承担旋转动画
-   */
-  private drawRicochetLines(g: PIXI.Graphics, radius: number): void {
+  /** 绘制中心反射核心（8 层径向渐变 + 白色中心核） */
+  private drawFieldCore(g: PIXI.Graphics, radius: number, palette: Palette): void {
     g.clear();
-    const lineR = radius * 0.95;
-    // 6 条反弹线均匀分布起始角
-    for (let i = 0; i < RICOCHET_LINE_COUNT; i++) {
-      const baseAngle =
-        (i * Math.PI * 2) / RICOCHET_LINE_COUNT +
-        this.ricochetJitter(i) * 0.2;
-      // 生成反弹点序列：从中心向外，每次反弹角度反射
-      const pts: [number, number][] = [[0, 0]];
-      let curAngle = baseAngle;
-      let curR = lineR * 0.25;
-      for (let s = 0; s < RICOCHET_BOUNCE_SEGMENTS; s++) {
-        pts.push([Math.cos(curAngle) * curR, Math.sin(curAngle) * curR]);
-        // 反弹：角度反射 + 半径递增（弹射向外）
-        curAngle = -curAngle + this.ricochetJitter(i * 10 + s) * 0.5;
-        curR = Math.min(lineR, curR + lineR * 0.3);
-      }
-      // 弹射青外层发光（粗）
-      g.moveTo(pts[0][0], pts[0][1]);
-      for (let s = 1; s < pts.length; s++) g.lineTo(pts[s][0], pts[s][1]);
-      g.stroke({ color: RICOCHET_CYAN, width: 2.5, alpha: 0.7 });
-      // 主橙金内层发光（细）
-      g.moveTo(pts[0][0], pts[0][1]);
-      for (let s = 1; s < pts.length; s++) g.lineTo(pts[s][0], pts[s][1]);
-      g.stroke({ color: RICOCHET_LIGHT, width: 1, alpha: 0.9 });
-      // 弹射端点：白色高亮节点
-      const last = pts[pts.length - 1];
-      g.circle(last[0], last[1], 3);
-      g.fill({ color: RICOCHET_WHITE, alpha: 0.9 });
-    }
+    this.drawMultilayerCircle(
+      g, Math.max(0.5, radius * 0.3), 8,
+      (t) => this.interpolateColor(palette.highlight, palette.shadow, t),
+      (t) => (1 - t) * 0.5,
+    );
+    g.circle(0, 0, Math.max(0.5, 4));
+    g.fill({ color: RICO_WHITE });
+    g.circle(0, 0, Math.max(0.5, 6));
+    g.stroke({ color: palette.glow, width: 1, alpha: 0.8 });
   }
 
-  /**
-   * 生成弹射粒子（沿反弹线方向喷射）
-   * 利用 particlePool.emit，每帧由 update 节流调用
-   */
-  private spawnRicochetParticles(
-    x: number,
-    y: number,
-    radius: number,
-    color: number,
-  ): void {
-    const s = this.scale;
+  /** 弹道余晖粒子（沿反射路径喷射，利用 tintStart/tintEnd 渐变） */
+  private spawnTrailParticles(f: ActiveRicochetField): void {
     for (let i = 0; i < 2; i++) {
       const angle = Math.random() * Math.PI * 2;
-      // 从核心附近出发
-      const startDist = radius * s * (0.15 + Math.random() * 0.15);
-      const px = x + Math.cos(angle) * startDist;
-      const py = y + Math.sin(angle) * startDist;
-      // 沿放射方向喷射速度（px/s），表现弹射感
-      const speed = (28 + Math.random() * 20) * s;
+      const dist = Math.random() * f.radius * 0.7;
       this.particlePool.emit({
-        x: px,
-        y: py,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 1800,
-        scaleStart: 1,
-        scaleEnd: 0,
-        alphaStart: 0.85,
-        alphaEnd: 0,
-        tint: color,
-        radius: (1.4 + Math.random() * 1.4) * s,
+        x: f.x + Math.cos(angle) * dist,
+        y: f.y + Math.sin(angle) * dist,
+        vx: Math.cos(angle) * 40,
+        vy: Math.sin(angle) * 40,
+        drag: 0.9, life: 400,
+        scaleStart: 1, scaleEnd: 0,
+        alphaStart: 0.6, alphaEnd: 0,
+        tint: RICO_TRAIL,
+        tintStart: f.palette.highlight,
+        tintEnd: f.palette.dim,
+        radius: 1.5,
       });
     }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  爆发特效（蓄射→弹射→消散 三阶段动画）
-  // ══════════════════════════════════════════════════════
+  // ═══ 爆发 ═══
 
   /**
-   * 触发爆发视觉效果
+   * 触发弹射风暴爆发
    * @param playerId 玩家 ID
    * @param x 逻辑坐标 X
    * @param y 逻辑坐标 Y
-   * @param radius 爆发范围（逻辑 px）
-   * @param themeColor 主题色
-   * @param durationMs 持续时间（ms），默认 5000
+   * @param radius 爆发半径（逻辑 px）
+   * @param themeColor 主题色（默认变奏者橙金）
+   * @param durationMs 爆发持续时间（ms，默认 1500）
    */
   triggerBurst(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = RICOCHET_MAIN,
+    themeColor: number = RICO_TRAIL,
     durationMs?: number,
   ): void {
     // 若已存在，先销毁旧实例
-    const old = this.activeBursts.get(playerId);
-    if (old) {
-      this.fieldContainer.removeChild(old.container);
-      old.container.destroy({ children: true });
-    }
+    const existing = this.activeBursts.get(playerId);
+    if (existing) this.removeBurstInstance(existing);
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 1. 弹射核心（8 层径向渐变 + 中心核）
+    const bladeGraphics = new PIXI.Graphics();
     const coreGraphics = new PIXI.Graphics();
-    this.drawBurstCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
+    container.addChild(bladeGraphics, coreGraphics);
 
-    // 2. 反弹线爆发（多层叠加发光反弹线）
-    const ricochetGraphics = new PIXI.Graphics();
-    this.drawRicochetLines(ricochetGraphics, radius * 0.85);
-    container.addChild(ricochetGraphics);
-
-    // 3. 弹射环（双层细高亮环）
-    const ringGraphics = new PIXI.Graphics();
-    this.drawBurstRing(ringGraphics, radius);
-    container.addChild(ringGraphics);
-
-    this.fieldContainer.addChild(container);
-
-    const burst: ActiveBurst = {
-      container,
-      coreGraphics,
-      ricochetGraphics,
-      ringGraphics,
-      life: 0,
-      maxLife: durationMs ?? 5000,
-      themeColor,
-      radius,
+    const burst: ActiveRicochetBurst = {
+      container, life: 0, maxLife: durationMs ?? 1500, themeColor, radius,
+      particleTimer: 0, palette,
+      bladeGraphics, coreGraphics, x, y,
     };
     this.activeBursts.set(playerId, burst);
   }
 
-  /**
-   * 绘制爆发弹射核心：8 层同心圆（白→高亮→浅橙→主橙金→深褐橙）+ 中心核
-   */
-  private drawBurstCore(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    const coreR = radius * 0.6;
+  // ═══ 三阶段钩子 ═══
 
-    // 8 层同心圆叠加
-    for (let i = 0; i < 8; i++) {
-      const t = i / 7;
-      const r = coreR * (0.1 + 0.9 * t);
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(RICOCHET_WHITE, RICOCHET_HIGHLIGHT, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(
-          RICOCHET_HIGHLIGHT,
-          RICOCHET_LIGHT,
-          (t - 0.25) / 0.25,
-        );
-      } else if (t < 0.75) {
-        color = this.interpolateColor(
-          RICOCHET_LIGHT,
-          RICOCHET_MAIN,
-          (t - 0.5) / 0.25,
-        );
-      } else {
-        color = this.interpolateColor(
-          RICOCHET_MAIN,
-          RICOCHET_DEEP,
-          (t - 0.75) / 0.25,
-        );
-      }
-      const alpha = (1 - t) * 0.28;
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
+  /** 阶段1 蓄压（0-15%T）：反射线收缩汇聚，核心蓄压显现 */
+  protected phase1Charge(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveRicochetBurst;
+    const ease = this.easeInCubic(t);
+    // 反射线收缩汇聚（6 条短线指向中心）
+    b.bladeGraphics.clear();
+    const r = b.radius * 0.3 * (1 - ease * 0.5);
+    for (let i = 0; i < RICO_LINE_COUNT; i++) {
+      const angle = (i * Math.PI * 2) / RICO_LINE_COUNT;
+      const endX = Math.cos(angle) * r;
+      const endY = Math.sin(angle) * r;
+      b.bladeGraphics.moveTo(0, 0);
+      b.bladeGraphics.lineTo(endX, endY);
+      b.bladeGraphics.stroke({ color: b.palette.glow, width: 1.5, alpha: 0.6 * (1 - t * 0.3) });
     }
-
-    // 中心核 r=6
-    g.circle(0, 0, 6);
-    g.fill({ color: RICOCHET_WHITE, alpha: 1 });
-
-    // 弹射青边缘辉光
-    g.circle(0, 0, 8);
-    g.stroke({ color: RICOCHET_CYAN, width: 1.5, alpha: 0.8 });
-  }
-
-  /**
-   * 绘制弹射环：双层细高亮环（主橙金 + 弹射青）
-   */
-  private drawBurstRing(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    g.circle(0, 0, radius);
-    g.stroke({ color: RICOCHET_LIGHT, width: 0.6, alpha: 0.7 });
-    g.circle(0, 0, radius * 0.95);
-    g.stroke({ color: RICOCHET_CYAN, width: 0.3, alpha: 0.5 });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  更新循环
-  // ══════════════════════════════════════════════════════
-
-  /** 每帧更新（由 EffectRenderer 调用，dt 单位 ms） */
-  update(dt: number): void {
-    // ── 弹射轨迹：核心呼吸 + 反弹线旋转 + 弹射粒子 ──
-    this.activeRicochets.forEach((ricochet) => {
-      ricochet.life += dt;
-      // 核心呼吸 scale 1.0↔1.05（2s 周期）
-      const breath = 1 + 0.05 * Math.sin(ricochet.life * 0.001 * Math.PI);
-      ricochet.coreGraphics.scale.set(breath);
-      // 核心脉动 alpha 0.7↔0.95
-      const pulse = 0.8 + 0.15 * Math.sin(ricochet.life * 0.001 * Math.PI);
-      ricochet.coreGraphics.alpha = pulse;
-      // 反弹线旋转 0.5 转/秒（弹射轨迹流动感）
-      ricochet.ricochetGraphics.rotation += dt * 0.001 * Math.PI;
-      // 反弹线高频闪烁 alpha 0.5↔1.0（弹射脉冲感）
-      ricochet.ricochetGraphics.alpha =
-        0.75 + 0.25 * Math.sin(ricochet.life * 0.004 * Math.PI * 2);
-      // 弹射粒子：每 1.2s 生成 2 个
-      ricochet.particleTimer += dt;
-      if (ricochet.particleTimer > 1200) {
-        ricochet.particleTimer = 0;
-        this.spawnRicochetParticles(
-          ricochet.x,
-          ricochet.y,
-          ricochet.radius,
-          RICOCHET_CYAN,
-        );
-      }
-    });
-
-    // ── 爆发：三阶段动画（蓄射→弹射→消散） ──
-    this.activeBursts.forEach((burst, playerId) => {
-      burst.life += dt;
-      const T = burst.maxLife;
-      if (burst.life >= T) {
-        this.removeBurst(playerId);
-        return;
-      }
-      const phase1End = T * 0.15; // 蓄射阶段
-      const phase2End = T * 0.35; // 弹射阶段
-
-      if (burst.life < phase1End) {
-        // 阶段1 蓄射：核心收缩 scale 1.0→0.4(easeInCubic)，反弹线汇聚收缩，环未展开
-        const t = burst.life / phase1End;
-        const eased = this.easeInCubic(t);
-        burst.coreGraphics.scale.set(1.0 - 0.6 * eased); // 1.0 → 0.4 蓄压收缩
-        burst.coreGraphics.alpha = 1.0 - 0.2 * t;
-        // 反弹线收缩汇聚 scale 1.0→0.3
-        burst.ricochetGraphics.scale.set(1.0 - 0.7 * eased);
-        burst.ricochetGraphics.alpha = 1.0 - 0.3 * t;
-        burst.ricochetGraphics.rotation += dt * 0.008 * Math.PI; // 快速蓄压旋转
-        burst.ringGraphics.alpha = 0;
-        burst.ringGraphics.scale.set(0.3);
-      } else if (burst.life < phase2End) {
-        // 阶段2 弹射：反弹线爆发扩张 scale 0.3→1.5(easeOutCubic)，核心爆发，环展开
-        const t = (burst.life - phase1End) / (phase2End - phase1End);
-        const eased = this.easeOutCubic(t);
-        // 反弹线弹射扩张 0.3 → 1.5
-        burst.ricochetGraphics.scale.set(0.3 + 1.2 * eased);
-        burst.ricochetGraphics.alpha = 0.7 + 0.3 * t;
-        burst.ricochetGraphics.rotation += dt * 0.012 * Math.PI; // 快速弹射旋转
-        // 核心爆发 scale 0.4→1.2
-        burst.coreGraphics.scale.set(0.4 + 0.8 * eased);
-        burst.coreGraphics.alpha = 0.8 + 0.2 * t;
-        // 环展开 scale 0.3→1.0
-        burst.ringGraphics.scale.set(0.3 + 0.7 * eased);
-        burst.ringGraphics.alpha = t;
-      } else {
-        // 阶段3 消散：反弹线渐隐扩散，环扩散消散，核心渐隐
-        const t = (burst.life - phase2End) / (T - phase2End);
-        burst.ricochetGraphics.alpha = 1.0 - t;
-        burst.ricochetGraphics.scale.set(1.5 + 0.5 * t); // 继续扩散
-        burst.ricochetGraphics.rotation += dt * 0.004 * Math.PI;
-        burst.ringGraphics.scale.set(1.0 + 1.0 * t);
-        burst.ringGraphics.alpha = 1.0 - t;
-        burst.coreGraphics.alpha = 1.0 - 0.7 * t;
-        burst.coreGraphics.scale.set(1.2 - 0.2 * t); // 略微收缩
-      }
-    });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  移除与清理
-  // ══════════════════════════════════════════════════════
-
-  /** 移除爆发特效 */
-  removeBurst(playerId: string): void {
-    const burst = this.activeBursts.get(playerId);
-    if (burst) {
-      this.fieldContainer.removeChild(burst.container);
-      burst.container.destroy({ children: true });
-      this.activeBursts.delete(playerId);
-    }
-  }
-
-  /** 清除所有特效（不销毁渲染器） */
-  clear(): void {
-    this.activeRicochets.forEach((_, playerId) =>
-      this.removeRicochet(playerId),
+    // 核心蓄压显现
+    b.coreGraphics.clear();
+    this.drawMultilayerCircle(
+      b.coreGraphics, Math.max(0.5, b.radius * 0.1 * ease), 6,
+      (ti) => this.interpolateColor(b.palette.highlight, b.palette.shadow, ti),
+      (ti) => (1 - ti) * 0.6 * ease,
     );
-    this.activeBursts.forEach((_, playerId) => this.removeBurst(playerId));
   }
 
-  destroy(): void {
-    this.clear();
+  /** 阶段2 弹射（15%-30%T）：12 条弹道齐射 + 反射网络 + 中心爆炸 */
+  protected phase2Burst(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveRicochetBurst;
+    const ease = this.easeOutCubic(t);
+    // 手动变换顶点（避免 g.rotation 在循环内只保留末帧 bug）
+    const rotation = b.life * 0.002;
+    const len = b.radius * ease;
+    // 12 条弹道齐射
+    b.bladeGraphics.clear();
+    for (let i = 0; i < RICO_SALVO_COUNT; i++) {
+      const angle = (i * Math.PI * 2) / RICO_SALVO_COUNT + rotation;
+      const endX = Math.cos(angle) * len;
+      const endY = Math.sin(angle) * len;
+      // 弹道
+      b.bladeGraphics.moveTo(0, 0);
+      b.bladeGraphics.lineTo(endX, endY);
+      b.bladeGraphics.stroke({ color: b.palette.glow, width: 2, alpha: ease });
+      // 弹头
+      b.bladeGraphics.circle(endX, endY, Math.max(0.5, 3));
+      b.bladeGraphics.fill({ color: b.palette.highlight, alpha: ease });
+    }
+    // 反射网络（连接相邻外端点）
+    for (let i = 0; i < RICO_SALVO_COUNT; i++) {
+      const next = (i + 1) % RICO_SALVO_COUNT;
+      const angle1 = (i * Math.PI * 2) / RICO_SALVO_COUNT + rotation;
+      const angle2 = (next * Math.PI * 2) / RICO_SALVO_COUNT + rotation;
+      b.bladeGraphics.moveTo(Math.cos(angle1) * len, Math.sin(angle1) * len);
+      b.bladeGraphics.lineTo(Math.cos(angle2) * len, Math.sin(angle2) * len);
+      b.bladeGraphics.stroke({ color: b.palette.dim, width: 0.8, alpha: ease * 0.5 });
+    }
+    // 中心爆炸
+    b.coreGraphics.clear();
+    this.drawMultilayerCircle(
+      b.coreGraphics, Math.max(0.5, b.radius * 0.15 * ease), 8,
+      (ti) => this.interpolateColor(b.palette.highlight, b.palette.shadow, ti),
+      (ti) => (1 - ti) * ease,
+    );
+    // 弹道余晖粒子（节流：固定步长 16ms，避免 b.life 累加 bug）
+    b.particleTimer += 16;
+    if (b.particleTimer > 80) {
+      b.particleTimer = 0;
+      this.spawnBurstParticles(b, 2);
+    }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  工具方法
-  // ══════════════════════════════════════════════════════
-
-  /**
-   * 确定性伪随机抖动（基于种子，保证反弹轨迹形态稳定）
-   * 返回 [-1, 1] 范围
-   */
-  private ricochetJitter(seed: number): number {
-    // 简单哈希：sin 折叠，避免使用 Math.random（保证可复现）
-    const v = Math.sin(seed * 12.9898) * 43758.5453;
-    return (v - Math.floor(v)) * 2 - 1;
+  /** 阶段3 余波（30%-100%T）：弹道消散，反射网络淡出 */
+  protected phase3Diffuse(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveRicochetBurst;
+    const ease = this.easeOutCubic(t);
+    // 弹道消散（手动变换顶点）
+    b.bladeGraphics.clear();
+    const rotation = b.life * 0.002;
+    const len = b.radius * (1 + ease * 0.3);
+    for (let i = 0; i < RICO_SALVO_COUNT; i++) {
+      const angle = (i * Math.PI * 2) / RICO_SALVO_COUNT + rotation;
+      const endX = Math.cos(angle) * len;
+      const endY = Math.sin(angle) * len;
+      b.bladeGraphics.moveTo(0, 0);
+      b.bladeGraphics.lineTo(endX, endY);
+      b.bladeGraphics.stroke({ color: b.palette.glow, width: 1.5, alpha: (1 - ease) * 0.5 });
+    }
+    // 中心爆炸淡出
+    b.coreGraphics.clear();
+    this.drawMultilayerCircle(
+      b.coreGraphics, Math.max(0.5, b.radius * 0.15 * (1 - ease * 0.5)), 6,
+      (ti) => this.interpolateColor(b.palette.highlight, b.palette.shadow, ti),
+      (ti) => (1 - ti) * (1 - ease) * 0.6,
+    );
   }
 
-  /** 颜色插值（from → to，t ∈ [0,1]） */
-  private interpolateColor(from: number, to: number, t: number): number {
-    const fr = (from >> 16) & 0xff;
-    const fg = (from >> 8) & 0xff;
-    const fb = from & 0xff;
-    const tr = (to >> 16) & 0xff;
-    const tg = (to >> 8) & 0xff;
-    const tb = to & 0xff;
-    const r = Math.round(fr + (tr - fr) * t);
-    const g = Math.round(fg + (tg - fg) * t);
-    const b = Math.round(fb + (tb - fb) * t);
-    return (r << 16) | (g << 8) | b;
+  /** 弹道余晖粒子（爆发期，带 tintStart/tintEnd 渐变 + 阻力衰减） */
+  private spawnBurstParticles(b: ActiveRicochetBurst, count: number): void {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 50 + Math.random() * 60;
+      this.particlePool.emit({
+        x: b.x, y: b.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        drag: 0.85, life: 500,
+        scaleStart: 1.2, scaleEnd: 0,
+        alphaStart: 0.7, alphaEnd: 0,
+        tint: RICO_TRAIL,
+        tintStart: b.palette.highlight,
+        tintEnd: b.palette.dim,
+        radius: 1.8,
+      });
+    }
   }
 
-  /** easeOutCubic 缓动 */
-  private easeOutCubic(t: number): number {
-    return 1 - Math.pow(1 - t, 3);
+  // ═══ 生命周期 ═══
+
+  update(dt: number): void {
+    // 更新反弹场
+    this.activeFields.forEach((f) => {
+      f.life += dt;
+      this.drawRicochetLines(f.lineGraphics, f.radius, f.palette, f.life);
+      // 核心呼吸
+      const breath = 1 + 0.05 * Math.sin(f.life * 0.002 * Math.PI);
+      f.coreGraphics.scale.set(breath);
+      // 弹道余晖粒子
+      f.particleTimer += dt;
+      if (f.particleTimer > 200) {
+        f.particleTimer = 0;
+        this.spawnTrailParticles(f);
+      }
+    });
+
+    // 更新爆发（三阶段调度）
+    const expired: string[] = [];
+    this.activeBursts.forEach((b, key) => {
+      if (this.runBurstAnimation(b, dt)) expired.push(key);
+    });
+    for (const key of expired) {
+      const b = this.activeBursts.get(key);
+      if (b) this.removeBurstInstance(b);
+      this.activeBursts.delete(key);
+    }
   }
 
-  /** easeInCubic 缓动 */
-  private easeInCubic(t: number): number {
-    return t * t * t;
+  private removeBurstInstance(b: ActiveRicochetBurst): void {
+    this.container.removeChild(b.container);
+    b.container.destroy({ children: true });
+  }
+
+  protected onScaleChange(scale: number): void {
+    this.activeFields.forEach((f) => { if (!f.container.destroyed) f.container.scale.set(scale); });
+    this.activeBursts.forEach((b) => { if (!b.container.destroyed) b.container.scale.set(scale); });
+  }
+
+  clear(): void {
+    this.activeFields.forEach((f) => {
+      this.container.removeChild(f.container);
+      f.container.destroy({ children: true });
+    });
+    this.activeFields.clear();
+    this.activeBursts.forEach((b) => this.removeBurstInstance(b));
+    this.activeBursts.clear();
   }
 }

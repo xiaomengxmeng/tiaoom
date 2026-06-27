@@ -689,6 +689,20 @@ export default class FishOilRoom extends GameRoom {
         weatherColor: evt.metadata?.color,
         // 林澈 - 情绪掌控
         currentMood: evt.metadata?.currentMood,
+        // KE - 流体操控
+        fluidFlowDir: evt.metadata?.flowDir,
+        fluidTrailLength: evt.metadata?.trailLength,
+        fluidPullForce: evt.metadata?.pullForce,
+        // 梦 - 记忆回廊
+        memoryShardId: evt.metadata?.shardId,
+        memoryEchoCount: evt.metadata?.echoCount,
+        memoryOriginalDamage: evt.metadata?.originalDamage,
+        memoryResonanceStacks: evt.metadata?.resonanceStacks,
+        // 陈厌孑 - 无限折叠
+        foldLayer: evt.metadata?.foldLayer,
+        foldDodgeSuccess: evt.metadata?.dodgeSuccess,
+        foldCount: evt.metadata?.foldCount,
+        foldDisplacementRange: evt.metadata?.displacementRange,
       });
     }
     return result;

@@ -20,6 +20,9 @@ import { DischargeCatWeapon } from '../skills/weapons/DischargeCatWeapon';
 import { PrecognitiveLensWeapon } from '../skills/weapons/PrecognitiveLensWeapon';
 import { EmotionalWeatherWeapon } from '../skills/weapons/EmotionalWeatherWeapon';
 import { EmotionMasteryWeapon } from '../skills/weapons/EmotionMasteryWeapon';
+import { FluidMasteryWeapon } from '../skills/weapons/FluidMasteryWeapon';
+import { MemoryCorridorWeapon } from '../skills/weapons/MemoryCorridorWeapon';
+import { InfiniteFoldWeapon } from '../skills/weapons/InfiniteFoldWeapon';
 
 // ── 武器元信息（工厂模式） ──────────────────────────────────
 export interface WeaponEntry {
@@ -193,6 +196,34 @@ export const REGISTRY: Record<string, WeaponEntry> = {
     difficulty: 2,
     iconId: 'game-icons:sparkles',
     factory: () => new EmotionMasteryWeapon(),
+  },
+  // ── 联动角色扩展 ──────────────────────────────
+  // ── KE - 流体操控 ──────────────────────────
+  [WeaponId.FLUID_MASTERY]: {
+    id: WeaponId.FLUID_MASTERY,
+    name: WeaponName.FLUID_MASTERY,
+    school: School.WILD,
+    difficulty: 2,
+    iconId: 'game-icons:water-flow',
+    factory: () => new FluidMasteryWeapon(),
+  },
+  // ── 梦 - 记忆回廊 ──────────────────────────
+  [WeaponId.MEMORY_CORRIDOR]: {
+    id: WeaponId.MEMORY_CORRIDOR,
+    name: WeaponName.MEMORY_CORRIDOR,
+    school: School.WILD,
+    difficulty: 3,
+    iconId: 'game-icons:memory',
+    factory: () => new MemoryCorridorWeapon(),
+  },
+  // ── 陈厌孑 - 无限折叠 ──────────────────────────
+  [WeaponId.INFINITE_FOLD]: {
+    id: WeaponId.INFINITE_FOLD,
+    name: WeaponName.INFINITE_FOLD,
+    school: School.WILD,
+    difficulty: 3,
+    iconId: 'game-icons:folded-paper',
+    factory: () => new InfiniteFoldWeapon(),
   },
 };
 

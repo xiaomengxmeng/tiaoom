@@ -238,6 +238,24 @@ export class CyberFishRenderer {
     weatherColor?: number;
     /** 林澈：当前心境 */
     currentMood?: string;
+    /** KE：流体方向（弧度） */
+    flowDir?: number;
+    /** KE：漩涡牵引力 */
+    pullForce?: number;
+    /** 梦：回响数量 */
+    echoCount?: number;
+    /** 梦：记忆碎片 ID */
+    shardId?: string;
+    /** 梦：原始伤害值 */
+    originalDamage?: number;
+    /** 梦：共振层数 */
+    resonanceStacks?: number;
+    /** 陈厌孑：折叠层数 */
+    foldLayer?: number;
+    /** 陈厌孑：闪避是否成功 */
+    dodgeSuccess?: boolean;
+    /** 陈厌孑：折叠次数 */
+    foldCount?: number;
   }): void {
     // 映射所有坐标参数
     const mapCfg: typeof config & Record<string, any> = { ...config };
@@ -555,6 +573,112 @@ export class CyberFishRenderer {
             config.playerId ?? 'unknown',
             mapCfg.x, mapCfg.y,
             themeColor,
+          );
+        }
+        break;
+      case VisualEventType.FLUID_MASTERY_TRAIL:
+        // KE 水流尾迹
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerFluidTrail(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 45,
+            config.flowDir ?? 0,
+            themeColor ?? config.factionColor,
+          );
+        }
+        break;
+      case VisualEventType.FLUID_MASTERY_VORTEX:
+        // KE 漩涡牵引
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerFluidVortex(
+            config.targetId ?? '',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 45,
+            config.pullForce ?? 0.5,
+            themeColor ?? config.factionColor,
+          );
+        }
+        break;
+      case VisualEventType.FLUID_MASTERY_BURST:
+        // KE 水龙卷爆发
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerFluidBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 220,
+            themeColor ?? config.factionColor,
+          );
+        }
+        break;
+      case VisualEventType.MEMORY_CORRIDOR_ECHO:
+        // 梦回响光环
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerMemoryEcho(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 50,
+            config.echoCount ?? 0,
+            config.shardId ?? '',
+            themeColor ?? config.factionColor,
+          );
+        }
+        break;
+      case VisualEventType.MEMORY_CORRIDOR_RESONANCE:
+        // 梦历史共振
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerMemoryResonance(
+            config.targetId ?? '',
+            mapCfg.x, mapCfg.y,
+            config.resonanceStacks ?? 1,
+            themeColor ?? config.factionColor,
+          );
+        }
+        break;
+      case VisualEventType.MEMORY_CORRIDOR_BURST:
+        // 梦记忆洪流爆发
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerMemoryBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 200,
+            config.echoCount ?? 0,
+            themeColor ?? config.factionColor,
+          );
+        }
+        break;
+      case VisualEventType.INFINITE_FOLD_DODGE:
+        // 陈厌孑空间闪避
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerFoldDodge(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 40,
+            config.foldLayer ?? 1,
+            config.dodgeSuccess ?? false,
+            themeColor ?? config.factionColor,
+          );
+        }
+        break;
+      case VisualEventType.INFINITE_FOLD_REASSEMBLE:
+        // 陈厌孑空间重组
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerFoldReassemble(
+            config.targetId ?? '',
+            mapCfg.x, mapCfg.y,
+            config.foldCount ?? 1,
+            themeColor ?? config.factionColor,
+          );
+        }
+        break;
+      case VisualEventType.INFINITE_FOLD_BURST:
+        // 陈厌孑维度坍缩爆发
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerFoldBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 180,
+            themeColor ?? config.factionColor,
           );
         }
         break;

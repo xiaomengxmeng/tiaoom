@@ -553,6 +553,112 @@ export function useFishOilBattle(
           });
         }
         break;
+      case VisualEventType.FLUID_MASTERY_TRAIL:
+        // KE 水流尾迹
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 45,
+            flowDir: data.fluidFlowDir ?? 0,
+          });
+        }
+        break;
+      case VisualEventType.FLUID_MASTERY_VORTEX:
+        // KE 漩涡牵引
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            targetId: data.targetId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 45,
+            pullForce: data.fluidPullForce ?? 0.5,
+          });
+        }
+        break;
+      case VisualEventType.FLUID_MASTERY_BURST:
+        // KE 水龙卷爆发
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 220,
+          });
+        }
+        break;
+      case VisualEventType.MEMORY_CORRIDOR_ECHO:
+        // 梦回响光环
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 50,
+            echoCount: data.memoryEchoCount ?? 0,
+            shardId: data.memoryShardId,
+          });
+        }
+        break;
+      case VisualEventType.MEMORY_CORRIDOR_RESONANCE:
+        // 梦历史共振
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            targetId: data.targetId,
+            x: data.x, y: data.y,
+            resonanceStacks: data.memoryResonanceStacks ?? 1,
+          });
+        }
+        break;
+      case VisualEventType.MEMORY_CORRIDOR_BURST:
+        // 梦记忆洪流爆发
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            echoCount: data.memoryEchoCount ?? 0,
+          });
+        }
+        break;
+      case VisualEventType.INFINITE_FOLD_DODGE:
+        // 陈厌孑空间闪避
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 40,
+            foldLayer: data.foldLayer ?? 1,
+            dodgeSuccess: data.foldDodgeSuccess ?? false,
+          });
+        }
+        break;
+      case VisualEventType.INFINITE_FOLD_REASSEMBLE:
+        // 陈厌孑空间重组
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            targetId: data.targetId,
+            x: data.x, y: data.y,
+            foldCount: data.foldCount ?? 1,
+          });
+        }
+        break;
+      case VisualEventType.INFINITE_FOLD_BURST:
+        // 陈厌孑维度坍缩爆发
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 180,
+          });
+        }
+        break;
       case VisualEventType.GLOBAL_EFFECT:
         if (rendererRef.value) {
           rendererRef.value.handleGlobalEffect(data);

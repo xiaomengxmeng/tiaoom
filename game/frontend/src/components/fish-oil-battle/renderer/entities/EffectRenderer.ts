@@ -42,6 +42,15 @@ import {
 import {
   EmotionMasteryRenderer,
 } from './EmotionMasteryRenderer';
+import {
+  FluidMasteryRenderer,
+} from './FluidMasteryRenderer';
+import {
+  MemoryCorridorRenderer,
+} from './MemoryCorridorRenderer';
+import {
+  InfiniteFoldRenderer,
+} from './InfiniteFoldRenderer';
 import type {
   ShockwaveVisualConfig,
   FirewallVisualConfig,
@@ -88,6 +97,9 @@ export class EffectRenderer {
   private precognitiveLensRenderer: PrecognitiveLensRenderer;
   private emotionalWeatherRenderer: EmotionalWeatherRenderer;
   private emotionMasteryRenderer: EmotionMasteryRenderer;
+  private fluidMasteryRenderer: FluidMasteryRenderer;
+  private memoryCorridorRenderer: MemoryCorridorRenderer;
+  private infiniteFoldRenderer: InfiniteFoldRenderer;
 
   // ── 形状特效池 ────────────────────────────────────────
   private shapeEffectPool: ShapeEffectPool;
@@ -143,6 +155,13 @@ export class EffectRenderer {
     // 情绪掌控渲染器
     this.emotionMasteryRenderer = new EmotionMasteryRenderer(fieldContainer, entityContainer);
 
+    // 流体操控渲染器（KE）
+    this.fluidMasteryRenderer = new FluidMasteryRenderer(fieldContainer, particlePool);
+    // 记忆回廊渲染器（梦）
+    this.memoryCorridorRenderer = new MemoryCorridorRenderer(fieldContainer, particlePool);
+    // 无限折叠渲染器（陈厌孑）
+    this.infiniteFoldRenderer = new InfiniteFoldRenderer(fieldContainer, particlePool);
+
     // 初始化形状特效池
     this.shapeEffectPool = new ShapeEffectPool(fieldContainer, 20);
   }
@@ -166,6 +185,9 @@ export class EffectRenderer {
     this.precognitiveLensRenderer.setScale(s);
     this.emotionalWeatherRenderer.setScale(s);
     this.emotionMasteryRenderer.setScale(s);
+    this.fluidMasteryRenderer.setScale(s);
+    this.memoryCorridorRenderer.setScale(s);
+    this.infiniteFoldRenderer.setScale(s);
   }
 
   // ════════════════════════════════════════
@@ -843,6 +865,216 @@ export class EffectRenderer {
   }
 
   // ══════════════════════════════════════════════════════
+  //  公开 API：流体操控（KE）
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * 从 WeaponRangeConfig 构建流体操控视觉配置
+   */
+  private buildFluidMasteryVisualCfg() {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.FLUID_MASTERY];
+    return {
+      trailRadius: rc?.damageRadius ?? 45,
+      burstRadius: rc?.aoeMaxRadius ?? 220,
+      burstDurationMs: (rc?.burstDurationSec ?? 4) * 1000,
+    };
+  }
+
+  /** 触发水流尾迹视觉效果（常驻光环） */
+  triggerFluidTrail(
+    playerId: string,
+    x: number,
+    y: number,
+    radius: number,
+    flowDir: number,
+    themeColor?: number,
+  ): void {
+    this.fluidMasteryRenderer.triggerTrail(playerId, x, y, radius, flowDir, themeColor);
+  }
+
+  /** 更新水流尾迹位置与流向 */
+  updateFluidTrail(playerId: string, x: number, y: number, flowDir: number): void {
+    this.fluidMasteryRenderer.updateTrail(playerId, x, y, flowDir);
+  }
+
+  /** 移除水流尾迹 */
+  removeFluidTrail(playerId: string): void {
+    this.fluidMasteryRenderer.removeTrail(playerId);
+  }
+
+  /** 触发漩涡牵引视觉效果 */
+  triggerFluidVortex(
+    targetId: string,
+    x: number,
+    y: number,
+    radius: number,
+    pullForce: number,
+    themeColor?: number,
+  ): void {
+    this.fluidMasteryRenderer.triggerVortex(targetId, x, y, radius, pullForce, themeColor);
+  }
+
+  /** 移除漩涡牵引 */
+  removeFluidVortex(targetId: string): void {
+    this.fluidMasteryRenderer.removeVortex(targetId);
+  }
+
+  /** 触发水龙卷爆发视觉效果 */
+  triggerFluidBurst(
+    playerId: string,
+    x: number,
+    y: number,
+    radius: number,
+    themeColor?: number,
+    durationMs?: number,
+  ): void {
+    const cfg = this.buildFluidMasteryVisualCfg();
+    this.fluidMasteryRenderer.triggerBurst(
+      playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs,
+    );
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  公开 API：记忆回廊（梦）
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * 从 WeaponRangeConfig 构建记忆回廊视觉配置
+   */
+  private buildMemoryCorridorVisualCfg() {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.MEMORY_CORRIDOR];
+    return {
+      echoRadius: rc?.damageRadius ?? 50,
+      burstRadius: rc?.aoeMaxRadius ?? 200,
+      burstDurationMs: (rc?.burstDurationSec ?? 5) * 1000,
+    };
+  }
+
+  /** 触发回响光环视觉效果（常驻光环 + FIFO 队列） */
+  triggerMemoryEcho(
+    playerId: string,
+    x: number,
+    y: number,
+    radius: number,
+    echoCount: number,
+    shardId: string,
+    themeColor?: number,
+  ): void {
+    // 渲染器 triggerEcho 的 shardId 参数为 number 占位（当前未深度使用），传 0 即可
+    void shardId;
+    this.memoryCorridorRenderer.triggerEcho(
+      playerId, x, y, radius, echoCount, 0, themeColor,
+    );
+  }
+
+  /** 更新回响光环位置与碎片数 */
+  updateMemoryEcho(playerId: string, x: number, y: number, echoCount: number): void {
+    this.memoryCorridorRenderer.updateEcho(playerId, x, y, echoCount);
+  }
+
+  /** 移除回响光环 */
+  removeMemoryEcho(playerId: string): void {
+    this.memoryCorridorRenderer.removeEcho(playerId);
+  }
+
+  /** 触发历史共振视觉效果 */
+  triggerMemoryResonance(
+    targetId: string,
+    x: number,
+    y: number,
+    resonanceStacks: number,
+    themeColor?: number,
+  ): void {
+    this.memoryCorridorRenderer.triggerResonance(targetId, x, y, resonanceStacks, themeColor);
+  }
+
+  /** 移除历史共振 */
+  removeMemoryResonance(targetId: string): void {
+    this.memoryCorridorRenderer.removeResonance(targetId);
+  }
+
+  /** 触发记忆洪流爆发视觉效果 */
+  triggerMemoryBurst(
+    playerId: string,
+    x: number,
+    y: number,
+    radius: number,
+    echoCount: number,
+    themeColor?: number,
+    durationMs?: number,
+  ): void {
+    const cfg = this.buildMemoryCorridorVisualCfg();
+    this.memoryCorridorRenderer.triggerBurst(
+      playerId, x, y, radius, echoCount, themeColor, durationMs ?? cfg.burstDurationMs,
+    );
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  公开 API：无限折叠（陈厌孑）
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * 从 WeaponRangeConfig 构建无限折叠视觉配置
+   */
+  private buildInfiniteFoldVisualCfg() {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.INFINITE_FOLD];
+    return {
+      dodgeRadius: rc?.damageRadius ?? 40,
+      burstRadius: rc?.aoeMaxRadius ?? 180,
+      burstDurationMs: (rc?.burstDurationSec ?? 3) * 1000,
+    };
+  }
+
+  /** 触发空间闪避视觉效果 */
+  triggerFoldDodge(
+    playerId: string,
+    x: number,
+    y: number,
+    radius: number,
+    foldLayer: number,
+    dodgeSuccess: boolean,
+    themeColor?: number,
+  ): void {
+    this.infiniteFoldRenderer.triggerDodge(playerId, x, y, radius, foldLayer, dodgeSuccess, themeColor);
+  }
+
+  /** 移除闪避特效 */
+  removeFoldDodge(playerId: string): void {
+    this.infiniteFoldRenderer.removeDodge(playerId);
+  }
+
+  /** 触发空间重组视觉效果 */
+  triggerFoldReassemble(
+    targetId: string,
+    x: number,
+    y: number,
+    foldCount: number,
+    themeColor?: number,
+  ): void {
+    this.infiniteFoldRenderer.triggerReassemble(targetId, x, y, foldCount, themeColor);
+  }
+
+  /** 移除空间重组特效 */
+  removeFoldReassemble(targetId: string): void {
+    this.infiniteFoldRenderer.removeReassemble(targetId);
+  }
+
+  /** 触发维度坍缩爆发视觉效果 */
+  triggerFoldBurst(
+    playerId: string,
+    x: number,
+    y: number,
+    radius: number,
+    themeColor?: number,
+    durationMs?: number,
+  ): void {
+    const cfg = this.buildInfiniteFoldVisualCfg();
+    this.infiniteFoldRenderer.triggerBurst(
+      playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs,
+    );
+  }
+
+  // ══════════════════════════════════════════════════════
   //  生命周期
   // ══════════════════════════════════════════════════════
 
@@ -855,6 +1087,15 @@ export class EffectRenderer {
 
     // 更新情绪天气渲染器（驱动"气象局特供"文字等基于 update(dt) 的生命周期）
     this.emotionalWeatherRenderer.update(dt);
+
+    // 更新流体操控渲染器（驱动水流尾迹/漩涡/水龙卷动画）
+    this.fluidMasteryRenderer.update(dt);
+
+    // 更新记忆回廊渲染器（驱动回响/共振/记忆洪流动画）
+    this.memoryCorridorRenderer.update(dt);
+
+    // 更新无限折叠渲染器（驱动闪避/重组/爆发动画）
+    this.infiniteFoldRenderer.update(dt);
 
     // 更新形状特效池
     this.shapeEffectPool.tick(dt);
@@ -888,6 +1129,9 @@ export class EffectRenderer {
     this.precognitiveLensRenderer.clear();
     this.emotionalWeatherRenderer.clear();
     this.emotionMasteryRenderer.clear();
+    this.fluidMasteryRenderer.clear();
+    this.memoryCorridorRenderer.clear();
+    this.infiniteFoldRenderer.clear();
   }
 
   destroy(): void {
@@ -906,6 +1150,9 @@ export class EffectRenderer {
     this.precognitiveLensRenderer.destroy();
     this.emotionalWeatherRenderer.destroy();
     this.emotionMasteryRenderer.destroy();
+    this.fluidMasteryRenderer.destroy();
+    this.memoryCorridorRenderer.destroy();
+    this.infiniteFoldRenderer.destroy();
     this.shapeEffectPool.destroy();
   }
 }

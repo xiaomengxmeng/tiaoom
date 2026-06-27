@@ -31,6 +31,10 @@ export enum WeaponId {
   PRECOGNITIVE_LENS = 'precognitive_lens', // 风随 - 预知透镜
   EMOTIONAL_WEATHER = 'emotional_weather', // Carzeye - 情绪天气
   EMOTION_MASTERY = 'emotion_mastery', // 林澈 - 情绪掌控
+  // ── 联动角色武器扩展 ─────────────────────────
+  FLUID_MASTERY = 'fluid_mastery',         // KE - 流体操控
+  MEMORY_CORRIDOR = 'memory_corridor',     // 梦 - 记忆回廊
+  INFINITE_FOLD = 'infinite_fold',         // 陈厌孑 - 无限折叠
 }
 
 // ── 武器名称 ─────────────────────────────────────
@@ -60,6 +64,10 @@ export enum WeaponName {
   PRECOGNITIVE_LENS = '预知透镜', // 风随
   EMOTIONAL_WEATHER = '情绪天气', // Carzeye
   EMOTION_MASTERY = '情绪掌控', // 林澈
+  // ── 联动角色武器扩展 ─────────────────────────
+  FLUID_MASTERY = '流体操控', // KE
+  MEMORY_CORRIDOR = '记忆回廊', // 梦
+  INFINITE_FOLD = '无限折叠', // 陈厌孑
 }
 
 // ── 流派 ─────────────────────────────────────────
@@ -141,6 +149,25 @@ export enum VisualEventType {
   EMOTION_MASTERY_MOOD = 'emotion_mastery_mood',
   /** 林澈 - 情绪掌控·情绪实体化爆发 */
   EMOTION_MASTERY_BURST = 'emotion_mastery_burst',
+  // ── 联动角色扩展 ───────────────────────────────
+  /** KE - 流体操控·水流尾迹 */
+  FLUID_MASTERY_TRAIL = 'fluid_mastery_trail',
+  /** KE - 流体操控·漩涡牵引 */
+  FLUID_MASTERY_VORTEX = 'fluid_mastery_vortex',
+  /** KE - 流体操控·水龙卷爆发 */
+  FLUID_MASTERY_BURST = 'fluid_mastery_burst',
+  /** 梦 - 记忆回廊·回响FIFO */
+  MEMORY_CORRIDOR_ECHO = 'memory_corridor_echo',
+  /** 梦 - 记忆回廊·历史共振 */
+  MEMORY_CORRIDOR_RESONANCE = 'memory_corridor_resonance',
+  /** 梦 - 记忆回廊·记忆洪流爆发 */
+  MEMORY_CORRIDOR_BURST = 'memory_corridor_burst',
+  /** 陈厌孑 - 无限折叠·概率闪避 */
+  INFINITE_FOLD_DODGE = 'infinite_fold_dodge',
+  /** 陈厌孑 - 无限折叠·空间重组 */
+  INFINITE_FOLD_REASSEMBLE = 'infinite_fold_reassemble',
+  /** 陈厌孑 - 无限折叠·维度坍缩爆发 */
+  INFINITE_FOLD_BURST = 'infinite_fold_burst',
   /** 形状特效（一次性） */
   SHAPE_EFFECT = 'shape',
   /** 持续形状特效（常驻，需 sustainedKey） */

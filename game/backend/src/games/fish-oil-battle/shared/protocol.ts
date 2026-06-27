@@ -173,6 +173,28 @@ export interface VisualEventData {
    * 林澈：当前心境 ('anger'|'bliss'|'happy')
    */
   currentMood?: string;
+  /** KE：流体方向（弧度） */
+  fluidFlowDir?: number;
+  /** KE：水流尾迹长度 */
+  fluidTrailLength?: number;
+  /** KE：漩涡牵引力 */
+  fluidPullForce?: number;
+  /** 梦：记忆碎片ID */
+  memoryShardId?: string;
+  /** 梦：回响数量 */
+  memoryEchoCount?: number;
+  /** 梦：原始伤害值 */
+  memoryOriginalDamage?: number;
+  /** 梦：共振层数 */
+  memoryResonanceStacks?: number;
+  /** 陈厌孑：折叠层数 */
+  foldLayer?: number;
+  /** 陈厌孑：闪避是否成功 */
+  foldDodgeSuccess?: boolean;
+  /** 陈厌孑：折叠次数 */
+  foldCount?: number;
+  /** 陈厌孑：位移范围 */
+  foldDisplacementRange?: number;
 }
 
 // ─── 游戏统计（game_end 用）───────────────

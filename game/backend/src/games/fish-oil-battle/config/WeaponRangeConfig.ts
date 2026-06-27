@@ -62,6 +62,10 @@ export interface WeaponFieldConfig {
   frostbiteDamagePerStack?: number;
   /** 标记伤害加成倍率（如预知透镜猎物标记，0.5 = +50%） */
   damageModifier?: number;
+  /** 每跳间隔（毫秒），持续伤害/效果场使用 */
+  tickIntervalMs?: number;
+  /** 速度因子（0-1，最终速度 = 原速 × slowFactor），与 slowPercent 二选一 */
+  slowFactor?: number;
 }
 
 /** 蜂巢母体专用数值配置 */
@@ -104,6 +108,8 @@ export interface WeaponTriggerCooldowns {
   hitByAttackerSec?: number;
   /** onWallHit 冷却时间（秒），0 或不填 = 无限制 */
   wallHitSec?: number;
+  /** 最小触发间隔（毫秒），通用限频 */
+  minIntervalMs?: number;
 }
 
 export interface WeaponRangeConfig {
@@ -148,6 +154,14 @@ export interface WeaponRangeConfig {
   burstWaves?: number;
   /** 单波最大命中数（冲击波） */
   maxHitsPerWave?: number;
+  /** 每次命中获得能量 */
+  energyPerHit?: number;
+  /** 爆发期间每次命中获得能量 */
+  energyPerBurstHit?: number;
+  /** 爆发消耗能量 */
+  burstEnergyCost?: number;
+  /** 爆发冷却（毫秒） */
+  cooldownMs?: number;
 }
 
 // ── 配置表 ──────────────────────────────────────────
@@ -412,5 +426,79 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
     triggerCooldowns: {
       hitTargetSec: 1.5,       // 落雷 CD 1.5 秒
     },
+  },
+
+  // ═══ 联动角色武器扩展 ═════════════════════════
+
+  // ── KE - 流体操控（水系流派）──────────────────
+  [WeaponId.FLUID_MASTERY]: {
+    damage: 8,                    // 普通伤害
+    burstDamage: 45,              // 爆发伤害
+    maxEnergy: 100,
+    energyPerHit: 12,
+    energyPerBurstHit: 25,
+    burstEnergyCost: 100,
+    damageRadius: 45,             // 水流尾迹影响半径
+    aoeMaxRadius: 220,            // 水龙卷最大范围
+    visualRadius: 45,
+    visualDurationMs: 1500,       // 尾迹持续 1.5s
+    burstDurationSec: 4,          // 爆发持续 4s
+    cooldownMs: 6000,             // 爆发冷却 6s
+    field: {
+      maxCount: 1,                // 单一水流场
+      radius: 45,
+      durationSec: 3,
+      tickIntervalMs: 500,
+      slowFactor: 0.7,            // 水流减速（速度降至 70%）
+    },
+    triggerCooldowns: { minIntervalMs: 400 },
+  },
+
+  // ── 梦 - 记忆回廊（虚空系流派）────────────────
+  [WeaponId.MEMORY_CORRIDOR]: {
+    damage: 6,                    // 低直接伤害
+    burstDamage: 50,              // 高爆发（历史共振叠加）
+    maxEnergy: 100,
+    energyPerHit: 10,
+    energyPerBurstHit: 20,
+    burstEnergyCost: 100,
+    damageRadius: 50,             // 回响范围
+    aoeMaxRadius: 200,
+    visualRadius: 50,
+    visualDurationMs: 2000,       // 回响持续 2s（FIFO 队列）
+    burstDurationSec: 5,          // 历史共振 5s
+    cooldownMs: 7000,
+    field: {
+      maxCount: 1,                // 单一回响场
+      radius: 50,
+      durationSec: 4,
+      tickIntervalMs: 600,
+      slowFactor: 0.85,
+    },
+    triggerCooldowns: { minIntervalMs: 500 },
+  },
+
+  // ── 陈厌孑 - 无限折叠（空间系流派）────────────
+  [WeaponId.INFINITE_FOLD]: {
+    damage: 10,                   // 中等直接伤害
+    burstDamage: 40,              // 空间重组伤害
+    maxEnergy: 100,
+    energyPerHit: 14,
+    energyPerBurstHit: 22,
+    burstEnergyCost: 100,
+    damageRadius: 40,             // 折叠影响半径
+    aoeMaxRadius: 180,
+    visualRadius: 40,
+    visualDurationMs: 1200,       // 闪避特效 1.2s
+    burstDurationSec: 3,          // 空间重组 3s
+    cooldownMs: 5000,
+    field: {
+      maxCount: 1,                // 单一折叠场
+      radius: 40,
+      durationSec: 2,
+      tickIntervalMs: 400,
+      slowFactor: 0.5,            // 强减速（空间扭曲，速度降至 50%）
+    },
+    triggerCooldowns: { minIntervalMs: 350 },
   },
 };

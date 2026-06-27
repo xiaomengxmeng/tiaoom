@@ -124,8 +124,8 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
   const particlePool = new ParticlePool(l2Entity, 500);
 
   // 5. 初始化特效渲染器
-  const shockwaveRenderer = new ShockwaveEffectRenderer(l3Field, logicalW, logicalH, 20);
-  const firewallRenderer = new FirewallEffectRenderer(l3Field, 16);
+  const shockwaveRenderer = new ShockwaveEffectRenderer(l3Field, logicalW, logicalH, particlePool, 20);
+  const firewallRenderer = new FirewallEffectRenderer(l3Field, particlePool, 16);
   const hiveRenderer = new HiveEffectRenderer(l2Entity, l5Hologram, particlePool, logicalW, logicalH, 60);
   const opticalSlashRenderer = new OpticalSlashEffectRenderer(l3Field, l5Hologram);
   const airRepulsionRenderer = new AirRepulsionFieldRenderer(l3Field, particlePool);

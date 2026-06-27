@@ -264,6 +264,10 @@ export class CyberFishRenderer {
     plantCount?: number;
     /** 沐里：爆发持续时间（ms） */
     durationMs?: number;
+    /** 追猎协议：追猎者位置 X（PURSUIT_PROTOCOL_MARK 专用，追踪线起点） */
+    hunterX?: number;
+    /** 追猎协议：追猎者位置 Y（PURSUIT_PROTOCOL_MARK 专用，追踪线起点） */
+    hunterY?: number;
   }): void {
     // 映射所有坐标参数
     const mapCfg: typeof config & Record<string, any> = { ...config };
@@ -273,6 +277,8 @@ export class CyberFishRenderer {
     if (config.fromY !== undefined) mapCfg.fromY = this.mapY(config.fromY);
     if (config.toX !== undefined) mapCfg.toX = this.mapX(config.toX);
     if (config.toY !== undefined) mapCfg.toY = this.mapY(config.toY);
+    if (config.hunterX !== undefined) mapCfg.hunterX = this.mapX(config.hunterX);
+    if (config.hunterY !== undefined) mapCfg.hunterY = this.mapY(config.hunterY);
 
     // 根据 playerId 获取头像主题色
     const themeColor = config.playerId
@@ -718,6 +724,198 @@ export class CyberFishRenderer {
             config.plantCount ?? 0,
             themeColor,
             config.durationMs,
+          );
+        }
+        break;
+      // ── 基础武器扩展（9 个，场 + 爆发） ──────────────
+      case VisualEventType.NANO_RIPPER_FIELD:
+        // 纳米撕裂者 - 撕裂场
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerNanoRipperField(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 60,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.NANO_RIPPER_BURST:
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerNanoRipperBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 200,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.PURSUIT_PROTOCOL_MARK:
+        // 追猎协议 - 追猎标记（x/y=目标位置，hunterX/hunterY=追猎者位置）
+        if (config.targetId && mapCfg.x !== undefined && mapCfg.y !== undefined &&
+            mapCfg.hunterX !== undefined && mapCfg.hunterY !== undefined) {
+          this.effectRenderer.triggerPursuitMark(
+            config.targetId,
+            mapCfg.x, mapCfg.y,
+            mapCfg.hunterX, mapCfg.hunterY,
+            config.radius ?? 60,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.PURSUIT_PROTOCOL_BURST:
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerPursuitBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 200,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.GRAVITY_WELL_CORE:
+        // 重力阱 - 重力核心
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerGravityCore(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 60,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.GRAVITY_WELL_BURST:
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerGravityBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 200,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.ENTROPY_DIFFUSER_FIELD:
+        // 熵增扩散器 - 熵增场
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerEntropyDiffuserField(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 60,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.ENTROPY_DIFFUSER_BURST:
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerEntropyDiffuserBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 200,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.BASTION_BUILDER_SHIELD:
+        // 堡垒构筑者 - 堡垒护盾
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerBastionShield(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 60,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.BASTION_BUILDER_BURST:
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerBastionBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 200,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.CIRCUIT_WEAVER_NETWORK:
+        // 电路编织者 - 电路网络
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerCircuitNetwork(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 60,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.CIRCUIT_WEAVER_BURST:
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerCircuitBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 200,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.QUANTUM_RIFT_FISSURE:
+        // 量子裂隙 - 裂隙
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerQuantumRift(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 60,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.QUANTUM_RIFT_BURST:
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerQuantumBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 200,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.SIZE_WARP_FIELD:
+        // 体积扭曲 - 扭曲场
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerSizeWarpField(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 60,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.SIZE_WARP_BURST:
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerSizeWarpBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 200,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.RICOCHET_CORE_TRAIL:
+        // 弹射核心 - 弹射轨迹
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerRicochetTrail(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 60,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.RICOCHET_CORE_BURST:
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerRicochetBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 200,
+            themeColor,
           );
         }
         break;

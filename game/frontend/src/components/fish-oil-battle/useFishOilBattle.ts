@@ -699,6 +699,199 @@ export function useFishOilBattle(
           rendererRef.value.handleGlobalEffect(data);
         }
         break;
+      // ── 基础武器扩展（9 个，场 + 爆发） ──────────────
+      case VisualEventType.NANO_RIPPER_FIELD:
+        // 纳米撕裂者 - 撕裂场
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value?.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 60,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.NANO_RIPPER_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.PURSUIT_PROTOCOL_MARK:
+        // 追猎协议 - 追猎标记（x/y=目标位置，tx/ty=追猎者位置）
+        if (data.targetId && data.x !== undefined && data.y !== undefined &&
+            data.tx !== undefined && data.ty !== undefined) {
+          rendererRef.value?.triggerSkillEffect({
+            type: data.type,
+            targetId: data.targetId,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            hunterX: data.tx, hunterY: data.ty,
+            radius: data.radius ?? 60,
+          });
+        }
+        break;
+      case VisualEventType.PURSUIT_PROTOCOL_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.GRAVITY_WELL_CORE:
+        // 重力阱 - 重力核心
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value?.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 60,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.GRAVITY_WELL_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.ENTROPY_DIFFUSER_FIELD:
+        // 熵增扩散器 - 熵增场
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value?.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 60,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.ENTROPY_DIFFUSER_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.BASTION_BUILDER_SHIELD:
+        // 堡垒构筑者 - 堡垒护盾
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value?.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 60,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.BASTION_BUILDER_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.CIRCUIT_WEAVER_NETWORK:
+        // 电路编织者 - 电路网络
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value?.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 60,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.CIRCUIT_WEAVER_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.QUANTUM_RIFT_FISSURE:
+        // 量子裂隙 - 裂隙
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value?.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 60,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.QUANTUM_RIFT_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.SIZE_WARP_FIELD:
+        // 体积扭曲 - 扭曲场
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value?.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 60,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.SIZE_WARP_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.RICOCHET_CORE_TRAIL:
+        // 弹射核心 - 弹射轨迹
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value?.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 60,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.RICOCHET_CORE_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            playerId: data.playerId,
+          });
+        }
+        break;
     }
   }
 

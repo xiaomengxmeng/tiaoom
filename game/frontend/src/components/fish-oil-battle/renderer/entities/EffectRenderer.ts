@@ -54,6 +54,33 @@ import {
 import {
   BotanicalPartyRenderer,
 } from './BotanicalPartyRenderer';
+import {
+  NanoRipperRenderer,
+} from './NanoRipperRenderer';
+import {
+  PursuitProtocolRenderer,
+} from './PursuitProtocolRenderer';
+import {
+  GravityWellRenderer,
+} from './GravityWellRenderer';
+import {
+  EntropyDiffuserRenderer,
+} from './EntropyDiffuserRenderer';
+import {
+  BastionBuilderRenderer,
+} from './BastionBuilderRenderer';
+import {
+  CircuitWeaverRenderer,
+} from './CircuitWeaverRenderer';
+import {
+  QuantumRiftRenderer,
+} from './QuantumRiftRenderer';
+import {
+  SizeWarpRenderer,
+} from './SizeWarpRenderer';
+import {
+  RicochetCoreRenderer,
+} from './RicochetCoreRenderer';
 import type {
   ShockwaveVisualConfig,
   FirewallVisualConfig,
@@ -70,6 +97,16 @@ import type { EmotionalWeatherVisualConfig } from './EmotionalWeatherRenderer';
 interface EntropicTouchVisualConfig {
   auraRadius: number;
   burstRadius: number;
+  burstDurationMs: number;
+}
+
+/** 基础武器通用视觉配置（场 + 爆发） */
+interface BasicWeaponVisualConfig {
+  /** 常驻场半径（逻辑 px） */
+  fieldRadius: number;
+  /** 爆发半径（逻辑 px） */
+  burstRadius: number;
+  /** 爆发持续时间（ms） */
   burstDurationMs: number;
 }
 
@@ -104,6 +141,16 @@ export class EffectRenderer {
   private memoryCorridorRenderer: MemoryCorridorRenderer;
   private infiniteFoldRenderer: InfiniteFoldRenderer;
   private botanicalPartyRenderer: BotanicalPartyRenderer;
+  // 基础武器子渲染器
+  private nanoRipperRenderer: NanoRipperRenderer;
+  private pursuitProtocolRenderer: PursuitProtocolRenderer;
+  private gravityWellRenderer: GravityWellRenderer;
+  private entropyDiffuserRenderer: EntropyDiffuserRenderer;
+  private bastionBuilderRenderer: BastionBuilderRenderer;
+  private circuitWeaverRenderer: CircuitWeaverRenderer;
+  private quantumRiftRenderer: QuantumRiftRenderer;
+  private sizeWarpRenderer: SizeWarpRenderer;
+  private ricochetCoreRenderer: RicochetCoreRenderer;
 
   // ── 形状特效池 ────────────────────────────────────────
   private shapeEffectPool: ShapeEffectPool;
@@ -173,6 +220,17 @@ export class EffectRenderer {
     // 植物伙伴派对渲染器（沐里）
     this.botanicalPartyRenderer = new BotanicalPartyRenderer(fieldContainer, particlePool);
 
+    // 基础武器渲染器（注入 fieldContainer + particlePool，由各自 update 驱动动画）
+    this.nanoRipperRenderer = new NanoRipperRenderer(fieldContainer, particlePool);
+    this.pursuitProtocolRenderer = new PursuitProtocolRenderer(fieldContainer, particlePool);
+    this.gravityWellRenderer = new GravityWellRenderer(fieldContainer, particlePool);
+    this.entropyDiffuserRenderer = new EntropyDiffuserRenderer(fieldContainer, particlePool);
+    this.bastionBuilderRenderer = new BastionBuilderRenderer(fieldContainer, particlePool);
+    this.circuitWeaverRenderer = new CircuitWeaverRenderer(fieldContainer, particlePool);
+    this.quantumRiftRenderer = new QuantumRiftRenderer(fieldContainer, particlePool);
+    this.sizeWarpRenderer = new SizeWarpRenderer(fieldContainer, particlePool);
+    this.ricochetCoreRenderer = new RicochetCoreRenderer(fieldContainer, particlePool);
+
     // 初始化形状特效池
     this.shapeEffectPool = new ShapeEffectPool(fieldContainer, 20);
   }
@@ -200,6 +258,16 @@ export class EffectRenderer {
     this.memoryCorridorRenderer.setScale(s);
     this.infiniteFoldRenderer.setScale(s);
     this.botanicalPartyRenderer.setScale(s);
+    // 基础武器渲染器统一同步缩放
+    this.nanoRipperRenderer.setScale(s);
+    this.pursuitProtocolRenderer.setScale(s);
+    this.gravityWellRenderer.setScale(s);
+    this.entropyDiffuserRenderer.setScale(s);
+    this.bastionBuilderRenderer.setScale(s);
+    this.circuitWeaverRenderer.setScale(s);
+    this.quantumRiftRenderer.setScale(s);
+    this.sizeWarpRenderer.setScale(s);
+    this.ricochetCoreRenderer.setScale(s);
   }
 
   // ════════════════════════════════════════
@@ -1165,6 +1233,193 @@ export class EffectRenderer {
   }
 
   // ══════════════════════════════════════════════════════
+  //  公开 API：基础武器（9 个）
+  // ══════════════════════════════════════════════════════
+
+  // ── 纳米撕裂者 (NANO_RIPPER) ─────────────────────────
+  private buildNanoRipperVisualCfg(): BasicWeaponVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.NANO_RIPPER];
+    return {
+      fieldRadius: rc?.damageRadius ?? 60,
+      burstRadius: rc?.aoeMaxRadius ?? 200,
+      burstDurationMs: (rc?.burstDurationSec ?? 5) * 1000,
+    };
+  }
+  triggerNanoRipperField(playerId: string, x: number, y: number, radius: number, themeColor?: number): void {
+    this.nanoRipperRenderer.triggerRipperField(playerId, x, y, radius, themeColor);
+  }
+  removeNanoRipperField(playerId: string): void {
+    this.nanoRipperRenderer.removeRipperField(playerId);
+  }
+  triggerNanoRipperBurst(playerId: string, x: number, y: number, radius: number, themeColor?: number, durationMs?: number): void {
+    const cfg = this.buildNanoRipperVisualCfg();
+    this.nanoRipperRenderer.triggerBurst(playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs);
+  }
+
+  // ── 追猎协议 (PURSUIT_PROTOCOL) ─────────────────────
+  private buildPursuitProtocolVisualCfg(): BasicWeaponVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.PURSUIT_PROTOCOL];
+    return {
+      fieldRadius: rc?.damageRadius ?? 60,
+      burstRadius: rc?.aoeMaxRadius ?? 200,
+      burstDurationMs: (rc?.burstDurationSec ?? 5) * 1000,
+    };
+  }
+  triggerPursuitMark(targetId: string, targetX: number, targetY: number, hunterX: number, hunterY: number, radius: number, themeColor?: number): void {
+    this.pursuitProtocolRenderer.triggerPursuitMark(targetId, targetX, targetY, hunterX, hunterY, radius, themeColor);
+  }
+  updatePursuitMark(targetId: string, targetX: number, targetY: number, hunterX: number, hunterY: number): void {
+    this.pursuitProtocolRenderer.updatePursuitMark(targetId, targetX, targetY, hunterX, hunterY);
+  }
+  removePursuitMark(targetId: string): void {
+    this.pursuitProtocolRenderer.removePursuitMark(targetId);
+  }
+  triggerPursuitBurst(playerId: string, x: number, y: number, radius: number, themeColor?: number, durationMs?: number): void {
+    const cfg = this.buildPursuitProtocolVisualCfg();
+    this.pursuitProtocolRenderer.triggerBurst(playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs);
+  }
+
+  // ── 重力阱 (GRAVITY_WELL) ────────────────────────────
+  private buildGravityWellVisualCfg(): BasicWeaponVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.GRAVITY_WELL];
+    return {
+      fieldRadius: rc?.damageRadius ?? 60,
+      burstRadius: rc?.aoeMaxRadius ?? 200,
+      burstDurationMs: (rc?.burstDurationSec ?? 5) * 1000,
+    };
+  }
+  triggerGravityCore(playerId: string, x: number, y: number, radius: number, themeColor?: number): void {
+    this.gravityWellRenderer.triggerGravityCore(playerId, x, y, radius, themeColor);
+  }
+  removeGravityCore(playerId: string): void {
+    this.gravityWellRenderer.removeGravityCore(playerId);
+  }
+  triggerGravityBurst(playerId: string, x: number, y: number, radius: number, themeColor?: number, durationMs?: number): void {
+    const cfg = this.buildGravityWellVisualCfg();
+    this.gravityWellRenderer.triggerBurst(playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs);
+  }
+
+  // ── 熵增扩散器 (ENTROPY_DIFFUSER) ───────────────────
+  private buildEntropyDiffuserVisualCfg(): BasicWeaponVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.ENTROPY_DIFFUSER];
+    return {
+      fieldRadius: rc?.damageRadius ?? 60,
+      burstRadius: rc?.aoeMaxRadius ?? 200,
+      burstDurationMs: (rc?.burstDurationSec ?? 5) * 1000,
+    };
+  }
+  triggerEntropyDiffuserField(playerId: string, x: number, y: number, radius: number, themeColor?: number): void {
+    this.entropyDiffuserRenderer.triggerEntropyField(playerId, x, y, radius, themeColor);
+  }
+  removeEntropyDiffuserField(playerId: string): void {
+    this.entropyDiffuserRenderer.removeEntropyField(playerId);
+  }
+  triggerEntropyDiffuserBurst(playerId: string, x: number, y: number, radius: number, themeColor?: number, durationMs?: number): void {
+    const cfg = this.buildEntropyDiffuserVisualCfg();
+    this.entropyDiffuserRenderer.triggerBurst(playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs);
+  }
+
+  // ── 堡垒构筑者 (BASTION_BUILDER) ───────────────────
+  private buildBastionBuilderVisualCfg(): BasicWeaponVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.BASTION_BUILDER];
+    return {
+      fieldRadius: rc?.damageRadius ?? 60,
+      burstRadius: rc?.aoeMaxRadius ?? 200,
+      burstDurationMs: (rc?.burstDurationSec ?? 5) * 1000,
+    };
+  }
+  triggerBastionShield(playerId: string, x: number, y: number, radius: number, themeColor?: number): void {
+    this.bastionBuilderRenderer.triggerBastion(playerId, x, y, radius, themeColor);
+  }
+  removeBastionShield(playerId: string): void {
+    this.bastionBuilderRenderer.removeBastion(playerId);
+  }
+  triggerBastionBurst(playerId: string, x: number, y: number, radius: number, themeColor?: number, durationMs?: number): void {
+    const cfg = this.buildBastionBuilderVisualCfg();
+    this.bastionBuilderRenderer.triggerBurst(playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs);
+  }
+
+  // ── 电路编织者 (CIRCUIT_WEAVER) ────────────────────
+  private buildCircuitWeaverVisualCfg(): BasicWeaponVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.CIRCUIT_WEAVER];
+    return {
+      fieldRadius: rc?.damageRadius ?? 60,
+      burstRadius: rc?.aoeMaxRadius ?? 200,
+      burstDurationMs: (rc?.burstDurationSec ?? 5) * 1000,
+    };
+  }
+  triggerCircuitNetwork(playerId: string, x: number, y: number, radius: number, themeColor?: number): void {
+    this.circuitWeaverRenderer.triggerCircuit(playerId, x, y, radius, themeColor);
+  }
+  removeCircuitNetwork(playerId: string): void {
+    this.circuitWeaverRenderer.removeCircuit(playerId);
+  }
+  triggerCircuitBurst(playerId: string, x: number, y: number, radius: number, themeColor?: number, durationMs?: number): void {
+    const cfg = this.buildCircuitWeaverVisualCfg();
+    this.circuitWeaverRenderer.triggerBurst(playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs);
+  }
+
+  // ── 量子裂隙 (QUANTUM_RIFT) ─────────────────────────
+  private buildQuantumRiftVisualCfg(): BasicWeaponVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.QUANTUM_RIFT];
+    return {
+      fieldRadius: rc?.damageRadius ?? 60,
+      burstRadius: rc?.aoeMaxRadius ?? 200,
+      burstDurationMs: (rc?.burstDurationSec ?? 5) * 1000,
+    };
+  }
+  triggerQuantumRift(playerId: string, x: number, y: number, radius: number, themeColor?: number): void {
+    this.quantumRiftRenderer.triggerRift(playerId, x, y, radius, themeColor);
+  }
+  removeQuantumRift(playerId: string): void {
+    this.quantumRiftRenderer.removeRift(playerId);
+  }
+  triggerQuantumBurst(playerId: string, x: number, y: number, radius: number, themeColor?: number, durationMs?: number): void {
+    const cfg = this.buildQuantumRiftVisualCfg();
+    this.quantumRiftRenderer.triggerBurst(playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs);
+  }
+
+  // ── 体积扭曲 (SIZE_WARP) ─────────────────────────────
+  private buildSizeWarpVisualCfg(): BasicWeaponVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.SIZE_WARP];
+    return {
+      fieldRadius: rc?.damageRadius ?? 60,
+      burstRadius: rc?.aoeMaxRadius ?? 200,
+      burstDurationMs: (rc?.burstDurationSec ?? 5) * 1000,
+    };
+  }
+  triggerSizeWarpField(playerId: string, x: number, y: number, radius: number, themeColor?: number): void {
+    this.sizeWarpRenderer.triggerWarp(playerId, x, y, radius, themeColor);
+  }
+  removeSizeWarpField(playerId: string): void {
+    this.sizeWarpRenderer.removeWarp(playerId);
+  }
+  triggerSizeWarpBurst(playerId: string, x: number, y: number, radius: number, themeColor?: number, durationMs?: number): void {
+    const cfg = this.buildSizeWarpVisualCfg();
+    this.sizeWarpRenderer.triggerBurst(playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs);
+  }
+
+  // ── 弹射核心 (RICOCHET_CORE) ────────────────────────
+  private buildRicochetCoreVisualCfg(): BasicWeaponVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.RICOCHET_CORE];
+    return {
+      fieldRadius: rc?.damageRadius ?? 60,
+      burstRadius: rc?.aoeMaxRadius ?? 200,
+      burstDurationMs: (rc?.burstDurationSec ?? 5) * 1000,
+    };
+  }
+  triggerRicochetTrail(playerId: string, x: number, y: number, radius: number, themeColor?: number): void {
+    this.ricochetCoreRenderer.triggerRicochet(playerId, x, y, radius, themeColor);
+  }
+  removeRicochetTrail(playerId: string): void {
+    this.ricochetCoreRenderer.removeRicochet(playerId);
+  }
+  triggerRicochetBurst(playerId: string, x: number, y: number, radius: number, themeColor?: number, durationMs?: number): void {
+    const cfg = this.buildRicochetCoreVisualCfg();
+    this.ricochetCoreRenderer.triggerBurst(playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs);
+  }
+
+  // ══════════════════════════════════════════════════════
   //  生命周期
   // ══════════════════════════════════════════════════════
 
@@ -1192,6 +1447,17 @@ export class EffectRenderer {
 
     // 更新植物伙伴派对渲染器（驱动植物出生/呼吸/枯萎+爆发三阶段动画）
     this.botanicalPartyRenderer.update(dt);
+
+    // 更新基础武器渲染器（驱动常驻场旋转/粒子 + 爆发三阶段动画）
+    this.nanoRipperRenderer.update(dt);
+    this.pursuitProtocolRenderer.update(dt);
+    this.gravityWellRenderer.update(dt);
+    this.entropyDiffuserRenderer.update(dt);
+    this.bastionBuilderRenderer.update(dt);
+    this.circuitWeaverRenderer.update(dt);
+    this.quantumRiftRenderer.update(dt);
+    this.sizeWarpRenderer.update(dt);
+    this.ricochetCoreRenderer.update(dt);
 
     // 更新形状特效池
     this.shapeEffectPool.tick(dt);
@@ -1229,6 +1495,16 @@ export class EffectRenderer {
     this.memoryCorridorRenderer.clear();
     this.infiniteFoldRenderer.clear();
     this.botanicalPartyRenderer.clear();
+    // 清理基础武器渲染器
+    this.nanoRipperRenderer.clear();
+    this.pursuitProtocolRenderer.clear();
+    this.gravityWellRenderer.clear();
+    this.entropyDiffuserRenderer.clear();
+    this.bastionBuilderRenderer.clear();
+    this.circuitWeaverRenderer.clear();
+    this.quantumRiftRenderer.clear();
+    this.sizeWarpRenderer.clear();
+    this.ricochetCoreRenderer.clear();
   }
 
   destroy(): void {
@@ -1251,6 +1527,16 @@ export class EffectRenderer {
     this.memoryCorridorRenderer.destroy();
     this.infiniteFoldRenderer.destroy();
     this.botanicalPartyRenderer.destroy();
+    // 销毁基础武器渲染器
+    this.nanoRipperRenderer.destroy();
+    this.pursuitProtocolRenderer.destroy();
+    this.gravityWellRenderer.destroy();
+    this.entropyDiffuserRenderer.destroy();
+    this.bastionBuilderRenderer.destroy();
+    this.circuitWeaverRenderer.destroy();
+    this.quantumRiftRenderer.destroy();
+    this.sizeWarpRenderer.destroy();
+    this.ricochetCoreRenderer.destroy();
     this.shapeEffectPool.destroy();
   }
 }

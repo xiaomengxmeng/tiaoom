@@ -177,6 +177,43 @@ export enum VisualEventType {
   BOTANICAL_PLANT_DECAY = 'botanical_plant_decay',
   /** 沐里 - 植物派对爆发 */
   BOTANICAL_BURST = 'botanical_burst',
+  // ── 基础武器扩展 ───────────────────────────────
+  /** 纳米撕裂者 - 撕裂场（常驻） */
+  NANO_RIPPER_FIELD = 'nano_ripper_field',
+  /** 纳米撕裂者 - 撕裂爆发 */
+  NANO_RIPPER_BURST = 'nano_ripper_burst',
+  /** 追猎协议 - 追猎标记（常驻，含追踪线） */
+  PURSUIT_PROTOCOL_MARK = 'pursuit_protocol_mark',
+  /** 追猎协议 - 锁定爆发 */
+  PURSUIT_PROTOCOL_BURST = 'pursuit_protocol_burst',
+  /** 重力阱 - 重力核心（常驻） */
+  GRAVITY_WELL_CORE = 'gravity_well_core',
+  /** 重力阱 - 引力爆发 */
+  GRAVITY_WELL_BURST = 'gravity_well_burst',
+  /** 熵增扩散器 - 熵增场（常驻） */
+  ENTROPY_DIFFUSER_FIELD = 'entropy_diffuser_field',
+  /** 熵增扩散器 - 扩散爆发 */
+  ENTROPY_DIFFUSER_BURST = 'entropy_diffuser_burst',
+  /** 堡垒构筑者 - 堡垒护盾（常驻） */
+  BASTION_BUILDER_SHIELD = 'bastion_builder_shield',
+  /** 堡垒构筑者 - 构筑爆发 */
+  BASTION_BUILDER_BURST = 'bastion_builder_burst',
+  /** 电路编织者 - 电路网络（常驻） */
+  CIRCUIT_WEAVER_NETWORK = 'circuit_weaver_network',
+  /** 电路编织者 - 编织爆发 */
+  CIRCUIT_WEAVER_BURST = 'circuit_weaver_burst',
+  /** 量子裂隙 - 量子裂隙（常驻） */
+  QUANTUM_RIFT_FISSURE = 'quantum_rift_fissure',
+  /** 量子裂隙 - 撕裂爆发 */
+  QUANTUM_RIFT_BURST = 'quantum_rift_burst',
+  /** 体积扭曲 - 扭曲场（常驻） */
+  SIZE_WARP_FIELD = 'size_warp_field',
+  /** 体积扭曲 - 缩放爆发 */
+  SIZE_WARP_BURST = 'size_warp_burst',
+  /** 弹射核心 - 弹射轨迹（常驻） */
+  RICOCHET_CORE_TRAIL = 'ricochet_core_trail',
+  /** 弹射核心 - 弹射爆发 */
+  RICOCHET_CORE_BURST = 'ricochet_core_burst',
   /** 形状特效（一次性） */
   SHAPE_EFFECT = 'shape',
   /** 持续形状特效（常驻，需 sustainedKey） */

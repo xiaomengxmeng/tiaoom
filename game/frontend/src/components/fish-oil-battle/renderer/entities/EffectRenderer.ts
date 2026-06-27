@@ -53,6 +53,13 @@ import type { DischargeCatVisualConfig } from './DischargeCatRenderer';
 import type { PrecognitiveLensVisualConfig } from './PrecognitiveLensRenderer';
 import type { EmotionMasteryVisualConfig } from './EmotionMasteryRenderer';
 
+/** 闲乘月视觉配置（数据驱动） */
+interface EntropicTouchVisualConfig {
+  auraRadius: number;
+  burstRadius: number;
+  burstDurationMs: number;
+}
+
 /**
  * 技能特效渲染总协调器
  *
@@ -468,6 +475,18 @@ export class EffectRenderer {
   // ══════════════════════════════════════════════════════
 
   /**
+   * 从 WeaponRangeConfig 构建熵寂之触视觉配置
+   */
+  private buildEntropicTouchVisualCfg(): EntropicTouchVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.ENTROPIC_TOUCH];
+    return {
+      auraRadius: rc?.damageRadius ?? 50,
+      burstRadius: rc?.aoeMaxRadius ?? 200,
+      burstDurationMs: (rc?.burstDurationSec ?? 5) * 1000,
+    };
+  }
+
+  /**
    * 触发低温场 aura 视觉效果
    */
   triggerEntropicAura(
@@ -502,8 +521,12 @@ export class EffectRenderer {
     y: number,
     radius: number,
     themeColor?: number,
+    durationMs?: number,
   ): void {
-    this.entropicTouchRenderer.triggerBurst(playerId, x, y, radius, themeColor);
+    const cfg = this.buildEntropicTouchVisualCfg();
+    this.entropicTouchRenderer.triggerBurst(
+      playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs,
+    );
   }
 
   /**

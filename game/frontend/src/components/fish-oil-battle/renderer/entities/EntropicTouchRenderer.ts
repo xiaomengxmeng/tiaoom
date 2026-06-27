@@ -2,45 +2,64 @@
  * 熵寂之触 (Entropic Touch) - 闲乘月
  * 前端视觉渲染器
  *
- * 视觉设计：
- * - 低温场：蓝色半透明六边形脉冲 + 冰晶粒子飘散
- * - 冻伤：理事会印章图标（带"批准"字样）+ 冰霜厚度
- * - 爆发：热力学奇点漩涡（冰蓝→暗紫）+ 全屏文字 + 长发残影
+ * 视觉设计（月华清辉 + 熵寂吸光双形态融合）：
+ * - 低温场 Aura：月华外晕（8 层径向渐变）+ 月轮主环（双层）+ 六角放射光线 + 中心月核
+ * - 冻伤 Frostbite：霜花光晕（6 层）+ 霜花六瓣纹（3 贯穿线 + 分叉）+ 层数环 + 中心冰核
+ * - 爆发 Burst：吸光奇点核心（10 层渐变）+ 事件视界环 + 能量撕裂线 + 月华长发（三阶段动画）
  */
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
 
-/** 活跃低温场实例 */
+// ══════════════════════════════════════════════════════
+//  颜色常量
+// ══════════════════════════════════════════════════════
+
+const MOON_COLOR = 0x88ddff; // 月华主色（冰蓝）
+const MOON_HIGHLIGHT = 0xAAFFFF; // 月华高亮（浅冰蓝）
+const MOON_CORE = 0xffffff; // 月核白
+const ENTROPY_PURPLE = 0x9966ff; // 熵寂暗紫（边缘辉光）
+const ENTROPY_DEEP = 0x6600cc; // 熵寂深紫（渐变中段）
+const ENTROPY_BLACK = 0x000000; // 熵寂黑（吸光核中心）
+
+// ══════════════════════════════════════════════════════
+//  数据结构
+// ══════════════════════════════════════════════════════
+
+/** 活跃低温场实例（月华清辉派） */
 interface ActiveAura {
   container: PIXI.Container;
-  hexGraphics: PIXI.Graphics;
+  moonGraphics: PIXI.Graphics; // 月轮 + 月华晕 + 月核
+  rayGraphics: PIXI.Graphics; // 六角放射光线（独立旋转）
   particleTimer: number;
-  life: number;
+  life: number; // ms 累计
   maxLife: number;
   x: number;
   y: number;
   radius: number;
 }
 
-/** 活跃冻伤印记 */
+/** 活跃冻伤印记（霜花六瓣纹） */
 interface ActiveFrostbite {
   container: PIXI.Container;
-  sealGraphics: PIXI.Graphics;
-  iceGraphics: PIXI.Graphics;
+  frostGraphics: PIXI.Graphics; // 霜花六瓣 + 层数环 + 中心冰核
   life: number;
   maxLife: number;
   stacks: number;
+  themeColor: number;
 }
 
-/** 活跃爆发特效 */
+/** 活跃爆发特效（熵寂吸光派 + 三阶段动画） */
 interface ActiveBurst {
   container: PIXI.Container;
-  vortexGraphics: PIXI.Graphics;
-  textContainer: PIXI.Container;
-  hairGraphics: PIXI.Graphics;
+  coreGraphics: PIXI.Graphics; // 吸光奇点核心
+  horizonGraphics: PIXI.Graphics; // 事件视界环
+  tearGraphics: PIXI.Graphics; // 能量撕裂线
+  hairGraphics: PIXI.Graphics; // 月华长发
   life: number;
   maxLife: number;
+  themeColor: number;
+  radius: number;
 }
 
 export class EntropicTouchRenderer {
@@ -53,9 +72,6 @@ export class EntropicTouchRenderer {
   private activeFrostbites: Map<string, ActiveFrostbite> = new Map();
   private activeBursts: Map<string, ActiveBurst> = new Map();
 
-  // 温度标签池（每个玩家一个）
-  private tempLabels: Map<string, PIXI.Text> = new Map();
-
   constructor(fieldContainer: PIXI.Container, particlePool: ParticlePool) {
     this.fieldContainer = fieldContainer;
     this.particlePool = particlePool;
@@ -63,34 +79,41 @@ export class EntropicTouchRenderer {
 
   setScale(scale: number): void {
     this.scale = scale;
-    // 更新所有活跃实例的缩放（hexGraphics 以 (0,0) 为中心绘制，
-    // 容器 position 已设为目标画布坐标，scale.set 不会产生位置漂移）
-    this.activeAuras.forEach(aura => {
-      if (aura.hexGraphics.destroyed) return;
-      aura.hexGraphics.scale.set(scale);
+    // 容器统一承担全局缩放，内部 graphics 维持各自的动画 scale
+    this.activeAuras.forEach((aura) => {
+      if (aura.container.destroyed) return;
+      aura.container.scale.set(scale);
+    });
+    this.activeFrostbites.forEach((fb) => {
+      if (fb.container.destroyed) return;
+      fb.container.scale.set(scale);
+    });
+    this.activeBursts.forEach((burst) => {
+      if (burst.container.destroyed) return;
+      burst.container.scale.set(scale);
     });
   }
 
   // ══════════════════════════════════════════════════════
-  //  低温场 Aura（绝对零度）
+  //  低温场 Aura（月华清辉派）
   // ══════════════════════════════════════════════════════
 
   /**
    * 触发低温场视觉效果
-   * @param playerId 玩家 ID（用于唯一标识）
+   * @param playerId 玩家 ID
    * @param x 逻辑坐标 X
    * @param y 逻辑坐标 Y
    * @param radius 低温场半径（逻辑 px）
-   * @param themeColor 主题色（冰蓝色）
+   * @param themeColor 主题色（默认月华冰蓝）
    */
   triggerAura(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = 0x00CCFF,
+    themeColor = MOON_COLOR,
   ): void {
-    // 如果已存在，更新位置
+    // 已存在则仅更新位置与半径
     const existing = this.activeAuras.get(playerId);
     if (existing) {
       existing.x = x;
@@ -100,35 +123,39 @@ export class EntropicTouchRenderer {
       return;
     }
 
-    const s = this.scale;
     const container = new PIXI.Container();
-    container.position.set(x, y); // 容器定位到画布像素坐标
-    const hexGraphics = new PIXI.Graphics();
+    container.position.set(x, y);
+    container.scale.set(this.scale); // 全局缩放由容器承担
 
-    // 以 (0,0) 为中心绘制（容器已定位到目标坐标，支持 resize 时 scale.set 不漂移）
-    this.drawAuraHex(hexGraphics, 0, 0, radius * s, themeColor);
+    // 月轮 + 月华晕 + 月核
+    const moonGraphics = new PIXI.Graphics();
+    this.drawMoonAura(moonGraphics, radius);
+    container.addChild(moonGraphics);
 
-    container.addChild(hexGraphics);
+    // 六角放射光线（独立旋转）
+    const rayGraphics = new PIXI.Graphics();
+    this.drawMoonRays(rayGraphics, radius * 0.3, radius);
+    container.addChild(rayGraphics);
+
     this.fieldContainer.addChild(container);
 
     const aura: ActiveAura = {
       container,
-      hexGraphics,
+      moonGraphics,
+      rayGraphics,
       particleTimer: 0,
       life: 0,
-      maxLife: 999999, // 常驻，直到手动移除
+      maxLife: Number.POSITIVE_INFINITY, // 常驻，直到手动移除
       x,
       y,
       radius,
     };
-
     this.activeAuras.set(playerId, aura);
 
-    // 触发冰晶粒子
-    this.spawnIceCrystals(x, y, radius * s, themeColor);
-
-    // 显示温度标签（16℃ 恒温彩蛋）
-    this.showTempLabel(playerId, x, y - (radius * s) - 20 * s, themeColor);
+    // 触发首帧冰晶粒子
+    this.spawnIceParticles(x, y, radius, MOON_COLOR);
+    // 避免未使用警告
+    void themeColor;
   }
 
   /** 移除低温场 */
@@ -139,139 +166,101 @@ export class EntropicTouchRenderer {
       aura.container.destroy({ children: true });
       this.activeAuras.delete(playerId);
     }
-
-    // 移除温度标签
-    const label = this.tempLabels.get(playerId);
-    if (label) {
-      label.destroy();
-      this.tempLabels.delete(playerId);
-    }
   }
 
-  /** 绘制低温场六边形 */
-  private drawAuraHex(
-    g: PIXI.Graphics,
-    x: number,
-    y: number,
-    radius: number,
-    color: number,
-  ): void {
+  /**
+   * 绘制月华清辉：月华外晕（8 层径向渐变）+ 月轮主环（双层）+ 中心月核
+   * 以 (0,0) 为中心绘制，半径单位为逻辑 px
+   */
+  private drawMoonAura(g: PIXI.Graphics, radius: number): void {
     g.clear();
 
-    // 外圈六边形（半透明蓝色）
-    const pts: [number, number][] = [];
-    for (let i = 0; i < 6; i++) {
-      const a = (i * Math.PI) / 3 - Math.PI / 6;
-      pts.push([x + Math.cos(a) * radius, y + Math.sin(a) * radius]);
-    }
-    g.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i < 6; i++) g.lineTo(pts[i][0], pts[i][1]);
-    g.closePath();
-    g.fill({ color, alpha: 0.15 });
-    g.stroke({ color, width: 2, alpha: 0.4 });
-
-    // 内圈脉动圆环
-    g.circle(x, y, radius * 0.3);
-    g.stroke({ color, width: 1, alpha: 0.2 });
-  }
-
-  /** 生成冰晶粒子 */
-  private spawnIceCrystals(
-    x: number,
-    y: number,
-    radius: number,
-    color: number,
-  ): void {
-    // 使用粒子池生成冰晶效果
+    // 月华外晕：8 层同心圆叠加模拟径向渐变（中心白 → 冰蓝 → 透明）
     for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      const dist = radius * (0.5 + Math.random() * 0.5);
-      const px = x + Math.cos(angle) * dist;
-      const py = y + Math.sin(angle) * dist;
-
-      // 创建冰晶粒子（小六边形）
-      const particle = new PIXI.Graphics();
-      this.drawTinyHex(particle, px, py, 3 + Math.random() * 3, color);
-      this.fieldContainer.addChild(particle);
-
-      // 动画：向外飘散 + 淡出
-      const vx = Math.cos(angle) * 20;
-      const vy = Math.sin(angle) * 20;
-      this.animateParticle(particle, vx, vy, 2000);
+      const t = i / 7; // 0 → 1
+      const r = radius * (0.15 + 0.85 * t);
+      // 颜色：前半段 白→冰蓝，后半段保持冰蓝
+      const color =
+        t < 0.5
+          ? this.interpolateColor(MOON_CORE, MOON_COLOR, t * 2)
+          : MOON_COLOR;
+      const alpha = (1 - t) * 0.2; // 中心高 alpha，边缘趋近 0
+      g.circle(0, 0, r);
+      g.fill({ color, alpha });
     }
+
+    // 月轮主环：外环 MOON_HIGHLIGHT + 内环 MOON_CORE
+    g.circle(0, 0, radius);
+    g.stroke({ color: MOON_HIGHLIGHT, width: 1, alpha: 0.7 });
+    g.circle(0, 0, radius * 0.95);
+    g.stroke({ color: MOON_CORE, width: 0.4, alpha: 0.5 });
+
+    // 中心月核：白色实心圆 r=4 + 冰蓝外环 r=6
+    g.circle(0, 0, 6);
+    g.stroke({ color: MOON_COLOR, width: 1, alpha: 0.8 });
+    g.circle(0, 0, 4);
+    g.fill({ color: MOON_CORE, alpha: 1 });
   }
 
-  /** 绘制微小六边形（冰晶） */
-  private drawTinyHex(
+  /**
+   * 绘制六角放射光线：6 条短线从内环到外环（60° 均分）
+   * 由 rayGraphics 独立承担旋转动画
+   */
+  private drawMoonRays(
     g: PIXI.Graphics,
-    x: number,
-    y: number,
-    size: number,
-    color: number,
+    innerR: number,
+    outerR: number,
   ): void {
     g.clear();
-    const pts: [number, number][] = [];
     for (let i = 0; i < 6; i++) {
       const a = (i * Math.PI) / 3;
-      pts.push([x + Math.cos(a) * size, y + Math.sin(a) * size]);
+      const x1 = Math.cos(a) * innerR;
+      const y1 = Math.sin(a) * innerR;
+      const x2 = Math.cos(a) * outerR;
+      const y2 = Math.sin(a) * outerR;
+      g.moveTo(x1, y1);
+      g.lineTo(x2, y2);
+      g.stroke({ color: MOON_HIGHLIGHT, width: 1, alpha: 0.6 });
     }
-    g.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i < 6; i++) g.lineTo(pts[i][0], pts[i][1]);
-    g.closePath();
-    g.fill({ color, alpha: 0.6 });
   }
 
-  /** 粒子动画 */
-  private animateParticle(
-    particle: PIXI.Graphics,
-    vx: number,
-    vy: number,
-    durationMs: number,
-  ): void {
-    const startTime = Date.now();
-    const tick = () => {
-      const elapsed = Date.now() - startTime;
-      const t = elapsed / durationMs;
-
-      if (t >= 1) {
-        particle.destroy();
-        return;
-      }
-
-      particle.x += vx * (1 / 60); // 假设 60fps
-      particle.y += vy * (1 / 60);
-      particle.alpha = 1 - t;
-      particle.scale.set(1 - t * 0.5);
-
-      requestAnimationFrame(tick);
-    };
-    tick();
-  }
-
-  /** 显示温度标签（16℃ 恒温彩蛋） */
-  private showTempLabel(
-    playerId: string,
+  /**
+   * 生成冰晶粒子（向外飘散）
+   * 利用 particlePool.emit，每帧由 update 节流调用
+   */
+  private spawnIceParticles(
     x: number,
     y: number,
+    radius: number,
     color: number,
   ): void {
-    if (this.tempLabels.has(playerId)) return;
-
-    const label = new PIXI.Text('16℃', {
-      fontFamily: 'monospace',
-      fontSize: 10,
-      fill: color,
-    });
-    label.anchor.set(0.5);
-    label.position.set(x, y);
-    label.alpha = 0.7;
-    this.fieldContainer.addChild(label);
-
-    this.tempLabels.set(playerId, label);
+    const s = this.scale;
+    for (let i = 0; i < 2; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      // 从月核附近出发
+      const startDist = radius * s * (0.2 + Math.random() * 0.2);
+      const px = x + Math.cos(angle) * startDist;
+      const py = y + Math.sin(angle) * startDist;
+      // 向外飘散速度（px/s）
+      const speed = (20 + Math.random() * 15) * s;
+      this.particlePool.emit({
+        x: px,
+        y: py,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 2000,
+        scaleStart: 1,
+        scaleEnd: 0,
+        alphaStart: 0.8,
+        alphaEnd: 0,
+        tint: color,
+        radius: (1.5 + Math.random() * 1.5) * s,
+      });
+    }
   }
 
   // ══════════════════════════════════════════════════════
-  //  冻伤叠加效果
+  //  冻伤叠加效果（霜花六瓣纹）
   // ══════════════════════════════════════════════════════
 
   /**
@@ -287,110 +276,104 @@ export class EntropicTouchRenderer {
     stacks: number,
     x: number,
     y: number,
-    themeColor = 0x00CCFF,
+    themeColor = MOON_COLOR,
   ): void {
+    // 若已存在，先销毁旧实例（避免泄漏）
+    const old = this.activeFrostbites.get(targetId);
+    if (old) {
+      this.fieldContainer.removeChild(old.container);
+      old.container.destroy({ children: true });
+    }
+
     const container = new PIXI.Container();
     container.position.set(x, y);
+    container.scale.set(this.scale);
 
-    // 绘制理事会印章图标
-    const sealGraphics = new PIXI.Graphics();
-    this.drawCouncilSeal(sealGraphics, 0, 0, stacks, themeColor);
-    container.addChild(sealGraphics);
-
-    // 绘制冰霜厚度（层数越高越厚）
-    const iceGraphics = new PIXI.Graphics();
-    this.drawIceThickness(iceGraphics, 0, 0, stacks, themeColor);
-    container.addChild(iceGraphics);
+    const frostGraphics = new PIXI.Graphics();
+    this.drawFrostbite(frostGraphics, stacks, themeColor);
+    container.addChild(frostGraphics);
 
     this.fieldContainer.addChild(container);
 
     const frostbite: ActiveFrostbite = {
       container,
-      sealGraphics,
-      iceGraphics,
+      frostGraphics,
       life: 0,
-      maxLife: 5 * 60, // 5 秒（假设 60fps）
+      maxLife: 5000, // 5 秒
       stacks,
+      themeColor,
     };
-
     this.activeFrostbites.set(targetId, frostbite);
-
-    // 动画：印章戳印效果
-    this.animateSealStamp(sealGraphics);
   }
 
-  /** 绘制理事会印章 */
-  private drawCouncilSeal(
+  /**
+   * 绘制霜花六瓣纹：霜花光晕（6 层）+ 霜花六瓣（3 贯穿线 + 分叉）+ 层数环 + 中心冰核
+   */
+  private drawFrostbite(
     g: PIXI.Graphics,
-    x: number,
-    y: number,
     stacks: number,
-    color: number,
+    themeColor: number,
   ): void {
     g.clear();
+    const baseR = 25; // 霜花基础半径
 
-    // 外圈圆形印章
-    const radius = 15 + stacks * 3; // 层数越高，印章越大
-    g.circle(x, y, radius);
-    g.stroke({ color, width: 2, alpha: 0.8 });
-
-    // 内部文字 "批准"（简化：用矩形表示）
-    g.rect(x - radius * 0.6, y - radius * 0.3, radius * 1.2, radius * 0.6);
-    g.stroke({ color, width: 1, alpha: 0.5 });
-
-    // 中心点
-    g.circle(x, y, 3);
-    g.fill({ color, alpha: 0.8 });
-  }
-
-  /** 绘制冰霜厚度 */
-  private drawIceThickness(
-    g: PIXI.Graphics,
-    x: number,
-    y: number,
-    stacks: number,
-    color: number,
-  ): void {
-    g.clear();
-
-    // 根据层数绘制不同厚度的冰霜环
-    for (let i = 0; i < stacks; i++) {
-      const radius = 20 + i * 8;
-      g.circle(x, y, radius);
-      g.stroke({
-        color,
-        width: 2 + i,
-        alpha: 0.3 + i * 0.2,
-      });
+    // 霜花光晕：6 层同心圆叠加（中心白 → 冰蓝 → 透明）
+    for (let i = 0; i < 6; i++) {
+      const t = i / 5; // 0 → 1
+      const r = baseR * (0.3 + 0.7 * t);
+      const color =
+        t < 0.5
+          ? this.interpolateColor(MOON_CORE, themeColor, t * 2)
+          : themeColor;
+      const alpha = (1 - t) * 0.22;
+      g.circle(0, 0, r);
+      g.fill({ color, alpha });
     }
-  }
 
-  /** 印章戳印动画 */
-  private animateSealStamp(seal: PIXI.Graphics): void {
-    seal.scale.set(0);
-    seal.alpha = 0;
+    // 霜花六瓣：3 条贯穿线（60° 均分）+ 每条线 1/3 和 2/3 处的分叉短线
+    for (let i = 0; i < 3; i++) {
+      const a = (i * Math.PI) / 3;
+      const x1 = Math.cos(a) * baseR;
+      const y1 = Math.sin(a) * baseR;
+      const x2 = -x1;
+      const y2 = -y1;
+      g.moveTo(x1, y1);
+      g.lineTo(x2, y2);
+      g.stroke({ color: themeColor, width: 1, alpha: 0.7 });
 
-    const startTime = Date.now();
-    const duration = 300; // 300ms
-
-    const tick = () => {
-      const elapsed = Date.now() - startTime;
-      const t = Math.min(elapsed / duration, 1);
-
-      // easeOutBack 效果
-      const ease = 1 - Math.pow(1 - t, 3);
-      seal.scale.set(ease);
-      seal.alpha = Math.min(t * 2, 1);
-
-      if (t < 1) {
-        requestAnimationFrame(tick);
+      // 1/3 与 2/3 处的分叉短线（垂直主线方向）
+      for (const f of [1 / 3, 2 / 3]) {
+        const cx = x1 + (x2 - x1) * f;
+        const cy = y1 + (y2 - y1) * f;
+        const fa = a + Math.PI / 2;
+        const forkLen = 4;
+        g.moveTo(
+          cx - Math.cos(fa) * forkLen,
+          cy - Math.sin(fa) * forkLen,
+        );
+        g.lineTo(
+          cx + Math.cos(fa) * forkLen,
+          cy + Math.sin(fa) * forkLen,
+        );
+        g.stroke({ color: themeColor, width: 0.5, alpha: 0.5 });
       }
-    };
-    tick();
+    }
+
+    // 层数环：外圈细环累加（每层 +4px 半径，alpha 0.4→0.3→0.2 递减）
+    for (let i = 0; i < stacks; i++) {
+      const r = baseR + 8 + i * 4;
+      const alpha = Math.max(0.1, 0.4 - i * 0.1);
+      g.circle(0, 0, r);
+      g.stroke({ color: themeColor, width: 1, alpha });
+    }
+
+    // 中心冰核：白色实心圆 r=3
+    g.circle(0, 0, 3);
+    g.fill({ color: MOON_CORE, alpha: 1 });
   }
 
   // ══════════════════════════════════════════════════════
-  //  爆发特效（热力学奇点）
+  //  爆发特效（熵寂吸光派 + 三阶段动画）
   // ══════════════════════════════════════════════════════
 
   /**
@@ -400,210 +383,255 @@ export class EntropicTouchRenderer {
    * @param y 逻辑坐标 Y
    * @param radius 爆发范围（逻辑 px）
    * @param themeColor 主题色
+   * @param durationMs 持续时间（ms），默认 5000
    */
   triggerBurst(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = 0x00CCFF,
+    themeColor = MOON_COLOR,
+    durationMs?: number,
   ): void {
-    const s = this.scale;
+    // 若已存在，先销毁旧实例
+    const old = this.activeBursts.get(playerId);
+    if (old) {
+      this.fieldContainer.removeChild(old.container);
+      old.container.destroy({ children: true });
+    }
+
     const container = new PIXI.Container();
     container.position.set(x, y);
+    container.scale.set(this.scale);
 
-    // 1. 漩涡图形（冰蓝→暗紫）
-    const vortexGraphics = new PIXI.Graphics();
-    this.drawVortex(vortexGraphics, 0, 0, radius * s, themeColor);
-    container.addChild(vortexGraphics);
+    // 1. 吸光奇点核心（10 层渐变 + 吸光核 + 紫色边缘辉光）
+    const coreGraphics = new PIXI.Graphics();
+    this.drawBurstCore(coreGraphics, radius);
+    container.addChild(coreGraphics);
 
-    // 2. 全屏文字
-    const textContainer = new PIXI.Container();
-    this.showBurstText(textContainer, themeColor);
-    container.addChild(textContainer);
+    // 2. 事件视界环（双层细高亮环）
+    const horizonGraphics = new PIXI.Graphics();
+    this.drawBurstHorizon(horizonGraphics, radius);
+    container.addChild(horizonGraphics);
 
-    // 3. 冰蓝长发残影
+    // 3. 能量撕裂线（6 条 quadraticCurveTo 从外向内汇聚）
+    const tearGraphics = new PIXI.Graphics();
+    this.drawBurstTears(tearGraphics, radius);
+    container.addChild(tearGraphics);
+
+    // 4. 月华长发（4 条非平行 bezier，向心被吸）
     const hairGraphics = new PIXI.Graphics();
-    this.drawHairAfterimage(hairGraphics, 0, 0, themeColor);
+    this.drawBurstHair(hairGraphics, radius, themeColor);
     container.addChild(hairGraphics);
 
     this.fieldContainer.addChild(container);
 
     const burst: ActiveBurst = {
       container,
-      vortexGraphics,
-      textContainer,
+      coreGraphics,
+      horizonGraphics,
+      tearGraphics,
       hairGraphics,
       life: 0,
-      maxLife: 5 * 60, // 5 秒
+      maxLife: durationMs ?? 5000,
+      themeColor,
+      radius,
     };
-
     this.activeBursts.set(playerId, burst);
-
-    // 动画：漩涡旋转 + 文字闪烁
-    this.animateVortex(vortexGraphics);
-    this.animateBurstText(textContainer);
   }
 
-  /** 绘制热力学奇点漩涡 */
-  private drawVortex(
+  /**
+   * 绘制吸光奇点核心：10 层同心圆（黑 → 暗紫 → 冰蓝 → 透明）+ 吸光核 + 紫色边缘辉光
+   */
+  private drawBurstCore(g: PIXI.Graphics, radius: number): void {
+    g.clear();
+    const coreR = radius * 0.6; // 奇点核心区域半径
+
+    // 10 层同心圆叠加（黑 → 暗紫 → 冰蓝 → 透明）
+    for (let i = 0; i < 10; i++) {
+      const t = i / 9; // 0 → 1
+      const r = coreR * (0.1 + 0.9 * t);
+      // 颜色分段：黑 → 暗紫 → 暗紫亮 → 冰蓝
+      let color: number;
+      if (t < 0.33) {
+        color = this.interpolateColor(ENTROPY_BLACK, ENTROPY_DEEP, t / 0.33);
+      } else if (t < 0.66) {
+        color = this.interpolateColor(
+          ENTROPY_DEEP,
+          ENTROPY_PURPLE,
+          (t - 0.33) / 0.33,
+        );
+      } else {
+        color = this.interpolateColor(
+          ENTROPY_PURPLE,
+          MOON_COLOR,
+          (t - 0.66) / 0.34,
+        );
+      }
+      const alpha = (1 - t) * 0.25;
+      g.circle(0, 0, r);
+      g.fill({ color, alpha });
+    }
+
+    // 吸光核 r=6
+    g.circle(0, 0, 6);
+    g.fill({ color: ENTROPY_BLACK, alpha: 1 });
+
+    // 紫色边缘辉光
+    g.circle(0, 0, 8);
+    g.stroke({ color: ENTROPY_PURPLE, width: 1.5, alpha: 0.8 });
+  }
+
+  /**
+   * 绘制事件视界环：双层细高亮环
+   */
+  private drawBurstHorizon(g: PIXI.Graphics, radius: number): void {
+    g.clear();
+    g.circle(0, 0, radius);
+    g.stroke({ color: MOON_HIGHLIGHT, width: 0.6, alpha: 0.7 });
+    g.circle(0, 0, radius * 0.95);
+    g.stroke({ color: MOON_CORE, width: 0.3, alpha: 0.5 });
+  }
+
+  /**
+   * 绘制能量撕裂线：6 条 quadraticCurveTo 从外向内汇聚
+   */
+  private drawBurstTears(g: PIXI.Graphics, radius: number): void {
+    g.clear();
+    for (let i = 0; i < 6; i++) {
+      const a = (i * Math.PI) / 3;
+      const startX = Math.cos(a) * radius;
+      const startY = Math.sin(a) * radius;
+      // 控制点偏离直线方向，形成弧形撕裂感
+      const midR = radius * 0.5;
+      const offset = Math.PI / 6;
+      const cpX = Math.cos(a + offset) * midR;
+      const cpY = Math.sin(a + offset) * midR;
+      g.moveTo(startX, startY);
+      g.quadraticCurveTo(cpX, cpY, 0, 0);
+      g.stroke({ color: ENTROPY_PURPLE, width: 1, alpha: 0.8 });
+    }
+  }
+
+  /**
+   * 绘制月华长发：4 条非平行 bezier（左右各 2，主细搭配），向心被吸
+   */
+  private drawBurstHair(
     g: PIXI.Graphics,
-    x: number,
-    y: number,
     radius: number,
-    color: number,
+    themeColor: number,
   ): void {
     g.clear();
-
-    // 螺旋线（冰蓝→暗紫渐变）
-    const spiralTurns = 5;
-    const points: [number, number][] = [];
-
-    for (let i = 0; i <= 100; i++) {
-      const t = i / 100;
-      const angle = t * spiralTurns * Math.PI * 2;
-      const r = radius * (1 - t * 0.8);
-      const px = x + Math.cos(angle) * r;
-      const py = y + Math.sin(angle) * r;
-      points.push([px, py]);
+    // 左右各 2 条：一条主（粗，themeColor）+ 一条细（MOON_HIGHLIGHT）
+    const configs = [
+      { side: -1, isMain: true, startOffset: -0.6 },
+      { side: -1, isMain: false, startOffset: -0.3 },
+      { side: 1, isMain: true, startOffset: 0.6 },
+      { side: 1, isMain: false, startOffset: 0.3 },
+    ];
+    for (const c of configs) {
+      // 起点：外侧偏远位置
+      const startX = c.side * radius * 1.5;
+      const startY = c.startOffset * radius;
+      // 终点：奇点中心
+      const endX = 0;
+      const endY = 0;
+      // 控制点：非平行走向，制造向心被吸的曲线
+      const cp1X = c.side * radius * 1.2;
+      const cp1Y = c.startOffset * radius * 0.5;
+      const cp2X = c.side * radius * 0.4;
+      const cp2Y = c.startOffset * radius * 0.2;
+      g.moveTo(startX, startY);
+      g.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY);
+      g.stroke({
+        color: c.isMain ? themeColor : MOON_HIGHLIGHT,
+        width: c.isMain ? 2 : 1,
+        alpha: 0.7,
+      });
     }
-
-    // 绘制螺旋线
-    if (points.length > 1) {
-      g.moveTo(points[0][0], points[0][1]);
-      for (let i = 1; i < points.length; i++) {
-        g.lineTo(points[i][0], points[i][1]);
-      }
-    }
-
-    const darkPurple = 0x6600CC;
-    g.stroke({ color: darkPurple, width: 3, alpha: 0.8 });
-
-    // 中心奇点（黑色圆点）
-    g.circle(x, y, 5);
-    g.fill({ color: 0x000000, alpha: 1 });
-  }
-
-  /** 显示爆发文字 */
-  private showBurstText(container: PIXI.Container, color: number): void {
-    const text1 = new PIXI.Text('> 最优解执行中...', {
-      fontFamily: 'monospace',
-      fontSize: 16,
-      fill: color,
-      fontWeight: 'bold',
-    });
-    text1.anchor.set(0.5);
-    text1.position.set(0, -50);
-    container.addChild(text1);
-
-    const text2 = new PIXI.Text('> 牺牲率：1%', {
-      fontFamily: 'monospace',
-      fontSize: 14,
-      fill: 0xFF0000, // 红字
-      fontWeight: 'bold',
-    });
-    text2.anchor.set(0.5);
-    text2.position.set(0, -30);
-    container.addChild(text2);
-  }
-
-  /** 绘制冰蓝长发残影 */
-  private drawHairAfterimage(
-    g: PIXI.Graphics,
-    x: number,
-    y: number,
-    color: number,
-  ): void {
-    g.clear();
-
-    // 简化：绘制几条曲线代表长发
-    for (let i = 0; i < 5; i++) {
-      const offsetX = (i - 2) * 10;
-      g.moveTo(x + offsetX, y - 20);
-      g.bezierCurveTo(
-        x + offsetX - 20, y - 10,
-        x + offsetX - 30, y + 20,
-        x + offsetX - 40, y + 40,
-      );
-    }
-
-    g.stroke({ color, width: 2, alpha: 0.6 });
-  }
-
-  /** 漩涡旋转动画 */
-  private animateVortex(vortex: PIXI.Graphics): void {
-    let angle = 0;
-    const tick = () => {
-      angle += 0.02;
-      vortex.rotation = angle;
-
-      if (vortex.parent) {
-        requestAnimationFrame(tick);
-      }
-    };
-    tick();
-  }
-
-  /** 文字闪烁动画 */
-  private animateBurstText(textContainer: PIXI.Container): void {
-    let visible = true;
-    const tick = () => {
-      visible = !visible;
-      textContainer.visible = visible;
-
-      if (textContainer.parent) {
-        setTimeout(tick, 500); // 500ms 闪烁
-      }
-    };
-    setTimeout(tick, 500);
   }
 
   // ══════════════════════════════════════════════════════
   //  更新循环
   // ══════════════════════════════════════════════════════
 
-  /** 每帧更新（由 EffectRenderer 调用） */
+  /** 每帧更新（由 EffectRenderer 调用，dt 单位 ms） */
   update(dt: number): void {
-    // 更新低温场（脉动效果）
-    this.activeAuras.forEach((aura, playerId) => {
-      aura.life++;
-      // 脉动：alpha 在 0.3-0.6 之间循环
-      const pulse = 0.4 + 0.2 * Math.sin(aura.life * 0.05);
-      aura.hexGraphics.alpha = pulse;
-
-      // 定期生成冰晶粒子
+    // ── 低温场：月轮呼吸 + 月华晕脉动 + 光线旋转 + 冰晶粒子 ──
+    this.activeAuras.forEach((aura) => {
+      aura.life += dt;
+      // 月轮呼吸 scale 1.0↔1.05（2s 周期）
+      const breath = 1 + 0.05 * Math.sin(aura.life * 0.001 * Math.PI);
+      aura.moonGraphics.scale.set(breath);
+      // 月华晕脉动 alpha 0.6↔0.9
+      const pulse = 0.75 + 0.15 * Math.sin(aura.life * 0.001 * Math.PI);
+      aura.moonGraphics.alpha = pulse;
+      // 六角光线旋转 0.5 转/秒
+      aura.rayGraphics.rotation += dt * 0.001 * Math.PI;
+      // 冰晶粒子：每 1.5s 生成 2 个
       aura.particleTimer += dt;
-      if (aura.particleTimer > 1000) {
-        // 每秒生成一次
+      if (aura.particleTimer > 1500) {
         aura.particleTimer = 0;
-        this.spawnIceCrystals(
-          aura.x,
-          aura.y,
-          aura.radius * this.scale,
-          0x00CCFF,
-        );
+        this.spawnIceParticles(aura.x, aura.y, aura.radius, MOON_COLOR);
       }
     });
 
-    // 更新冻伤印记（自动过期）
+    // ── 冻伤：自动过期 ──
     this.activeFrostbites.forEach((fb, targetId) => {
-      fb.life++;
-      if (fb.life >= fb.maxLife) {
-        this.removeFrostbite(targetId);
-      }
+      fb.life += dt;
+      if (fb.life >= fb.maxLife) this.removeFrostbite(targetId);
     });
 
-    // 更新爆发特效（自动过期）
+    // ── 爆发：三阶段动画 ──
     this.activeBursts.forEach((burst, playerId) => {
-      burst.life++;
-      if (burst.life >= burst.maxLife) {
+      burst.life += dt;
+      const T = burst.maxLife;
+      if (burst.life >= T) {
         this.removeBurst(playerId);
+        return;
+      }
+      const phase1End = T * 0.15;
+      const phase2End = T * 0.25;
+
+      if (burst.life < phase1End) {
+        // 阶段1 蓄压：月华收缩 scale 1.0→0.3，光线变暗 alpha 1.0→0.3，吸光核显现
+        const t = burst.life / phase1End;
+        burst.hairGraphics.scale.set(1.0 - 0.7 * t);
+        burst.hairGraphics.alpha = 1.0 - 0.7 * t;
+        burst.coreGraphics.alpha = t; // 0 → 1 显现
+        burst.tearGraphics.alpha = 0;
+        burst.horizonGraphics.alpha = 0;
+        burst.horizonGraphics.scale.set(0.3);
+      } else if (burst.life < phase2End) {
+        // 阶段2 坍缩：奇点爆发 scale 0.3→1.0(easeOutCubic)，撕裂线闪现 alpha 0→0.8，视界环展开
+        const t = (burst.life - phase1End) / (phase2End - phase1End);
+        const eased = this.easeOutCubic(t);
+        burst.hairGraphics.scale.set(0.3 + 0.7 * eased);
+        burst.hairGraphics.alpha = 0.3 + 0.4 * t; // 0.3 → 0.7
+        burst.coreGraphics.alpha = 1.0;
+        burst.tearGraphics.alpha = 0.8 * t; // 0 → 0.8
+        burst.horizonGraphics.scale.set(0.3 + 0.7 * eased);
+        burst.horizonGraphics.alpha = t; // 0 → 1
+      } else {
+        // 阶段3 扩散：视界环扩散 scale 1.0→2.0 alpha 1.0→0，长发消散 alpha 0.7→0（sin 波动），
+        //           撕裂线消散 alpha 0.8→0，吸光核保持但透明 alpha 1.0→0.3
+        const t = (burst.life - phase2End) / (T - phase2End);
+        burst.horizonGraphics.scale.set(1.0 + 1.0 * t);
+        burst.horizonGraphics.alpha = 1.0 - t;
+        burst.hairGraphics.alpha = 0.7 * (1.0 - t);
+        burst.hairGraphics.rotation = Math.sin(t * Math.PI * 4) * 0.5;
+        burst.tearGraphics.alpha = 0.8 * (1.0 - t);
+        burst.coreGraphics.alpha = 1.0 - 0.7 * t;
       }
     });
   }
 
+  // ══════════════════════════════════════════════════════
+  //  移除与清理
+  // ══════════════════════════════════════════════════════
+
   /** 移除冻伤印记 */
-  private removeFrostbite(targetId: string): void {
+  removeFrostbite(targetId: string): void {
     const fb = this.activeFrostbites.get(targetId);
     if (fb) {
       this.fieldContainer.removeChild(fb.container);
@@ -613,7 +641,7 @@ export class EntropicTouchRenderer {
   }
 
   /** 移除爆发特效 */
-  private removeBurst(playerId: string): void {
+  removeBurst(playerId: string): void {
     const burst = this.activeBursts.get(playerId);
     if (burst) {
       this.fieldContainer.removeChild(burst.container);
@@ -622,24 +650,39 @@ export class EntropicTouchRenderer {
     }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  销毁
-  // ══════════════════════════════════════════════════════
-
   /** 清除所有特效（不销毁渲染器） */
   clear(): void {
-    this.activeAuras.forEach((aura, playerId) => {
-      this.removeAura(playerId);
-    });
-    this.activeFrostbites.forEach((fb, targetId) => {
-      this.removeFrostbite(targetId);
-    });
-    this.activeBursts.forEach((burst, playerId) => {
-      this.removeBurst(playerId);
-    });
+    this.activeAuras.forEach((_, playerId) => this.removeAura(playerId));
+    this.activeFrostbites.forEach((_, targetId) =>
+      this.removeFrostbite(targetId),
+    );
+    this.activeBursts.forEach((_, playerId) => this.removeBurst(playerId));
   }
 
   destroy(): void {
     this.clear();
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  工具方法
+  // ══════════════════════════════════════════════════════
+
+  /** 颜色插值（from → to，t ∈ [0,1]） */
+  private interpolateColor(from: number, to: number, t: number): number {
+    const fr = (from >> 16) & 0xff;
+    const fg = (from >> 8) & 0xff;
+    const fb = from & 0xff;
+    const tr = (to >> 16) & 0xff;
+    const tg = (to >> 8) & 0xff;
+    const tb = to & 0xff;
+    const r = Math.round(fr + (tr - fr) * t);
+    const g = Math.round(fg + (tg - fg) * t);
+    const b = Math.round(fb + (tb - fb) * t);
+    return (r << 16) | (g << 8) | b;
+  }
+
+  /** easeOutCubic 缓动 */
+  private easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
   }
 }

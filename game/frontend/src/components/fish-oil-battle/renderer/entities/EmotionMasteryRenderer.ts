@@ -65,6 +65,9 @@ export class EmotionMasteryRenderer {
   /** 爆发实体: playerId → BurstEntity[] */
   private burstEntities: Map<string, BurstEntity[]> = new Map();
 
+  /** 爆发外层容器: playerId → PIXI.Container（用于 setScale 同步缩放） */
+  private burstContainers: Map<string, PIXI.Container> = new Map();
+
   constructor(fieldContainer: PIXI.Container, entityContainer: PIXI.Container) {
     this.fieldContainer = fieldContainer;
     this.entityContainer = entityContainer;
@@ -72,7 +75,12 @@ export class EmotionMasteryRenderer {
 
   setScale(s: number): void {
     this.scale = s;
-    // 更新已有实体缩放（安全模式下处理，因为实体用容器定位）
+    // 同步已有爆发实体的外层容器缩放（参考 EntropicTouchRenderer）
+    // 心境文字由 updateMood 每帧重绘自适应，无需在此处理
+    this.burstContainers.forEach((container) => {
+      if (container.destroyed) return;
+      container.scale.set(s);
+    });
   }
 
   // ══════════════════════════════════════════════════════
@@ -167,6 +175,8 @@ export class EmotionMasteryRenderer {
 
   /**
    * 触发情绪实体化爆发，返回 ActiveEffect 用于生命周期管理
+   *
+   * @param orbitRadius 实体公转半径（逻辑像素，由外层 container.scale 统一缩放），默认 80
    */
   triggerBurst(
     playerId: string,
@@ -174,6 +184,7 @@ export class EmotionMasteryRenderer {
     y: number,
     durationMs: number,
     themeColor?: number,
+    orbitRadius = 80,
   ): { effect: ActiveEffect | null } {
     const s = this.scale;
 
@@ -182,6 +193,8 @@ export class EmotionMasteryRenderer {
 
     const container = new PIXI.Container();
     container.position.set(x, y);
+    // 外层容器承担全局缩放，内部图形一律使用逻辑像素（参考 EntropicTouchRenderer）
+    container.scale.set(s);
     this.entityContainer.addChild(container);
 
     const entities: BurstEntity[] = [];
@@ -198,15 +211,17 @@ export class EmotionMasteryRenderer {
       container.addChild(eContainer);
 
       entities.push({ container: eContainer, body: eBody, aura: eAura, mood });
-      this.drawEmotionEntity(eBody, eAura, mood, s);
+      this.drawEmotionEntity(eBody, eAura, mood);
     }
 
     this.burstEntities.set(playerId, entities);
+    this.burstContainers.set(playerId, container);
 
     const maxLife = durationMs;
 
     const effect: ActiveEffect = {
-      type: 'emotional_weather_burst' as any, // 复用类型联合
+      // 专属类型标识，避免复用 EmotionalWeather 的事件类型
+      type: 'emotion_mastery_burst',
       container,
       life: 0,
       maxLife,
@@ -215,9 +230,8 @@ export class EmotionMasteryRenderer {
         const alpha = t < 0.1 ? t / 0.1 : t > 0.8 ? (1 - t) / 0.2 : 1;
         container.alpha = alpha;
 
-        // 更新角度
-        const orbitR = 80 * s;
-        const baseSpeed = 0.002 * (dt / 16.67);
+        // 数据驱动：公转半径从配置读取（逻辑像素，由 container.scale 统一缩放）
+        const orbitR = orbitRadius;
         for (let j = 0; j < entities.length; j++) {
           const ent = entities[j];
           const angle = (j * 2 * Math.PI) / 3 + _ef.life * 0.003;
@@ -226,15 +240,16 @@ export class EmotionMasteryRenderer {
             Math.sin(angle) * orbitR,
           );
 
-          // 脉冲缩放
+          // 脉冲缩放：仅动画幅度，全局缩放由外层 container 承担
           const pulse = 1 + 0.1 * Math.sin(_ef.life * 0.01 + j);
-          ent.container.scale.set(pulse * this.scale);
+          ent.container.scale.set(pulse);
         }
       },
       onDecay: () => {
         container.destroy({ children: true });
         entities.length = 0;
         this.burstEntities.delete(playerId);
+        this.burstContainers.delete(playerId);
       },
     };
 
@@ -242,35 +257,34 @@ export class EmotionMasteryRenderer {
   }
 
   /**
-   * 绘制情绪实体
+   * 绘制情绪实体（逻辑像素，缩放由外层 container 承担）
    */
   private drawEmotionEntity(
     bodyG: PIXI.Graphics,
     auraG: PIXI.Graphics,
     mood: string,
-    s: number,
   ): void {
     const color = MOOD_COLORS[mood] ?? 0xFFFFFF;
     const emoji = MOOD_EMOJI[mood] ?? '?';
-    const radius = 12 * s;
+    const radius = 12;
 
     // 光环
-    auraG.circle(0, 0, radius + 6 * s);
+    auraG.circle(0, 0, radius + 6);
     auraG.fill({ color, alpha: 0.15 });
     auraG.circle(0, 0, radius);
-    auraG.stroke({ color: glowColor(color), width: 2 * s, alpha: 0.5 });
+    auraG.stroke({ color: glowColor(color), width: 2, alpha: 0.5 });
 
     // 实体
     bodyG.circle(0, 0, radius);
     bodyG.fill({ color: color, alpha: 0.6 });
     bodyG.circle(0, 0, radius);
-    bodyG.stroke({ color: 0xFFFFFF, width: 1.5 * s, alpha: 0.7 });
+    bodyG.stroke({ color: 0xFFFFFF, width: 1.5, alpha: 0.7 });
 
     // 表情符号用 Text
     if (emoji) {
       const text = new PIXI.Text(emoji, {
         fontFamily: 'Arial',
-        fontSize: 10 * s,
+        fontSize: 10,
       });
       text.anchor.set(0.5);
       bodyG.addChild(text);
@@ -278,16 +292,17 @@ export class EmotionMasteryRenderer {
   }
 
   /**
-   * 移除玩家爆发实体
+   * 移除玩家爆发实体（外层容器由 ActiveEffect.onDecay 负责销毁，此处仅清理引用）
    */
   private removeBurstEntities(playerId: string): void {
     const entities = this.burstEntities.get(playerId);
     if (entities) {
       for (const ent of entities) {
-        ent.container.destroy({ children: true });
+        if (!ent.container.destroyed) ent.container.destroy({ children: true });
       }
-      this.burstEntities.delete(playerId);
     }
+    this.burstEntities.delete(playerId);
+    this.burstContainers.delete(playerId);
   }
 
   // ══════════════════════════════════════════════════════
@@ -299,11 +314,11 @@ export class EmotionMasteryRenderer {
       mood.container.destroy({ children: true });
     }
     this.activeMoods.clear();
-    for (const [, entities] of this.burstEntities) {
-      for (const ent of entities) {
-        ent.container.destroy({ children: true });
-      }
+    // 销毁爆发外层容器（同时销毁内部实体子节点）
+    for (const [, container] of this.burstContainers) {
+      if (!container.destroyed) container.destroy({ children: true });
     }
+    this.burstContainers.clear();
     this.burstEntities.clear();
   }
 

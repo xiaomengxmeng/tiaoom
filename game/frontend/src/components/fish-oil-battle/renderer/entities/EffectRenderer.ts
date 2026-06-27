@@ -52,6 +52,7 @@ import type { DrawingManifestVisualConfig } from './DrawingManifestRenderer';
 import type { DischargeCatVisualConfig } from './DischargeCatRenderer';
 import type { PrecognitiveLensVisualConfig } from './PrecognitiveLensRenderer';
 import type { EmotionMasteryVisualConfig } from './EmotionMasteryRenderer';
+import type { EmotionalWeatherVisualConfig } from './EmotionalWeatherRenderer';
 
 /** 闲乘月视觉配置（数据驱动） */
 interface EntropicTouchVisualConfig {
@@ -769,11 +770,25 @@ export class EffectRenderer {
     x: number, y: number,
     radius: number,
   ): void {
-    const rc = WEAPON_RANGE_CONFIG[WeaponId.EMOTIONAL_WEATHER];
+    const cfg = this.buildEmotionalWeatherVisualCfg();
     const ef = this.emotionalWeatherRenderer.triggerBurst(
-      x, y, radius, (rc?.burstDurationSec ?? 4) * 1000,
+      x, y, radius, cfg.burstDurationMs ?? 4000,
     );
     if (ef.effect) this.activeEffects.push(ef.effect);
+  }
+
+  /**
+   * 从 WeaponRangeConfig 构建 EmotionalWeatherVisualConfig
+   * 所有视觉参数由后端配置驱动，无硬编码常量
+   */
+  private buildEmotionalWeatherVisualCfg(): EmotionalWeatherVisualConfig {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.EMOTIONAL_WEATHER];
+    return {
+      lightningRadius: rc?.damageRadius ?? 40,
+      hailRadius: rc?.aoeMaxRadius ?? 200,
+      hailStoneRadius: rc?.field?.radius ?? 30,
+      burstDurationMs: (rc?.burstDurationSec ?? 4) * 1000,
+    };
   }
 
   // ══════════════════════════════════════════════════════
@@ -811,7 +826,7 @@ export class EffectRenderer {
   ): void {
     const cfg = this.buildEmotionMasteryVisualCfg();
     const ef = this.emotionMasteryRenderer.triggerBurst(
-      playerId, x, y, cfg.burstDurationMs ?? 4000, themeColor,
+      playerId, x, y, cfg.burstDurationMs ?? 4000, themeColor, cfg.orbitRadius ?? 80,
     );
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
@@ -834,6 +849,12 @@ export class EffectRenderer {
   update(dt: number): void {
     // 更新熵寂之触渲染器
     this.entropicTouchRenderer.update(dt);
+
+    // 更新预知透镜渲染器（驱动"已看透"文字等基于 update(dt) 的生命周期）
+    this.precognitiveLensRenderer.update(dt);
+
+    // 更新情绪天气渲染器（驱动"气象局特供"文字等基于 update(dt) 的生命周期）
+    this.emotionalWeatherRenderer.update(dt);
 
     // 更新形状特效池
     this.shapeEffectPool.tick(dt);

@@ -21,13 +21,31 @@ export interface PrecognitiveLensVisualConfig {
   burstDurationMs?: number;
 }
 
+/** "已看透"文字最大显示时长（ms），与原 setTimeout(1000) 保持一致 */
+const REVEAL_TEXT_MAX_LIFE_MS = 1000;
+
+/**
+ * 单个玩家的先见光环实例
+ * 持有光环绘制体，以及"已看透"文字的生命周期状态（由 update(dt) 驱动过期）
+ */
+interface ForesightAura {
+  /** 光环绘制体（包含环、层数指示器、"已看透"文字等所有子元素） */
+  graphics: PIXI.Graphics;
+  /** "已看透"文字（仅当 stacks >= 6 且非爆发时存在）；由 update(dt) 累加 revealLife 判断过期 */
+  revealText?: PIXI.Text;
+  /** 文字已显示时间（ms），由 update(dt) 累加 */
+  revealLife?: number;
+  /** 文字最大显示时间（ms），到达后由 update(dt) 移除并销毁 */
+  revealMaxLife?: number;
+}
+
 export class PrecognitiveLensRenderer {
   private entityContainer: PIXI.Container;
   private fieldContainer: PIXI.Container;
   private scale = 1;
 
-  /** 每个玩家的先见光环 */
-  private foresightAuras: Map<string, PIXI.Graphics> = new Map();
+  /** 每个玩家的先见光环（含"已看透"文字生命周期） */
+  private foresightAuras: Map<string, ForesightAura> = new Map();
 
   constructor(entityContainer: PIXI.Container, fieldContainer: PIXI.Container) {
     this.entityContainer = entityContainer;
@@ -55,12 +73,14 @@ export class PrecognitiveLensRenderer {
     themeColor = 0x4DA6FF,
   ): void {
     const s = this.scale;
-    let aura = this.foresightAuras.get(playerId);
-    if (!aura) {
-      aura = new PIXI.Graphics();
-      this.entityContainer.addChild(aura);
-      this.foresightAuras.set(playerId, aura);
+    let auraData = this.foresightAuras.get(playerId);
+    if (!auraData) {
+      const graphics = new PIXI.Graphics();
+      this.entityContainer.addChild(graphics);
+      auraData = { graphics };
+      this.foresightAuras.set(playerId, auraData);
     }
+    const aura = auraData.graphics;
 
     aura.position.set(x, y);
     aura.clear();
@@ -87,8 +107,11 @@ export class PrecognitiveLensRenderer {
       aura.fill({ color, alpha: 0.9 });
     }
 
-    // 6层时"已看透"文字
+    // 6层时显示"已看透"文字
+    // 注意：不再使用 setTimeout，文字生命周期由 update(dt) 累加 revealLife 判断过期后清理
     if (stacks >= 6 && !isBurst) {
+      // 销毁旧文字（避免重复叠加，并重置过期计时器）
+      this.disposeRevealText(auraData);
       const text = new PIXI.Text('已看透', {
         fontFamily: 'monospace',
         fontSize: 8,
@@ -98,13 +121,10 @@ export class PrecognitiveLensRenderer {
       text.position.set(0, -radius - 12 * s);
       text.alpha = 0.8;
       aura.addChild(text);
-      // 短暂显示后移除
-      setTimeout(() => {
-        if (!text.destroyed) {
-          aura!.removeChild(text);
-          text.destroy();
-        }
-      }, 1000);
+      // 记录生命周期状态，由 update(dt) 驱动过期
+      auraData.revealText = text;
+      auraData.revealLife = 0;
+      auraData.revealMaxLife = REVEAL_TEXT_MAX_LIFE_MS;
     }
 
     // 爆发期间额外光环
@@ -114,14 +134,50 @@ export class PrecognitiveLensRenderer {
     }
   }
 
-  /** 移除玩家光环 */
+  /** 移除玩家光环（同时清理其"已看透"文字） */
   removeForesight(playerId: string): void {
-    const aura = this.foresightAuras.get(playerId);
-    if (aura) {
-      this.entityContainer.removeChild(aura);
-      aura.destroy({ children: true });
+    const auraData = this.foresightAuras.get(playerId);
+    if (auraData) {
+      // 显式清理文字生命周期状态（graphics.destroy 会一并销毁子节点）
+      this.disposeRevealText(auraData);
+      this.entityContainer.removeChild(auraData.graphics);
+      auraData.graphics.destroy({ children: true });
       this.foresightAuras.delete(playerId);
     }
+  }
+
+  /**
+   * 销毁并重置"已看透"文字的生命周期状态
+   * 用于：updateForesight 重建文字前、removeForesight 清理时、update(dt) 过期后
+   */
+  private disposeRevealText(auraData: ForesightAura): void {
+    const text = auraData.revealText;
+    if (text && !text.destroyed) {
+      auraData.graphics.removeChild(text);
+      text.destroy();
+    }
+    auraData.revealText = undefined;
+    auraData.revealLife = undefined;
+    auraData.revealMaxLife = undefined;
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  生命周期更新（由 EffectRenderer.update 主循环调用，dt 单位 ms）
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * 每帧更新：累加"已看透"文字的 revealLife，超过 maxLife 后移除并销毁
+   * 取代原 setTimeout(1000) 的延迟清理逻辑
+   */
+  update(dt: number): void {
+    this.foresightAuras.forEach((auraData) => {
+      const text = auraData.revealText;
+      if (!text || text.destroyed) return;
+      auraData.revealLife = (auraData.revealLife ?? 0) + dt;
+      if (auraData.revealLife >= (auraData.revealMaxLife ?? REVEAL_TEXT_MAX_LIFE_MS)) {
+        this.disposeRevealText(auraData);
+      }
+    });
   }
 
   // ══════════════════════════════════════════════════════

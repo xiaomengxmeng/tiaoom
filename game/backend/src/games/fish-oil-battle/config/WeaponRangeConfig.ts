@@ -456,48 +456,48 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
 
   // ── 梦 - 记忆回廊（虚空系流派）────────────────
   [WeaponId.MEMORY_CORRIDOR]: {
-    damage: 6,                    // 低直接伤害
-    burstDamage: 50,              // 高爆发（历史共振叠加）
-    maxEnergy: 100,
-    energyPerHit: 10,
-    energyPerBurstHit: 20,
-    burstEnergyCost: 100,
-    damageRadius: 50,             // 回响范围
-    aoeMaxRadius: 200,
-    visualRadius: 50,
-    visualDurationMs: 2000,       // 回响持续 2s（FIFO 队列）
-    burstDurationSec: 5,          // 历史共振 5s
+    damage: 5,                    // 回响触碰伤害
+    burstDamage: 8,               // 共振 AOE 伤害
+    maxEnergy: 6,                 // 回响数量上限（同时也是爆发阈值）
+    energyPerHit: 1,              // 每次碰撞生成 1 回响
+    energyPerBurstHit: 1,         // 被击也 +1 回响
+    burstEnergyCost: 6,           // 6 回响满触发
+    damageRadius: 35,             // 回响判定半径
+    aoeMaxRadius: 60,             // 爆发共振半径
+    visualRadius: 35,
+    visualDurationMs: 7000,       // 回响持续 7s
+    burstDurationSec: 0.5,        // 共振持续半秒
     cooldownMs: 7000,
     field: {
-      maxCount: 1,                // 单一回响场
-      radius: 50,
-      durationSec: 4,
-      tickIntervalMs: 600,
-      slowFactor: 0.85,
+      maxCount: 6,                // 最多 6 个回响
+      durationSec: 7,             // 回响持续 7 秒
+      radius: 35,
+      contactDamage: 5,           // 回响触碰伤害
+      slowPercent: 0,             // 无减速，仅拖拽
     },
     triggerCooldowns: { minIntervalMs: 500 },
   },
 
   // ── 陈厌孑 - 无限折叠（空间系流派）────────────
   [WeaponId.INFINITE_FOLD]: {
-    damage: 10,                   // 中等直接伤害
-    burstDamage: 40,              // 空间重组伤害
-    maxEnergy: 100,
-    energyPerHit: 14,
-    energyPerBurstHit: 22,
-    burstEnergyCost: 100,
-    damageRadius: 40,             // 折叠影响半径
-    aoeMaxRadius: 180,
-    visualRadius: 40,
+    damage: 0,                    // 常驻无直接伤害
+    burstDamage: 18,              // 空间重组伤害
+    maxEnergy: 6,                 // 标记总层数阈值（6 层自动触发）
+    energyPerHit: 1,              // 每次碰撞 +1 层
+    energyPerBurstHit: 1,         // 被击也 +1 层
+    burstEnergyCost: 6,           // 6 层满触发
+    damageRadius: 30,             // 折叠影响半径
+    aoeMaxRadius: 200,            // 弹飞范围
+    visualRadius: 30,
     visualDurationMs: 1200,       // 闪避特效 1.2s
-    burstDurationSec: 3,          // 空间重组 3s
+    burstDurationSec: 5,          // 空间重组 5s
     cooldownMs: 5000,
     field: {
-      maxCount: 1,                // 单一折叠场
-      radius: 40,
-      durationSec: 2,
-      tickIntervalMs: 400,
-      slowFactor: 0.5,            // 强减速（空间扭曲，速度降至 50%）
+      maxCount: 3,                // 单目标标记上限 3 层
+      radius: 30,
+      durationSec: 6,             // 标记持续 6 秒
+      contactDamage: 3,           // 每层附加伤害（3 层 +9）
+      slowPercent: 4,             // 每层减速 4%（3 层 -12%）
     },
     triggerCooldowns: { minIntervalMs: 350 },
   },

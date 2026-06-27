@@ -2,23 +2,31 @@
  * 堡垒构筑者 (Bastion Builder) - 工程师流派
  * 前端视觉渲染器
  *
- * 视觉设计（工程师黄 + 多层防御堡垒）：
- * - 堡垒护盾 Bastion：堡垒核心（8 层径向渐变）+ 六角护盾（多层叠加）+ 防御粒子
- * - 爆发 Burst：构筑核心（8 层渐变）+ 六角护盾展开 + 防御环 + 三阶段动画（构筑→激活→消散）
+ * 视觉主题（Spec §6.1 #8 —— 防御工事）：
+ * - 堡垒护盾（常驻）：
+ *   · 3 层六边形护盾叠加（不同角度旋转 + 节点连接线）
+ *   · 防御符文（中心十字符文 + 外圈符文环，呼吸闪烁）
+ *   · 防御粒子（沿护盾边缘环绕飘散，向内汇聚）
+ * - 爆发：三阶段动画
+ *   · 蓄压（0-15%T）：护盾收缩汇聚
+ *   · 堡垒降临（15-30%T）：六边形要塞展开 + 护盾冲击波 + 防御塔投影
+ *   · 消散（30-100%T）：要塞淡出，冲击波扩散
+ *
+ * 独特符号：3 层六边形护盾、防御符文、六边形要塞、护盾冲击波、防御塔
+ *
+ * API：triggerBastion / removeBastion / triggerBurst / update / setScale / clear / destroy
+ * 所有动画由 update(dt) 驱动。
  */
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
+import { BaseWeaponEffectRenderer, type ActiveBurstBase, type Palette } from './BaseWeaponEffectRenderer';
 
 // ══════════════════════════════════════════════════════
 //  颜色常量（工程师黄）
 // ══════════════════════════════════════════════════════
 
-const BASTION_DEEP = 0x3a3a0a; // 深褐黄（渐变外缘）
-const BASTION_MAIN = 0xccaa00; // 主黄（堡垒主色）
-const BASTION_LIGHT = 0xffdd33; // 浅金黄（中层渐变）
-const BASTION_HIGHLIGHT = 0xffee88; // 高亮浅黄（内层渐变）
-const BASTION_WHITE = 0xffffff; // 白色（核心高亮）
+const BASTION_MAIN = 0xccaa00; // 主黄（默认 themeColor）
 
 // ══════════════════════════════════════════════════════
 //  数据结构
@@ -27,73 +35,47 @@ const BASTION_WHITE = 0xffffff; // 白色（核心高亮）
 /** 活跃堡垒护盾实例（常驻防御场） */
 interface ActiveBastion {
   container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 堡垒核心（8 层径向渐变）
-  shieldGraphics: PIXI.Graphics; // 六角护盾（多层叠加，独立旋转）
+  shieldGraphics: PIXI.Graphics; // 3 层六边形护盾
+  runeGraphics: PIXI.Graphics;   // 防御符文
   particleTimer: number;
-  life: number; // ms 累计
+  life: number;
   maxLife: number;
   x: number;
   y: number;
   radius: number;
-}
-
-/** 活跃爆发特效（构筑→激活→消散 三阶段） */
-interface ActiveBurst {
-  container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 构筑核心（8 层渐变）
-  shieldGraphics: PIXI.Graphics; // 六角护盾展开
-  ringGraphics: PIXI.Graphics; // 防御环
-  life: number;
-  maxLife: number;
   themeColor: number;
-  radius: number;
+  palette: Palette;
 }
 
-export class BastionBuilderRenderer {
-  private fieldContainer: PIXI.Container;
-  private particlePool: ParticlePool;
-  private scale = 1;
+/** 活跃爆发特效（堡垒降临） */
+interface ActiveBastionBurst extends ActiveBurstBase {
+  coreGraphics: PIXI.Graphics;   // 六边形要塞（3 层）
+  haloGraphics: PIXI.Graphics;  // 护盾冲击波
+  bladeGraphics: PIXI.Graphics;  // 防御塔投影（6 个）
+  x: number;
+  y: number;
+}
 
-  // 活跃实例池
-  private activeBastions: Map<string, ActiveBastion> = new Map();
-  private activeBursts: Map<string, ActiveBurst> = new Map();
+// ══════════════════════════════════════════════════════
+//  渲染器
+// ══════════════════════════════════════════════════════
+
+export class BastionBuilderRenderer extends BaseWeaponEffectRenderer {
+  private activeBastions = new Map<string, ActiveBastion>();
+  private activeBursts = new Map<string, ActiveBastionBurst>();
 
   constructor(fieldContainer: PIXI.Container, particlePool: ParticlePool) {
-    this.fieldContainer = fieldContainer;
-    this.particlePool = particlePool;
+    super(fieldContainer, particlePool);
   }
 
-  setScale(scale: number): void {
-    this.scale = scale;
-    // 容器统一承担全局缩放，内部 graphics 维持各自的动画 scale
-    this.activeBastions.forEach((b) => {
-      if (b.container.destroyed) return;
-      b.container.scale.set(scale);
-    });
-    this.activeBursts.forEach((b) => {
-      if (b.container.destroyed) return;
-      b.container.scale.set(scale);
-    });
-  }
+  // ═══ 堡垒护盾（常驻防御场） ═══
 
-  // ══════════════════════════════════════════════════════
-  //  堡垒护盾 Bastion（常驻防御场）
-  // ══════════════════════════════════════════════════════
-
-  /**
-   * 触发堡垒护盾视觉效果
-   * @param playerId 玩家 ID
-   * @param x 逻辑坐标 X
-   * @param y 逻辑坐标 Y
-   * @param radius 堡垒半径（逻辑 px）
-   * @param themeColor 主题色（默认工程师黄）
-   */
   triggerBastion(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = BASTION_MAIN,
+    themeColor: number = BASTION_MAIN,
   ): void {
     // 已存在则仅更新位置与半径
     const existing = this.activeBastions.get(playerId);
@@ -105,148 +87,96 @@ export class BastionBuilderRenderer {
       return;
     }
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
-    container.scale.set(this.scale); // 全局缩放由容器承担
+    container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 堡垒核心（8 层径向渐变 + 主环 + 中心核）
-    const coreGraphics = new PIXI.Graphics();
-    this.drawBastionCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
-
-    // 六角护盾（多层叠加，独立旋转）
     const shieldGraphics = new PIXI.Graphics();
-    this.drawHexShield(shieldGraphics, radius);
-    container.addChild(shieldGraphics);
-
-    this.fieldContainer.addChild(container);
+    const runeGraphics = new PIXI.Graphics();
+    container.addChild(shieldGraphics, runeGraphics);
 
     const bastion: ActiveBastion = {
       container,
-      coreGraphics,
       shieldGraphics,
+      runeGraphics,
       particleTimer: 0,
       life: 0,
-      maxLife: Number.POSITIVE_INFINITY, // 常驻，直到手动移除
+      maxLife: Infinity,
       x,
       y,
       radius,
+      themeColor,
+      palette,
     };
     this.activeBastions.set(playerId, bastion);
-
-    // 触发首帧防御粒子
-    this.spawnDefenseParticles(x, y, radius, BASTION_LIGHT);
-    // 避免未使用警告
-    void themeColor;
   }
 
-  /** 移除堡垒护盾 */
   removeBastion(playerId: string): void {
-    const bastion = this.activeBastions.get(playerId);
-    if (bastion) {
-      this.fieldContainer.removeChild(bastion.container);
-      bastion.container.destroy({ children: true });
-      this.activeBastions.delete(playerId);
-    }
+    const b = this.activeBastions.get(playerId);
+    if (!b) return;
+    this.container.removeChild(b.container);
+    b.container.destroy({ children: true });
+    this.activeBastions.delete(playerId);
   }
 
-  /**
-   * 绘制堡垒核心：8 层同心圆径向渐变（白→高亮→浅黄→主黄→深褐黄）+ 主环 + 中心核
-   * 以 (0,0) 为中心绘制
-   */
-  private drawBastionCore(g: PIXI.Graphics, radius: number): void {
+  // ═══ 独特视觉：3 层六边形护盾叠加 ═══
+
+  private drawHexShields(g: PIXI.Graphics, radius: number, palette: Palette, life: number): void {
     g.clear();
-
-    // 8 层同心圆叠加模拟径向渐变（中心白 → 高亮 → 浅黄 → 主黄 → 深褐黄外缘）
-    for (let i = 0; i < 8; i++) {
-      const t = i / 7; // 0 → 1
-      const r = radius * (0.15 + 0.85 * t);
-      // 颜色分段：白 → 高亮 → 浅黄 → 主黄 → 深褐黄
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(BASTION_WHITE, BASTION_HIGHLIGHT, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(
-          BASTION_HIGHLIGHT,
-          BASTION_LIGHT,
-          (t - 0.25) / 0.25,
-        );
-      } else if (t < 0.75) {
-        color = this.interpolateColor(
-          BASTION_LIGHT,
-          BASTION_MAIN,
-          (t - 0.5) / 0.25,
-        );
-      } else {
-        color = this.interpolateColor(
-          BASTION_MAIN,
-          BASTION_DEEP,
-          (t - 0.75) / 0.25,
-        );
-      }
-      const alpha = (1 - t) * 0.22;
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
-    }
-
-    // 堡垒主环：外环深褐黄描边 + 浅黄主环 + 内环高亮
-    g.circle(0, 0, radius);
-    g.stroke({ color: BASTION_DEEP, width: 1.5, alpha: 0.6 });
-    g.circle(0, 0, radius * 0.97);
-    g.stroke({ color: BASTION_LIGHT, width: 1, alpha: 0.7 });
-    g.circle(0, 0, radius * 0.93);
-    g.stroke({ color: BASTION_HIGHLIGHT, width: 0.4, alpha: 0.5 });
-
-    // 中心核：白色实心圆 r=4 + 主黄外环 r=6
-    g.circle(0, 0, 6);
-    g.stroke({ color: BASTION_MAIN, width: 1, alpha: 0.8 });
-    g.circle(0, 0, 4);
-    g.fill({ color: BASTION_WHITE, alpha: 1 });
-  }
-
-  /**
-   * 绘制六角护盾：3 层六边形叠加（由外到内，独立旋转）
-   * 由 shieldGraphics 独立承担旋转动画
-   */
-  private drawHexShield(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    // 3 层六边形叠加：外层主黄 → 中层浅黄 → 内层高亮
-    const layers = [
-      { r: radius * 1.0, color: BASTION_MAIN, alpha: 0.4, width: 2 },
-      { r: radius * 0.85, color: BASTION_LIGHT, alpha: 0.5, width: 1.5 },
-      { r: radius * 0.7, color: BASTION_HIGHLIGHT, alpha: 0.6, width: 1 },
-    ];
-    for (const layer of layers) {
+    for (let layer = 0; layer < 3; layer++) {
+      const r = radius * (0.5 + layer * 0.25);
+      const rot = life * 0.0005 * Math.PI * (layer % 2 === 0 ? 1 : -1);
+      const cos = Math.cos(rot);
+      const sin = Math.sin(rot);
+      // 六边形护盾（填充 + 描边），手动旋转顶点以实现各层独立旋转
       const pts: [number, number][] = [];
       for (let i = 0; i < 6; i++) {
-        const a = (i * Math.PI) / 3 - Math.PI / 6; // 顶点朝上
-        pts.push([Math.cos(a) * layer.r, Math.sin(a) * layer.r]);
+        const a = (i * Math.PI) / 3 - Math.PI / 6;
+        const px = Math.cos(a) * r;
+        const py = Math.sin(a) * r;
+        pts.push([px * cos - py * sin, px * sin + py * cos]);
       }
       g.moveTo(pts[0][0], pts[0][1]);
       for (let i = 1; i < 6; i++) g.lineTo(pts[i][0], pts[i][1]);
       g.closePath();
-      g.stroke({ color: layer.color, width: layer.width, alpha: layer.alpha });
+      g.fill({ color: palette.glow, alpha: 0.1 - layer * 0.02 });
+      g.stroke({ color: palette.glow, width: 2 - layer * 0.3, alpha: 0.7 - layer * 0.15 });
+      // 节点连接线（六边形顶点对角连线）
+      for (let i = 0; i < 6; i += 2) {
+        g.moveTo(pts[i][0], pts[i][1]);
+        g.lineTo(pts[(i + 3) % 6][0], pts[(i + 3) % 6][1]);
+        g.stroke({ color: palette.highlight, width: 0.5, alpha: 0.4 });
+      }
     }
   }
 
-  /**
-   * 生成防御粒子（沿六角护盾边缘环绕飘散）
-   * 利用 particlePool.emit，每帧由 update 节流调用
-   */
-  private spawnDefenseParticles(
-    x: number,
-    y: number,
-    radius: number,
-    color: number,
-  ): void {
+  // ═══ 独特视觉：防御符文 ═══
+
+  private drawDefenseRune(g: PIXI.Graphics, radius: number, palette: Palette, life: number): void {
+    g.clear();
+    const breath = 0.7 + 0.3 * Math.sin(life * 0.003 * Math.PI);
+    // 中心十字符文
+    g.moveTo(-radius * 0.15, 0);
+    g.lineTo(radius * 0.15, 0);
+    g.moveTo(0, -radius * 0.15);
+    g.lineTo(0, radius * 0.15);
+    g.stroke({ color: palette.highlight, width: 2, alpha: breath });
+    // 外圈符文环
+    g.circle(0, 0, radius * 0.12);
+    g.stroke({ color: palette.glow, width: 1, alpha: breath * 0.6 });
+  }
+
+  // ═══ 防御粒子（常驻场，向内汇聚） ═══
+
+  private spawnDefenseParticles(x: number, y: number, radius: number, color: number): void {
     const s = this.scale;
     for (let i = 0; i < 2; i++) {
       const angle = Math.random() * Math.PI * 2;
-      // 从护盾边缘附近出发
       const startDist = radius * s * (0.7 + Math.random() * 0.3);
       const px = x + Math.cos(angle) * startDist;
       const py = y + Math.sin(angle) * startDist;
-      // 向内汇聚速度（px/s），表现防御场吸入感
       const speed = (15 + Math.random() * 10) * s;
       this.particlePool.emit({
         x: px,
@@ -264,242 +194,214 @@ export class BastionBuilderRenderer {
     }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  爆发特效（构筑→激活→消散 三阶段动画）
-  // ══════════════════════════════════════════════════════
+  // ═══ 爆发：堡垒降临 ═══
 
-  /**
-   * 触发爆发视觉效果
-   * @param playerId 玩家 ID
-   * @param x 逻辑坐标 X
-   * @param y 逻辑坐标 Y
-   * @param radius 爆发范围（逻辑 px）
-   * @param themeColor 主题色
-   * @param durationMs 持续时间（ms），默认 5000
-   */
   triggerBurst(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = BASTION_MAIN,
+    themeColor: number = BASTION_MAIN,
     durationMs?: number,
   ): void {
     // 若已存在，先销毁旧实例
-    const old = this.activeBursts.get(playerId);
-    if (old) {
-      this.fieldContainer.removeChild(old.container);
-      old.container.destroy({ children: true });
+    const existing = this.activeBursts.get(playerId);
+    if (existing) {
+      this.removeBurstInstance(existing);
     }
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 1. 构筑核心（8 层径向渐变 + 中心核）
     const coreGraphics = new PIXI.Graphics();
-    this.drawBurstCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
+    const haloGraphics = new PIXI.Graphics();
+    const bladeGraphics = new PIXI.Graphics();
+    container.addChild(coreGraphics, haloGraphics, bladeGraphics);
 
-    // 2. 六角护盾展开（多层叠加）
-    const shieldGraphics = new PIXI.Graphics();
-    this.drawHexShield(shieldGraphics, radius * 0.8);
-    container.addChild(shieldGraphics);
-
-    // 3. 防御环（双层细高亮环）
-    const ringGraphics = new PIXI.Graphics();
-    this.drawBurstRing(ringGraphics, radius);
-    container.addChild(ringGraphics);
-
-    this.fieldContainer.addChild(container);
-
-    const burst: ActiveBurst = {
+    const burst: ActiveBastionBurst = {
       container,
-      coreGraphics,
-      shieldGraphics,
-      ringGraphics,
       life: 0,
-      maxLife: durationMs ?? 5000,
+      maxLife: durationMs ?? 1500,
       themeColor,
       radius,
+      particleTimer: 0,
+      palette,
+      coreGraphics,
+      haloGraphics,
+      bladeGraphics,
+      x,
+      y,
     };
     this.activeBursts.set(playerId, burst);
   }
 
-  /**
-   * 绘制构筑核心：8 层同心圆（白→高亮→浅黄→主黄→透明）+ 中心核
-   */
-  private drawBurstCore(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    const coreR = radius * 0.6; // 核心区域半径
+  // ═══ 三阶段钩子 ═══
 
-    // 8 层同心圆叠加
-    for (let i = 0; i < 8; i++) {
-      const t = i / 7;
-      const r = coreR * (0.1 + 0.9 * t);
-      let color: number;
-      if (t < 0.33) {
-        color = this.interpolateColor(BASTION_WHITE, BASTION_HIGHLIGHT, t / 0.33);
-      } else if (t < 0.66) {
-        color = this.interpolateColor(
-          BASTION_HIGHLIGHT,
-          BASTION_LIGHT,
-          (t - 0.33) / 0.33,
-        );
-      } else {
-        color = this.interpolateColor(
-          BASTION_LIGHT,
-          BASTION_MAIN,
-          (t - 0.66) / 0.34,
-        );
+  protected phase1Charge(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveBastionBurst;
+    const ease = this.easeOutCubic(t);
+    // 蓄压：3 层护盾从外向内收缩汇聚
+    b.coreGraphics.clear();
+    b.coreGraphics.rotation = 0;
+    for (let layer = 0; layer < 3; layer++) {
+      const r = b.radius * (0.5 + layer * 0.25) * (1 - ease * 0.5);
+      const pts: [number, number][] = [];
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3 - Math.PI / 6;
+        pts.push([Math.cos(a) * r, Math.sin(a) * r]);
       }
-      const alpha = (1 - t) * 0.28;
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
+      b.coreGraphics.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < 6; i++) b.coreGraphics.lineTo(pts[i][0], pts[i][1]);
+      b.coreGraphics.closePath();
+      b.coreGraphics.stroke({ color: b.palette.glow, width: 1.5, alpha: ease });
     }
-
-    // 中心核 r=6
-    g.circle(0, 0, 6);
-    g.fill({ color: BASTION_WHITE, alpha: 1 });
-
-    // 主黄边缘辉光
-    g.circle(0, 0, 8);
-    g.stroke({ color: BASTION_MAIN, width: 1.5, alpha: 0.8 });
+    b.coreGraphics.alpha = ease;
+    // 冲击波与防御塔隐藏
+    b.haloGraphics.alpha = 0;
+    b.bladeGraphics.alpha = 0;
   }
 
-  /**
-   * 绘制防御环：双层细高亮环
-   */
-  private drawBurstRing(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    g.circle(0, 0, radius);
-    g.stroke({ color: BASTION_LIGHT, width: 0.6, alpha: 0.7 });
-    g.circle(0, 0, radius * 0.95);
-    g.stroke({ color: BASTION_HIGHLIGHT, width: 0.3, alpha: 0.5 });
+  protected phase2Burst(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveBastionBurst;
+    const ease = this.easeOutCubic(t);
+    // 六边形要塞展开（3 层从内到外）
+    b.coreGraphics.clear();
+    b.coreGraphics.rotation = b.life * 0.001 * Math.PI;
+    for (let layer = 0; layer < 3; layer++) {
+      const r = b.radius * (0.2 + layer * 0.25) * ease;
+      const pts: [number, number][] = [];
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3 - Math.PI / 6;
+        pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+      }
+      b.coreGraphics.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < 6; i++) b.coreGraphics.lineTo(pts[i][0], pts[i][1]);
+      b.coreGraphics.closePath();
+      b.coreGraphics.fill({ color: b.palette.glow, alpha: 0.2 * ease });
+      b.coreGraphics.stroke({ color: b.palette.highlight, width: 2, alpha: ease });
+    }
+    b.coreGraphics.alpha = 1;
+    // 护盾冲击波
+    b.haloGraphics.clear();
+    const waveR = b.radius * 1.5 * ease;
+    b.haloGraphics.circle(0, 0, waveR);
+    b.haloGraphics.stroke({ color: b.palette.glow, width: 4 * (1 - ease), alpha: 0.6 * (1 - ease) });
+    b.haloGraphics.alpha = 1;
+    // 防御塔投影（6 个顶点的小塔）
+    b.bladeGraphics.clear();
+    for (let i = 0; i < 6; i++) {
+      const angle = (i * Math.PI) / 3;
+      const tx = Math.cos(angle) * b.radius * 0.4 * ease;
+      const ty = Math.sin(angle) * b.radius * 0.4 * ease;
+      b.bladeGraphics.circle(tx, ty, 4 * ease);
+      b.bladeGraphics.fill({ color: b.palette.primary, alpha: ease });
+    }
+    b.bladeGraphics.alpha = 1;
+    // 防御粒子向外溅射（节流：particleTimer += 16）
+    b.particleTimer += 16;
+    if (b.particleTimer > 80) {
+      b.particleTimer = 0;
+      this.spawnBurstDefenseParticles(b, 2);
+    }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  更新循环
-  // ══════════════════════════════════════════════════════
+  protected phase3Diffuse(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveBastionBurst;
+    const ease = this.easeOutCubic(t);
+    // 六边形要塞淡出
+    b.coreGraphics.alpha = 1 - ease;
+    b.coreGraphics.rotation += 0.001 * Math.PI;
+    // 护盾冲击波扩散
+    b.haloGraphics.clear();
+    const waveR = b.radius * 1.5 * (1 + ease * 0.5);
+    b.haloGraphics.circle(0, 0, waveR);
+    b.haloGraphics.stroke({ color: b.palette.glow, width: 2 * (1 - ease), alpha: 0.4 * (1 - ease) });
+    b.haloGraphics.alpha = 1 - ease;
+    // 防御塔淡出
+    b.bladeGraphics.alpha = 1 - ease;
+  }
 
-  /** 每帧更新（由 EffectRenderer 调用，dt 单位 ms） */
+  // ═══ 独特视觉：爆发期防御粒子溅射 ═══
+
+  private spawnBurstDefenseParticles(burst: ActiveBastionBurst, count: number): void {
+    const s = this.scale;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = (40 + Math.random() * 30) * s;
+      this.particlePool.emit({
+        x: burst.x,
+        y: burst.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        drag: 0.3,
+        life: 600,
+        scaleStart: 1,
+        scaleEnd: 0,
+        alphaStart: 0.9,
+        alphaEnd: 0,
+        tint: burst.palette.glow,
+        radius: 2 * s,
+      });
+    }
+  }
+
+  // ═══ 生命周期 ═══
+
   update(dt: number): void {
-    // ── 堡垒护盾：核心呼吸 + 护盾旋转 + 防御粒子 ──
+    // ── 堡垒护盾：3 层六边形护盾 + 防御符文 + 粒子 ──
     this.activeBastions.forEach((bastion) => {
       bastion.life += dt;
-      // 核心呼吸 scale 1.0↔1.05（2s 周期）
-      const breath = 1 + 0.05 * Math.sin(bastion.life * 0.001 * Math.PI);
-      bastion.coreGraphics.scale.set(breath);
-      // 核心脉动 alpha 0.7↔0.95
-      const pulse = 0.8 + 0.15 * Math.sin(bastion.life * 0.001 * Math.PI);
-      bastion.coreGraphics.alpha = pulse;
-      // 六角护盾缓慢旋转 0.3 转/秒
-      bastion.shieldGraphics.rotation += dt * 0.0006 * Math.PI;
-      // 护盾呼吸 alpha 0.7↔1.0（反相，与核心错峰）
-      bastion.shieldGraphics.alpha =
-        0.85 + 0.15 * Math.sin(bastion.life * 0.001 * Math.PI + Math.PI / 2);
-      // 防御粒子：每 1.5s 生成 2 个
+      // 3 层六边形护盾（每帧重绘，含各层独立旋转）
+      this.drawHexShields(bastion.shieldGraphics, bastion.radius, bastion.palette, bastion.life);
+      // 防御符文（呼吸闪烁）
+      this.drawDefenseRune(bastion.runeGraphics, bastion.radius, bastion.palette, bastion.life);
+      // 防御粒子（节流：每 1.5s 生成）
       bastion.particleTimer += dt;
       if (bastion.particleTimer > 1500) {
         bastion.particleTimer = 0;
-        this.spawnDefenseParticles(
-          bastion.x,
-          bastion.y,
-          bastion.radius,
-          BASTION_LIGHT,
-        );
+        this.spawnDefenseParticles(bastion.x, bastion.y, bastion.radius, bastion.palette.glow);
       }
     });
 
-    // ── 爆发：三阶段动画（构筑→激活→消散） ──
-    this.activeBursts.forEach((burst, playerId) => {
-      burst.life += dt;
-      const T = burst.maxLife;
-      if (burst.life >= T) {
-        this.removeBurst(playerId);
-        return;
-      }
-      const phase1End = T * 0.2; // 构筑阶段
-      const phase2End = T * 0.4; // 激活阶段
-
-      if (burst.life < phase1End) {
-        // 阶段1 构筑：护盾从 0.3 收缩组装到 1.0，核心显现，环未展开
-        const t = burst.life / phase1End;
-        burst.shieldGraphics.scale.set(0.3 + 0.7 * this.easeOutCubic(t));
-        burst.shieldGraphics.alpha = t; // 0 → 1 显现
-        burst.coreGraphics.alpha = t;
-        burst.coreGraphics.scale.set(0.5 + 0.5 * t);
-        burst.ringGraphics.alpha = 0;
-        burst.ringGraphics.scale.set(0.3);
-      } else if (burst.life < phase2End) {
-        // 阶段2 激活：环展开 scale 0.3→1.0(easeOutCubic)，护盾脉冲变亮，核心全亮
-        const t = (burst.life - phase1End) / (phase2End - phase1End);
-        const eased = this.easeOutCubic(t);
-        burst.ringGraphics.scale.set(0.3 + 0.7 * eased);
-        burst.ringGraphics.alpha = t; // 0 → 1
-        // 护盾脉冲：scale 1.0↔1.1 高频闪烁
-        burst.shieldGraphics.scale.set(
-          1.0 + 0.1 * Math.sin(t * Math.PI * 6),
-        );
-        burst.shieldGraphics.alpha = 1.0;
-        burst.coreGraphics.alpha = 1.0;
-        burst.coreGraphics.scale.set(1.0 + 0.05 * Math.sin(t * Math.PI * 6));
-      } else {
-        // 阶段3 消散：环扩散 scale 1.0→2.0 alpha 1.0→0，护盾消散，核心保持透明渐隐
-        const t = (burst.life - phase2End) / (T - phase2End);
-        burst.ringGraphics.scale.set(1.0 + 1.0 * t);
-        burst.ringGraphics.alpha = 1.0 - t;
-        burst.shieldGraphics.alpha = 1.0 - t;
-        burst.shieldGraphics.rotation += dt * 0.002 * Math.PI;
-        burst.coreGraphics.alpha = 1.0 - 0.7 * t;
+    // ── 爆发：三阶段动画 ──
+    const expired: string[] = [];
+    this.activeBursts.forEach((b, key) => {
+      const isExpired = this.runBurstAnimation(b, dt);
+      if (isExpired) {
+        expired.push(key);
       }
     });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  移除与清理
-  // ══════════════════════════════════════════════════════
-
-  /** 移除爆发特效 */
-  removeBurst(playerId: string): void {
-    const burst = this.activeBursts.get(playerId);
-    if (burst) {
-      this.fieldContainer.removeChild(burst.container);
-      burst.container.destroy({ children: true });
-      this.activeBursts.delete(playerId);
+    for (const key of expired) {
+      const b = this.activeBursts.get(key);
+      if (b) this.removeBurstInstance(b);
+      this.activeBursts.delete(key);
     }
   }
 
-  /** 清除所有特效（不销毁渲染器） */
+  private removeBurstInstance(b: ActiveBastionBurst): void {
+    this.container.removeChild(b.container);
+    b.container.destroy({ children: true });
+  }
+
+  protected onScaleChange(scale: number): void {
+    this.activeBastions.forEach((b) => {
+      if (!b.container.destroyed) b.container.scale.set(scale);
+    });
+    this.activeBursts.forEach((b) => {
+      if (!b.container.destroyed) b.container.scale.set(scale);
+    });
+  }
+
   clear(): void {
-    this.activeBastions.forEach((_, playerId) => this.removeBastion(playerId));
-    this.activeBursts.forEach((_, playerId) => this.removeBurst(playerId));
-  }
-
-  destroy(): void {
-    this.clear();
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  工具方法
-  // ══════════════════════════════════════════════════════
-
-  /** 颜色插值（from → to，t ∈ [0,1]） */
-  private interpolateColor(from: number, to: number, t: number): number {
-    const fr = (from >> 16) & 0xff;
-    const fg = (from >> 8) & 0xff;
-    const fb = from & 0xff;
-    const tr = (to >> 16) & 0xff;
-    const tg = (to >> 8) & 0xff;
-    const tb = to & 0xff;
-    const r = Math.round(fr + (tr - fr) * t);
-    const g = Math.round(fg + (tg - fg) * t);
-    const b = Math.round(fb + (tb - fb) * t);
-    return (r << 16) | (g << 8) | b;
-  }
-
-  /** easeOutCubic 缓动 */
-  private easeOutCubic(t: number): number {
-    return 1 - Math.pow(1 - t, 3);
+    this.activeBastions.forEach((b) => {
+      this.container.removeChild(b.container);
+      b.container.destroy({ children: true });
+    });
+    this.activeBastions.clear();
+    this.activeBursts.forEach((b) => this.removeBurstInstance(b));
+    this.activeBursts.clear();
   }
 }

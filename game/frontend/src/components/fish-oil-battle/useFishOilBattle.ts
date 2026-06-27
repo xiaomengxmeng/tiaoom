@@ -892,6 +892,9 @@ export function useFishOilBattle(
           });
         }
         break;
+      default:
+        console.warn('[FishOilBattle] 未处理的 VisualEventType:', data.type);
+        break;
     }
   }
 

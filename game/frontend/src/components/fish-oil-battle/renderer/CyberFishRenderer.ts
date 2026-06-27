@@ -919,6 +919,9 @@ export class CyberFishRenderer {
           );
         }
         break;
+      default:
+        console.warn('[CyberFishRenderer] 未处理的 VisualEventType:', config.type);
+        break;
     }
   }
 

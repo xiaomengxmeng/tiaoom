@@ -666,6 +666,8 @@ export default class FishOilRoom extends GameRoom {
         durationSec: evt.metadata?.durationSec,
         angle: evt.metadata?.angle,
         length: evt.metadata?.length,
+        // 通用目标 ID（联动角色事件专用：冻伤/漩涡/共振/重组等）
+        targetId: evt.metadata?.targetId,
         // 空气斥力场
         anchorId: evt.metadata?.anchorId,
         // 熵寂之触

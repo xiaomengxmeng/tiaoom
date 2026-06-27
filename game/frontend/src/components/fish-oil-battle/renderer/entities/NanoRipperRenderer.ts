@@ -2,542 +2,462 @@
  * 纳米撕裂者 (Nano Ripper) - 侵略者流派
  * 前端视觉渲染器
  *
- * 视觉设计（侵略者红橙色系 —— 高频低伤害的纳米级撕裂）：
- * - 撕裂场 RipperField：8 层径向渐变光环（白→高亮橙→浅橙红→主红→深红透明）
- *   + 双层主环（外环高亮橙 + 内环白）+ 中心撕裂核（白实心 + 浅橙红外晕）
- *   + 撕裂粒子（红色，向外飞散）+ 缓慢旋转（撕裂痕迹感）
+ * 视觉设计（侵略者红橙色系 —— 纳米级分子撕裂）：
+ * - 撕裂场 RipperField：6×6 分子点阵网格（每个点阵有局部错位抖动）
+ *   + 4 条从中心生长的撕裂裂纹（径向直线，随生命生长）
+ *   + 8 层径向渐变光环 + 双层主环 + 中心撕裂核
+ *   + 红色撕裂粒子（向外飞散，带阻力衰减）
  * - 爆发 Burst：三阶段动画
- *   · 蓄能（0-15%T）：撕裂场收缩，能量向中心汇聚
- *   · 撕裂（15%-30%T）：奇点爆发（10 层渐变核心）+ 6 条撕裂线闪现 + 视界环展开
- *   · 余波（30%-100%T）：撕裂痕迹扩散消散，红色粒子飞散
+ *   · 蓄压（0-15%T）：分子网格收缩汇聚，裂纹向中心收缩
+ *   · 撕裂（15%-30%T）：X 形交叉裂刃爆发 + 黑色虚空核显现 + 碎片粒子飞散（带重力）
+ *   · 余波（30%-100%T）：裂刃消散，虚空核残留淡出，红色粒子飘散
  *
  * API：triggerRipperField / removeRipperField / triggerBurst / update / setScale / clear / destroy
- * 所有动画由 update(dt) 驱动，不使用 rAF / setTimeout。
  */
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
+import { BaseWeaponEffectRenderer, type ActiveBurstBase, type Palette } from './BaseWeaponEffectRenderer';
 
 // ══════════════════════════════════════════════════════
 //  颜色常量（侵略者红）
 // ══════════════════════════════════════════════════════
 
-const NANO_DEEP = 0x4a0a0a; // 深红（渐变末端）
-const NANO_MAIN = 0xcc2200; // 主红
-const NANO_LIGHT = 0xff6633; // 浅橙红
-const NANO_HIGHLIGHT = 0xffaa66; // 高亮橙
-const NANO_WHITE = 0xffffff; // 白色
+const NANO_DEEP = 0x4a0a0a;
+const NANO_MAIN = 0xcc2200;
+const NANO_LIGHT = 0xff6633;
+const NANO_HIGHLIGHT = 0xffaa66;
+const NANO_WHITE = 0xffffff;
+const NANO_VOID = 0x0a0000; // 黑色虚空核
 
 // ══════════════════════════════════════════════════════
 //  数据结构
 // ══════════════════════════════════════════════════════
 
-/** 活跃撕裂场实例（常驻，移动时留下撕裂痕迹） */
 interface ActiveRipperField {
   container: PIXI.Container;
-  fieldGraphics: PIXI.Graphics; // 8 层渐变光环 + 双层主环 + 中心撕裂核
-  particleTimer: number; // 粒子节流计时器
-  life: number; // ms 累计
+  gridGraphics: PIXI.Graphics;      // 6×6 分子点阵网格
+  crackGraphics: PIXI.Graphics;     // 4 条生长裂纹
+  haloGraphics: PIXI.Graphics;      // 8 层渐变光环 + 双层主环 + 中心核
+  particleTimer: number;
+  life: number;
   maxLife: number;
   x: number;
   y: number;
   radius: number;
   themeColor: number;
+  palette: Palette;
 }
 
-/** 活跃爆发特效（三阶段：蓄能 → 撕裂 → 余波） */
-interface ActiveBurst {
-  container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 撕裂奇点核心（10 层渐变）
-  horizonGraphics: PIXI.Graphics; // 视界环（双层细高亮环）
-  tearGraphics: PIXI.Graphics; // 撕裂线（6 条向心汇聚）
-  haloGraphics: PIXI.Graphics; // 余波光晕（多层细环）
-  life: number;
-  maxLife: number;
-  themeColor: number;
-  radius: number;
-  particleTimer: number; // 撕裂阶段粒子节流
+interface ActiveNanoBurst extends ActiveBurstBase {
+  bladeGraphics: PIXI.Graphics;      // X 形交叉裂刃
+  voidGraphics: PIXI.Graphics;       // 黑色虚空核
+  haloGraphics: PIXI.Graphics;       // 余波光晕
+  gridGraphics: PIXI.Graphics;       // 收缩的分子网格
+  x: number;
+  y: number;
 }
 
-export class NanoRipperRenderer {
-  private fieldContainer: PIXI.Container;
-  private particlePool: ParticlePool;
-  private scale = 1;
+// ══════════════════════════════════════════════════════
+//  渲染器
+// ══════════════════════════════════════════════════════
 
-  // 活跃实例池
-  private activeFields: Map<string, ActiveRipperField> = new Map();
-  private activeBursts: Map<string, ActiveBurst> = new Map();
+export class NanoRipperRenderer extends BaseWeaponEffectRenderer {
+  private activeFields = new Map<string, ActiveRipperField>();
+  private activeBursts = new Map<string, ActiveNanoBurst>();
 
   constructor(fieldContainer: PIXI.Container, particlePool: ParticlePool) {
-    this.fieldContainer = fieldContainer;
-    this.particlePool = particlePool;
+    super(fieldContainer, particlePool);
   }
 
-  setScale(scale: number): void {
-    this.scale = scale;
-    // 容器统一承担全局缩放，内部 graphics 维持各自的动画 scale
-    this.activeFields.forEach((f) => {
-      if (f.container.destroyed) return;
-      f.container.scale.set(scale);
-    });
-    this.activeBursts.forEach((b) => {
-      if (b.container.destroyed) return;
-      b.container.scale.set(scale);
-    });
-  }
+  // ═══ 撕裂场 ═══
 
-  // ══════════════════════════════════════════════════════
-  //  撕裂场 RipperField（常驻，移动时留下撕裂痕迹）
-  // ══════════════════════════════════════════════════════
-
-  /**
-   * 触发撕裂场视觉效果
-   * @param playerId 玩家 ID
-   * @param x 逻辑坐标 X
-   * @param y 逻辑坐标 Y
-   * @param radius 撕裂场半径（逻辑 px）
-   * @param themeColor 主题色（默认主红）
-   */
   triggerRipperField(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = NANO_MAIN,
+    themeColor: number = NANO_MAIN,
   ): void {
-    // 已存在则仅更新位置与半径（移动时跟随）
     const existing = this.activeFields.get(playerId);
     if (existing) {
       existing.x = x;
       existing.y = y;
-      existing.radius = radius;
       existing.container.position.set(x, y);
       return;
     }
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
-    container.scale.set(this.scale); // 全局缩放由容器承担
+    container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 8 层渐变光环 + 双层主环 + 中心撕裂核
-    const fieldGraphics = new PIXI.Graphics();
-    this.drawRipperField(fieldGraphics, radius);
-    container.addChild(fieldGraphics);
+    const gridGraphics = new PIXI.Graphics();
+    container.addChild(gridGraphics);
 
-    this.fieldContainer.addChild(container);
+    const crackGraphics = new PIXI.Graphics();
+    container.addChild(crackGraphics);
+
+    const haloGraphics = new PIXI.Graphics();
+    container.addChild(haloGraphics);
 
     const field: ActiveRipperField = {
       container,
-      fieldGraphics,
+      gridGraphics,
+      crackGraphics,
+      haloGraphics,
       particleTimer: 0,
       life: 0,
-      maxLife: Number.POSITIVE_INFINITY, // 常驻，直到手动移除
+      maxLife: Infinity,
       x,
       y,
       radius,
       themeColor,
+      palette,
     };
+    this.drawFieldHalo(haloGraphics, radius, palette);
     this.activeFields.set(playerId, field);
-
-    // 触发首帧撕裂粒子
-    this.spawnTearParticles(x, y, radius, NANO_MAIN);
   }
 
-  /** 移除撕裂场 */
   removeRipperField(playerId: string): void {
     const f = this.activeFields.get(playerId);
-    if (f) {
-      this.fieldContainer.removeChild(f.container);
-      f.container.destroy({ children: true });
-      this.activeFields.delete(playerId);
-    }
+    if (!f) return;
+    this.container.removeChild(f.container);
+    f.container.destroy({ children: true });
+    this.activeFields.delete(playerId);
   }
 
-  /**
-   * 绘制撕裂场：8 层同心圆径向渐变（白→高亮橙→浅橙红→主红→深红透明）
-   * + 双层主环 + 中心撕裂核
-   * 以 (0,0) 为中心绘制，半径单位为逻辑 px
-   */
-  private drawRipperField(g: PIXI.Graphics, radius: number): void {
+  /** 绘制 6×6 分子点阵网格 + 局部错位 */
+  private drawMolecularGrid(g: PIXI.Graphics, radius: number, palette: Palette, life: number): void {
     g.clear();
+    const grid = 6;
+    const spacing = (radius * 2) / grid;
+    const startX = -radius;
+    const startY = -radius;
+    // 抖动幅度随生命脉动
+    const jitterAmp = 1 + 0.5 * Math.sin(life * 0.003 * Math.PI);
 
-    // 8 层渐变光环：中心白 → 高亮橙 → 浅橙红 → 主红 → 深红透明
-    for (let i = 0; i < 8; i++) {
-      const t = i / 7; // 0 → 1
-      const r = radius * (0.15 + 0.85 * t);
-      // 颜色四段插值：白→高亮橙→浅橙红→主红→深红
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(NANO_WHITE, NANO_HIGHLIGHT, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(
-          NANO_HIGHLIGHT,
-          NANO_LIGHT,
-          (t - 0.25) / 0.25,
-        );
-      } else if (t < 0.75) {
-        color = this.interpolateColor(NANO_LIGHT, NANO_MAIN, (t - 0.5) / 0.25);
-      } else {
-        color = this.interpolateColor(NANO_MAIN, NANO_DEEP, (t - 0.75) / 0.25);
+    for (let row = 0; row < grid; row++) {
+      for (let col = 0; col < grid; col++) {
+        const baseX = startX + col * spacing + spacing / 2;
+        const baseY = startY + row * spacing + spacing / 2;
+        // 局部错位：基于位置的确定性抖动 + 时间脉动
+        const jx = Math.sin(row * 1.7 + col * 2.3 + life * 0.001) * jitterAmp;
+        const jy = Math.cos(row * 2.1 + col * 1.9 + life * 0.001) * jitterAmp;
+        const px = baseX + jx;
+        const py = baseY + jy;
+        const distFromCenter = Math.sqrt(px * px + py * py);
+        if (distFromCenter > radius) continue;
+        // 距离中心越远点越小越暗
+        const distRatio = distFromCenter / radius;
+        const dotR = Math.max(0.5, 2.5 - distRatio * 1.5);
+        const alpha = Math.max(0.2, 0.8 - distRatio * 0.4);
+        const color = distRatio < 0.3 ? palette.highlight : distRatio < 0.6 ? palette.glow : palette.primary;
+        g.circle(px, py, dotR);
+        g.fill({ color, alpha });
       }
-      const alpha = (1 - t) * 0.22; // 中心高 alpha，边缘趋近 0
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
     }
+  }
 
-    // 双层主环：外环高亮橙 + 内环白
+  /** 绘制 4 条从中心生长的撕裂裂纹（径向直线） */
+  private drawGrowingCracks(g: PIXI.Graphics, radius: number, palette: Palette, growProgress: number): void {
+    g.clear();
+    const crackCount = 4;
+    for (let i = 0; i < crackCount; i++) {
+      const angle = (i * Math.PI * 2) / crackCount + Math.PI / 4;
+      const len = radius * growProgress;
+      const startX = Math.cos(angle) * radius * 0.1;
+      const startY = Math.sin(angle) * radius * 0.1;
+      const endX = Math.cos(angle) * len;
+      const endY = Math.sin(angle) * len;
+      // 主裂纹线
+      g.moveTo(startX, startY);
+      g.lineTo(endX, endY);
+      g.stroke({ color: palette.glow, width: 1.5, alpha: 0.8 * growProgress });
+      // 高亮内线
+      g.moveTo(startX, startY);
+      g.lineTo(endX, endY);
+      g.stroke({ color: palette.highlight, width: 0.5, alpha: 0.6 * growProgress });
+    }
+  }
+
+  /** 绘制场光晕（8 层渐变 + 双层主环 + 中心核） */
+  private drawFieldHalo(g: PIXI.Graphics, radius: number, palette: Palette): void {
+    g.clear();
+    // 8 层径向渐变
+    this.drawMultilayerCircle(
+      g, radius, 8,
+      (t) => this.interpolateColor(palette.highlight, palette.shadow, t),
+      (t) => (1 - t) * 0.4,
+    );
+    // 双层主环
     g.circle(0, 0, radius);
-    g.stroke({ color: NANO_HIGHLIGHT, width: 1, alpha: 0.7 });
+    g.stroke({ color: palette.glow, width: 1, alpha: 0.7 });
     g.circle(0, 0, radius * 0.95);
-    g.stroke({ color: NANO_WHITE, width: 0.4, alpha: 0.5 });
-
-    // 中心撕裂核：白色实心圆 r=4 + 浅橙红外环 r=6
-    g.circle(0, 0, 6);
-    g.stroke({ color: NANO_LIGHT, width: 1, alpha: 0.8 });
+    g.stroke({ color: palette.highlight, width: 0.4, alpha: 0.5 });
+    // 中心撕裂核
     g.circle(0, 0, 4);
-    g.fill({ color: NANO_WHITE, alpha: 1 });
+    g.fill({ color: NANO_WHITE });
+    g.circle(0, 0, 6);
+    g.stroke({ color: palette.glow, width: 1, alpha: 0.8 });
   }
 
-  /**
-   * 生成撕裂粒子（红色，向外飞散）
-   * 利用 particlePool.emit，由 update 节流调用
-   */
-  private spawnTearParticles(
-    x: number,
-    y: number,
-    radius: number,
-    color: number,
-  ): void {
-    const s = this.scale;
-    for (let i = 0; i < 2; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      // 从撕裂核附近出发
-      const startDist = radius * s * (0.2 + Math.random() * 0.2);
-      const px = x + Math.cos(angle) * startDist;
-      const py = y + Math.sin(angle) * startDist;
-      // 向外飞散速度（px/s）
-      const speed = (20 + Math.random() * 15) * s;
-      this.particlePool.emit({
-        x: px,
-        y: py,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 1500,
-        scaleStart: 1,
-        scaleEnd: 0,
-        alphaStart: 0.8,
-        alphaEnd: 0,
-        tint: color,
-        radius: (1.5 + Math.random() * 1.5) * s,
-      });
-    }
-  }
+  // ═══ 爆发 ═══
 
-  // ══════════════════════════════════════════════════════
-  //  爆发特效（三阶段：蓄能 → 撕裂 → 余波）
-  // ══════════════════════════════════════════════════════
-
-  /**
-   * 触发爆发视觉效果
-   * @param playerId 玩家 ID
-   * @param x 逻辑坐标 X
-   * @param y 逻辑坐标 Y
-   * @param radius 爆发范围（逻辑 px）
-   * @param themeColor 主题色
-   * @param durationMs 持续时间（ms），默认 5000
-   */
   triggerBurst(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = NANO_MAIN,
+    themeColor: number = NANO_MAIN,
     durationMs?: number,
   ): void {
-    // 若已存在，先销毁旧实例
-    const old = this.activeBursts.get(playerId);
-    if (old) {
-      this.fieldContainer.removeChild(old.container);
-      old.container.destroy({ children: true });
+    const existing = this.activeBursts.get(playerId);
+    if (existing) {
+      this.removeBurstInstance(existing);
     }
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 1. 撕裂奇点核心（10 层渐变 + 白核 + 红色边缘辉光）
-    const coreGraphics = new PIXI.Graphics();
-    this.drawBurstCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
-
-    // 2. 视界环（双层细高亮环）
-    const horizonGraphics = new PIXI.Graphics();
-    this.drawBurstHorizon(horizonGraphics, radius);
-    container.addChild(horizonGraphics);
-
-    // 3. 撕裂线（6 条 quadraticCurveTo 从外向内汇聚）
-    const tearGraphics = new PIXI.Graphics();
-    this.drawBurstTears(tearGraphics, radius);
-    container.addChild(tearGraphics);
-
-    // 4. 余波光晕（多层细环）
+    const gridGraphics = new PIXI.Graphics();
+    const bladeGraphics = new PIXI.Graphics();
+    const voidGraphics = new PIXI.Graphics();
     const haloGraphics = new PIXI.Graphics();
-    this.drawBurstHalo(haloGraphics, radius);
-    container.addChild(haloGraphics);
+    container.addChild(gridGraphics, bladeGraphics, voidGraphics, haloGraphics);
 
-    this.fieldContainer.addChild(container);
-
-    const burst: ActiveBurst = {
+    const burst: ActiveNanoBurst = {
       container,
-      coreGraphics,
-      horizonGraphics,
-      tearGraphics,
-      haloGraphics,
       life: 0,
-      maxLife: durationMs ?? 5000,
+      maxLife: durationMs ?? 1500,
       themeColor,
       radius,
       particleTimer: 0,
+      palette,
+      bladeGraphics,
+      voidGraphics,
+      haloGraphics,
+      gridGraphics,
+      x,
+      y,
     };
     this.activeBursts.set(playerId, burst);
   }
 
-  /**
-   * 绘制撕裂奇点核心：10 层同心圆（深红 → 主红 → 浅橙红 → 高亮橙 → 白）
-   * + 白核 + 红色边缘辉光
-   */
-  private drawBurstCore(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    const coreR = radius * 0.6; // 奇点核心区域半径
+  // ═══ 三阶段钩子 ═══
 
-    // 10 层同心圆叠加（深红 → 主红 → 浅橙红 → 高亮橙 → 白）
-    for (let i = 0; i < 10; i++) {
-      const t = i / 9; // 0 → 1
-      const r = coreR * (0.1 + 0.9 * t);
-      // 颜色四段插值：深红→主红→浅橙红→高亮橙→白
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(NANO_DEEP, NANO_MAIN, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(NANO_MAIN, NANO_LIGHT, (t - 0.25) / 0.25);
-      } else if (t < 0.75) {
-        color = this.interpolateColor(
-          NANO_LIGHT,
-          NANO_HIGHLIGHT,
-          (t - 0.5) / 0.25,
-        );
-      } else {
-        color = this.interpolateColor(
-          NANO_HIGHLIGHT,
-          NANO_WHITE,
-          (t - 0.75) / 0.25,
-        );
-      }
-      const alpha = (1 - t) * 0.25;
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
-    }
-
-    // 撕裂核 r=6（白色实心）
-    g.circle(0, 0, 6);
-    g.fill({ color: NANO_WHITE, alpha: 1 });
-
-    // 红色边缘辉光
-    g.circle(0, 0, 8);
-    g.stroke({ color: NANO_MAIN, width: 1.5, alpha: 0.8 });
+  protected phase1Charge(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveNanoBurst;
+    const ease = this.easeOutCubic(t);
+    // 分子网格收缩汇聚
+    b.gridGraphics.clear();
+    const gridR = b.radius * (1 - ease * 0.7);
+    this.drawMolecularGrid(b.gridGraphics, gridR, b.palette, b.life);
+    b.gridGraphics.alpha = 1 - t * 0.3;
+    // 虚空核逐渐显现
+    b.voidGraphics.clear();
+    const voidR = b.radius * 0.1 * ease;
+    this.drawVoidCore(b.voidGraphics, voidR, b.palette, t * 0.5);
+    // 裂刃蓄压隐藏
+    b.bladeGraphics.alpha = 0;
+    b.haloGraphics.alpha = 0;
   }
 
-  /**
-   * 绘制视界环：双层细高亮环
-   */
-  private drawBurstHorizon(g: PIXI.Graphics, radius: number): void {
+  protected phase2Burst(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveNanoBurst;
+    const ease = this.easeOutCubic(t);
+    // X 形交叉裂刃爆发
+    this.drawXBlades(b.bladeGraphics, b.radius, b.palette, ease);
+    b.bladeGraphics.alpha = 1;
+    // 虚空核满显
+    b.voidGraphics.clear();
+    this.drawVoidCore(b.voidGraphics, b.radius * 0.1, b.palette, 1);
+    // 网格消散
+    b.gridGraphics.alpha = (1 - t) * 0.7;
+    // 发射碎片粒子（带重力下落）
+    b.particleTimer += 16;
+    if (b.particleTimer > 50) {
+      b.particleTimer = 0;
+      this.spawnShrapnelParticles(b, 3);
+    }
+  }
+
+  protected phase3Diffuse(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveNanoBurst;
+    const ease = this.easeOutCubic(t);
+    // 裂刃消散
+    b.bladeGraphics.alpha = 1 - ease;
+    b.bladeGraphics.scale.set(1 + ease * 0.5);
+    // 虚空核残留淡出
+    b.voidGraphics.clear();
+    this.drawVoidCore(b.voidGraphics, b.radius * 0.1 * (1 + ease * 0.5), b.palette, 1 - ease);
+    // 余波光晕展开
+    this.drawBurstHalo(b.haloGraphics, b.radius, b.palette, ease);
+    b.haloGraphics.alpha = 1 - ease * 0.7;
+    // 残余粒子
+    b.particleTimer += 16;
+    if (b.particleTimer > 100) {
+      b.particleTimer = 0;
+      this.spawnShrapnelParticles(b, 1);
+    }
+  }
+
+  /** 绘制 X 形交叉裂刃 */
+  private drawXBlades(g: PIXI.Graphics, radius: number, palette: Palette, progress: number): void {
     g.clear();
+    const len = radius * progress;
+    // X 形两条交叉裂刃（45° 和 135°）
+    const angles = [Math.PI / 4, (3 * Math.PI) / 4];
+    for (const angle of angles) {
+      const dx = Math.cos(angle);
+      const dy = Math.sin(angle);
+      // 主裂刃（粗）
+      g.moveTo(-dx * len, -dy * len);
+      g.lineTo(dx * len, dy * len);
+      g.stroke({ color: palette.glow, width: 3, alpha: 0.9 });
+      // 高亮裂刃（细）
+      g.moveTo(-dx * len, -dy * len);
+      g.lineTo(dx * len, dy * len);
+      g.stroke({ color: palette.highlight, width: 1, alpha: 1 });
+      // 边缘辉光
+      g.moveTo(-dx * len * 0.9, -dy * len * 0.9);
+      g.lineTo(dx * len * 0.9, dy * len * 0.9);
+      g.stroke({ color: palette.primary, width: 6, alpha: 0.3 });
+    }
+  }
+
+  /** 绘制黑色虚空核 */
+  private drawVoidCore(g: PIXI.Graphics, radius: number, palette: Palette, intensity: number): void {
+    g.clear();
+    // 10 层渐变：中心黑 → 外圈暗红
+    this.drawMultilayerCircle(
+      g, radius, 10,
+      (t) => this.interpolateColor(NANO_VOID, palette.shadow, t),
+      (t) => (1 - t * 0.5) * intensity,
+    );
+    // 黑色吸光核
+    g.circle(0, 0, Math.max(0.5, radius * 0.3));
+    g.fill({ color: NANO_VOID, alpha: intensity });
+    // 紫色边缘辉光
     g.circle(0, 0, radius);
-    g.stroke({ color: NANO_HIGHLIGHT, width: 0.6, alpha: 0.7 });
-    g.circle(0, 0, radius * 0.95);
-    g.stroke({ color: NANO_WHITE, width: 0.3, alpha: 0.5 });
+    g.stroke({ color: palette.primary, width: 1, alpha: 0.6 * intensity });
   }
 
-  /**
-   * 绘制撕裂线：6 条 quadraticCurveTo 从外向内汇聚（锯齿状撕裂感）
-   */
-  private drawBurstTears(g: PIXI.Graphics, radius: number): void {
+  /** 绘制余波光晕 */
+  private drawBurstHalo(g: PIXI.Graphics, radius: number, palette: Palette, progress: number): void {
     g.clear();
-    for (let i = 0; i < 6; i++) {
-      const a = (i * Math.PI) / 3;
-      const startX = Math.cos(a) * radius;
-      const startY = Math.sin(a) * radius;
-      // 控制点偏离直线方向，形成弧形撕裂感
-      const midR = radius * 0.5;
-      const offset = Math.PI / 6;
-      const cpX = Math.cos(a + offset) * midR;
-      const cpY = Math.sin(a + offset) * midR;
-      g.moveTo(startX, startY);
-      g.quadraticCurveTo(cpX, cpY, 0, 0);
-      g.stroke({ color: NANO_LIGHT, width: 1, alpha: 0.8 });
+    const r = radius * (1 + progress * 0.5);
+    // 4 层细环
+    for (let i = 0; i < 4; i++) {
+      const ringR = r * (0.7 + i * 0.1);
+      g.circle(0, 0, ringR);
+      g.stroke({ color: palette.glow, width: 0.8, alpha: 0.3 - i * 0.05 });
     }
   }
 
-  /**
-   * 绘制余波光晕：4 层细环（白 → 高亮橙 → 浅橙红 → 主红）
-   */
-  private drawBurstHalo(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    const colors = [NANO_WHITE, NANO_HIGHLIGHT, NANO_LIGHT, NANO_MAIN];
-    for (let i = 0; i < colors.length; i++) {
-      const r = radius * (0.8 + i * 0.1);
-      g.circle(0, 0, r);
-      g.stroke({ color: colors[i], width: 0.5, alpha: 0.4 });
-    }
-  }
-
-  /**
-   * 撕裂阶段喷射粒子（从核心向外飞散的红色撕裂粒子）
-   */
-  private spawnBurstParticles(burst: ActiveBurst): void {
-    const s = this.scale;
-    const count = 3;
+  /** 发射碎片粒子（带重力下落 + 阻力 + 颜色渐变） */
+  private spawnShrapnelParticles(burst: ActiveNanoBurst, count: number): void {
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const startDist = burst.radius * s * 0.1;
-      const px = burst.container.position.x + Math.cos(angle) * startDist;
-      const py = burst.container.position.y + Math.sin(angle) * startDist;
-      const speed = (60 + Math.random() * 40) * s;
+      const speed = 80 + Math.random() * 120;
       this.particlePool.emit({
-        x: px,
-        y: py,
+        x: burst.x,
+        y: burst.y,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 800,
-        scaleStart: 1.2,
+        vy: Math.sin(angle) * speed - 50, // 略微向上初速
+        ax: 0,
+        ay: 200, // 重力下落
+        drag: 0.5, // 阻力衰减
+        life: 800 + Math.random() * 400,
+        scaleStart: 1.5,
         scaleEnd: 0,
         alphaStart: 1,
         alphaEnd: 0,
-        tint: Math.random() < 0.5 ? NANO_MAIN : NANO_LIGHT,
-        radius: (1.5 + Math.random() * 1.5) * s,
+        tint: burst.palette.glow,
+        tintStart: burst.palette.highlight,
+        tintEnd: burst.palette.shadow,
+        radius: 1.5 + Math.random() * 1.5,
+        rotationSpeed: (Math.random() - 0.5) * 10,
       });
     }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  更新循环
-  // ══════════════════════════════════════════════════════
+  // ═══ 生命周期 ═══
 
-  /** 每帧更新（由 EffectRenderer 调用，dt 单位 ms） */
   update(dt: number): void {
-    // ── 撕裂场：呼吸 scale + 脉动 alpha + 缓慢旋转 + 撕裂粒子 ──
-    this.activeFields.forEach((field) => {
-      field.life += dt;
-      // 呼吸 scale 1.0↔1.05（2s 周期）
-      const breath = 1 + 0.05 * Math.sin(field.life * 0.001 * Math.PI);
-      field.fieldGraphics.scale.set(breath);
-      // 脉动 alpha 0.6↔0.9
-      const pulse = 0.75 + 0.15 * Math.sin(field.life * 0.001 * Math.PI);
-      field.fieldGraphics.alpha = pulse;
-      // 撕裂场缓慢旋转（撕裂痕迹感，0.25 转/秒）
-      field.fieldGraphics.rotation += dt * 0.0005 * Math.PI;
-      // 撕裂粒子：每 1.2s 生成 2 个
-      field.particleTimer += dt;
-      if (field.particleTimer > 1200) {
-        field.particleTimer = 0;
-        this.spawnTearParticles(field.x, field.y, field.radius, NANO_MAIN);
+    // 更新撕裂场
+    this.activeFields.forEach((f) => {
+      f.life += dt;
+      // 重绘分子网格（抖动）
+      this.drawMolecularGrid(f.gridGraphics, f.radius, f.palette, f.life);
+      // 重绘生长裂纹
+      const growProgress = Math.min(1, f.life / 2000);
+      this.drawGrowingCracks(f.crackGraphics, f.radius, f.palette, growProgress);
+      // 光晕呼吸
+      const breath = 1 + 0.05 * Math.sin(f.life * 0.002 * Math.PI);
+      f.haloGraphics.scale.set(breath);
+      // 粒子节流
+      f.particleTimer += dt;
+      if (f.particleTimer > 200) {
+        f.particleTimer = 0;
+        const angle = Math.random() * Math.PI * 2;
+        this.particlePool.emit({
+          x: f.x,
+          y: f.y,
+          vx: Math.cos(angle) * 30,
+          vy: Math.sin(angle) * 30,
+          drag: 0.8,
+          life: 600,
+          scaleStart: 1,
+          scaleEnd: 0,
+          alphaStart: 0.6,
+          alphaEnd: 0,
+          tint: f.palette.glow,
+          radius: 1.5,
+        });
       }
     });
 
-    // ── 爆发：三阶段动画 ──
-    this.activeBursts.forEach((burst, playerId) => {
-      burst.life += dt;
-      const T = burst.maxLife;
-      if (burst.life >= T) {
-        this.removeBurst(playerId);
-        return;
-      }
-      const phase1End = T * 0.15; // 蓄能阶段结束
-      const phase2End = T * 0.30; // 撕裂阶段结束
-
-      if (burst.life < phase1End) {
-        // 阶段1 蓄能：光环收缩 scale 1.0→0.3，alpha 1.0→0.3，撕裂核显现
-        const t = burst.life / phase1End;
-        burst.haloGraphics.scale.set(1.0 - 0.7 * t);
-        burst.haloGraphics.alpha = 1.0 - 0.7 * t;
-        burst.coreGraphics.alpha = t; // 0 → 1 显现
-        burst.tearGraphics.alpha = 0;
-        burst.horizonGraphics.alpha = 0;
-        burst.horizonGraphics.scale.set(0.3);
-      } else if (burst.life < phase2End) {
-        // 阶段2 撕裂：奇点爆发 scale 0.3→1.0(easeOutCubic)，撕裂线闪现 alpha 0→0.8，视界环展开
-        const t = (burst.life - phase1End) / (phase2End - phase1End);
-        const eased = this.easeOutCubic(t);
-        burst.haloGraphics.scale.set(0.3 + 0.7 * eased);
-        burst.haloGraphics.alpha = 0.3 + 0.4 * t; // 0.3 → 0.7
-        burst.coreGraphics.alpha = 1.0;
-        burst.tearGraphics.alpha = 0.8 * t; // 0 → 0.8
-        burst.horizonGraphics.scale.set(0.3 + 0.7 * eased);
-        burst.horizonGraphics.alpha = t; // 0 → 1
-        // 撕裂阶段喷射粒子（每 80ms）
-        burst.particleTimer += dt;
-        if (burst.particleTimer > 80) {
-          burst.particleTimer = 0;
-          this.spawnBurstParticles(burst);
-        }
-      } else {
-        // 阶段3 余波：视界环扩散 scale 1.0→2.0 alpha 1.0→0，余波光晕消散 alpha 0.7→0（sin 波动），
-        //            撕裂线消散 alpha 0.8→0，撕裂核保持但透明 alpha 1.0→0.3
-        const t = (burst.life - phase2End) / (T - phase2End);
-        burst.horizonGraphics.scale.set(1.0 + 1.0 * t);
-        burst.horizonGraphics.alpha = 1.0 - t;
-        burst.haloGraphics.alpha = 0.7 * (1.0 - t);
-        burst.haloGraphics.rotation = Math.sin(t * Math.PI * 4) * 0.5;
-        burst.tearGraphics.alpha = 0.8 * (1.0 - t);
-        burst.coreGraphics.alpha = 1.0 - 0.7 * t;
+    // 更新爆发
+    const expired: string[] = [];
+    this.activeBursts.forEach((b, key) => {
+      const isExpired = this.runBurstAnimation(b, dt);
+      if (isExpired) {
+        expired.push(key);
       }
     });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  移除与清理
-  // ══════════════════════════════════════════════════════
-
-  /** 移除爆发特效 */
-  removeBurst(playerId: string): void {
-    const burst = this.activeBursts.get(playerId);
-    if (burst) {
-      this.fieldContainer.removeChild(burst.container);
-      burst.container.destroy({ children: true });
-      this.activeBursts.delete(playerId);
+    for (const key of expired) {
+      const b = this.activeBursts.get(key);
+      if (b) this.removeBurstInstance(b);
+      this.activeBursts.delete(key);
     }
   }
 
-  /** 清除所有特效（不销毁渲染器） */
+  private removeBurstInstance(b: ActiveNanoBurst): void {
+    this.container.removeChild(b.container);
+    b.container.destroy({ children: true });
+  }
+
+  protected onScaleChange(scale: number): void {
+    this.activeFields.forEach((f) => {
+      if (!f.container.destroyed) f.container.scale.set(scale);
+    });
+    this.activeBursts.forEach((b) => {
+      if (!b.container.destroyed) b.container.scale.set(scale);
+    });
+  }
+
   clear(): void {
-    this.activeFields.forEach((_, playerId) => this.removeRipperField(playerId));
-    this.activeBursts.forEach((_, playerId) => this.removeBurst(playerId));
-  }
-
-  destroy(): void {
-    this.clear();
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  工具方法
-  // ══════════════════════════════════════════════════════
-
-  /** 颜色插值（from → to，t ∈ [0,1]） */
-  private interpolateColor(from: number, to: number, t: number): number {
-    const fr = (from >> 16) & 0xff;
-    const fg = (from >> 8) & 0xff;
-    const fb = from & 0xff;
-    const tr = (to >> 16) & 0xff;
-    const tg = (to >> 8) & 0xff;
-    const tb = to & 0xff;
-    const r = Math.round(fr + (tr - fr) * t);
-    const g = Math.round(fg + (tg - fg) * t);
-    const b = Math.round(fb + (tb - fb) * t);
-    return (r << 16) | (g << 8) | b;
-  }
-
-  /** easeOutCubic 缓动 */
-  private easeOutCubic(t: number): number {
-    return 1 - Math.pow(1 - t, 3);
+    this.activeFields.forEach((f) => {
+      this.container.removeChild(f.container);
+      f.container.destroy({ children: true });
+    });
+    this.activeFields.clear();
+    this.activeBursts.forEach((b) => this.removeBurstInstance(b));
+    this.activeBursts.clear();
   }
 }

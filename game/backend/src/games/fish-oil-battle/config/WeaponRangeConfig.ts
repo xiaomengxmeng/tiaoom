@@ -432,12 +432,12 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
 
   // ── KE - 流体操控（水系流派）──────────────────
   [WeaponId.FLUID_MASTERY]: {
-    damage: 8,                    // 普通伤害
-    burstDamage: 45,              // 爆发伤害
-    maxEnergy: 100,
-    energyPerHit: 12,
-    energyPerBurstHit: 25,
-    burstEnergyCost: 100,
+    damage: 2,                    // 普通伤害
+    burstDamage: 15,              // 爆发伤害
+    maxEnergy: 4,
+    energyPerHit: 1,
+    energyPerBurstHit: 1,
+    burstEnergyCost: 4,
     damageRadius: 45,             // 水流尾迹影响半径
     aoeMaxRadius: 220,            // 水龙卷最大范围
     visualRadius: 45,

@@ -695,6 +695,7 @@ export default class FishOilRoom extends GameRoom {
         fluidFlowDir: evt.metadata?.flowDir,
         fluidTrailLength: evt.metadata?.trailLength,
         fluidPullForce: evt.metadata?.pullForce,
+        isAngry: evt.metadata?.isAngry,
         // 梦 - 记忆回廊
         memoryShardId: evt.metadata?.shardId,
         memoryEchoCount: evt.metadata?.echoCount,

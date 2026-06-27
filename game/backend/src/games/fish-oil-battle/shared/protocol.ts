@@ -179,6 +179,8 @@ export interface VisualEventData {
   fluidTrailLength?: number;
   /** KE：漩涡牵引力 */
   fluidPullForce?: number;
+  /** KE：书生愤怒态（hp<30% 时触发，色系切换为深红） */
+  isAngry?: boolean;
   /** 梦：记忆碎片ID */
   memoryShardId?: string;
   /** 梦：回响数量 */

@@ -48,6 +48,8 @@ export class FluidMasteryWeapon implements IWeapon {
   private stacks: Record<string, number> = {};
   private flags: Record<string, boolean> = {};
   private tickCounter = 0;
+  /** 书生愤怒态（hp<30% 时触发，色系切换为深红） */
+  private isAngry = false;
 
   // ── 生命周期 ──────────────────────────────────────
 
@@ -56,6 +58,10 @@ export class FluidMasteryWeapon implements IWeapon {
     const CFG = WEAPON_RANGE_CONFIG[this.id];
     const self = state.getPlayer(this.playerId);
     if (!self) return effects;
+
+    // 书生愤怒态：hp < 30% 时激活
+    const hpRatio = self.hp / self.maxHp;
+    this.isAngry = hpRatio < 0.3;
 
     this.tickCounter++;
     const isSecondTick = this.tickCounter >= TICKS_PER_SEC;
@@ -97,6 +103,7 @@ export class FluidMasteryWeapon implements IWeapon {
             flowDir,
             trailLength,
             radius: CFG.damageRadius ?? 45,
+            isAngry: this.isAngry,
           },
         });
 
@@ -199,6 +206,7 @@ export class FluidMasteryWeapon implements IWeapon {
         pullForce,
         targetId: attackerId,
         radius: vortexRadius,
+        isAngry: this.isAngry,
       },
     });
 
@@ -264,6 +272,7 @@ export class FluidMasteryWeapon implements IWeapon {
         isBurst: true,
         radius,
         durationMs,
+        isAngry: this.isAngry,
         desc: '水龙卷启动',
       },
     }];
@@ -289,6 +298,7 @@ export class FluidMasteryWeapon implements IWeapon {
       custom: {
         burstTicksLeft: this.burstTicksLeft,
         burstCooldownTicksLeft: this.burstCooldownTicksLeft,
+        isAngry: this.isAngry,
       },
     };
   }
@@ -303,6 +313,7 @@ export class FluidMasteryWeapon implements IWeapon {
     this.vortexCooldownTicks = 0;
     this.burstCooldownTicksLeft = 0;
     this.tickCounter = 0;
+    this.isAngry = false;
     this.cooldowns = {};
     this.stacks = {};
     this.flags = {};

@@ -14,6 +14,13 @@ export interface PooledParticle {
   alphaEnd: number;
   rotationSpeed: number;
   tint: number;
+  // 新增物理属性
+  ax: number;           // X 加速度 (px/s²)
+  ay: number;           // Y 加速度 (px/s²)
+  drag: number;         // 阻力系数 (0-1, 每秒衰减比例)
+  tintStart: number;   // 颜色渐变起始色
+  tintEnd: number;      // 颜色渐变结束色
+  hasGradient: boolean; // 是否启用颜色渐变
   active: boolean;
 }
 
@@ -48,6 +55,11 @@ export class ParticlePool {
         alphaStart: 1, alphaEnd: 0,
         rotationSpeed: 0,
         tint: 0xffffff,
+        ax: 0, ay: 0,
+        drag: 0,
+        tintStart: 0xffffff,
+        tintEnd: 0xffffff,
+        hasGradient: false,
         active: false,
       };
     }
@@ -71,6 +83,12 @@ export class ParticlePool {
     tint?: number;
     radius?: number;
     rotationSpeed?: number;
+    // 新增物理参数
+    ax?: number;
+    ay?: number;
+    drag?: number;
+    tintStart?: number;
+    tintEnd?: number;
   }): PooledParticle | null {
     // 找第一个不活跃的粒子
     let p: PooledParticle | null = null;
@@ -86,11 +104,15 @@ export class ParticlePool {
       p.active = false;
     }
 
+    const tintVal = config.tint ?? 0xffffff;
+    const tintStart = config.tintStart ?? tintVal;
+    const tintEnd = config.tintEnd ?? tintVal;
+
     // 初始化 Graphics 为圆形
     const g = p.sprite as PIXI.Graphics;
     g.clear();
     g.circle(0, 0, config.radius ?? 3);
-    g.fill({ color: config.tint ?? 0xffffff });
+    g.fill({ color: tintVal });
     g.x = config.x;
     g.y = config.y;
     g.visible = true;
@@ -107,7 +129,13 @@ export class ParticlePool {
     p.alphaStart = config.alphaStart ?? 1;
     p.alphaEnd = config.alphaEnd ?? 0;
     p.rotationSpeed = config.rotationSpeed ?? 0;
-    p.tint = config.tint ?? 0xffffff;
+    p.tint = tintVal;
+    p.ax = config.ax ?? 0;
+    p.ay = config.ay ?? 0;
+    p.drag = config.drag ?? 0;
+    p.tintStart = tintStart;
+    p.tintEnd = tintEnd;
+    p.hasGradient = config.tintStart !== undefined || config.tintEnd !== undefined;
     p.active = true;
 
     return p;
@@ -219,6 +247,7 @@ export class ParticlePool {
    * @param dt 帧间隔（ms）
    */
   update(dt: number): void {
+    const dtSec = dt / 1000;
     for (let i = 0; i < this.capacity; i++) {
       const p = this.pool[i];
       if (!p.active) continue;
@@ -234,9 +263,20 @@ export class ParticlePool {
 
       const t = p.life / p.maxLife;
 
+      // 阻力衰减
+      if (p.drag > 0) {
+        const dragFactor = Math.pow(1 - p.drag, dtSec);
+        p.vx *= dragFactor;
+        p.vy *= dragFactor;
+      }
+
+      // 重力加速
+      p.vx += p.ax * dtSec;
+      p.vy += p.ay * dtSec;
+
       // 位置
-      p.sprite.x += p.vx * dt / 1000;
-      p.sprite.y += p.vy * dt / 1000;
+      p.sprite.x += p.vx * dtSec;
+      p.sprite.y += p.vy * dtSec;
 
       // 缩放
       const s = p.scaleStart + (p.scaleEnd - p.scaleStart) * t;
@@ -246,8 +286,20 @@ export class ParticlePool {
       p.sprite.alpha = p.alphaStart + (p.alphaEnd - p.alphaStart) * t;
 
       // 旋转
-      p.sprite.rotation += p.rotationSpeed * dt / 1000;
+      p.sprite.rotation += p.rotationSpeed * dtSec;
+
+      // 颜色渐变
+      if (p.hasGradient && p.tintStart !== p.tintEnd) {
+        const r = Math.round(this.lerp((p.tintStart >> 16) & 0xff, (p.tintEnd >> 16) & 0xff, t));
+        const g = Math.round(this.lerp((p.tintStart >> 8) & 0xff, (p.tintEnd >> 8) & 0xff, t));
+        const b = Math.round(this.lerp(p.tintStart & 0xff, p.tintEnd & 0xff, t));
+        p.sprite.tint = (r << 16) | (g << 8) | b;
+      }
     }
+  }
+
+  private lerp(a: number, b: number, t: number): number {
+    return a + (b - a) * t;
   }
 
   /** 清除所有活跃粒子 */

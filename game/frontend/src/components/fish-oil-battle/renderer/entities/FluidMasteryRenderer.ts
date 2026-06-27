@@ -1,42 +1,77 @@
 /**
  * KE 流体操控 (Fluid Mastery) - 鱼油大战
- * 前端视觉渲染器
+ * 前端视觉渲染器（书海潮汐方案）
  *
- * 视觉设计（水系三态：水流尾迹 + 漩涡牵引 + 水龙卷爆发）：
- * - 水流尾迹 Trail：水流光环（8 层径向渐变）+ 流动波纹（3 条扩散环）+ 水滴粒子 + 流向箭头
- * - 漩涡牵引 Vortex：漩涡核心（6 层）+ 阿基米德螺旋臂（3 条）+ 牵引曲线（4 条）
- * - 爆发 Burst：水龙卷主体（10 层）+ 螺旋水臂（4 条）+ 中心水柱 + 水花粒子（三阶段动画）
+ * 视觉设计（书生古籍人设 + 水系三态）：
+ * - 水流尾迹 Trail：8 层径向渐变光环 + 漂浮古籍书页（3-5 片）+ 墨迹波纹（3 条）+ 墨迹箭头 + 水滴/书页碎片粒子
+ * - 漩涡牵引 Vortex：漩涡核心（6 层）+ 中心古籍（翻开旋转）+ 书页飞舞螺旋臂（3 条×8-10 片）+ 翻书声波环 + 墨迹牵引线
+ * - 水龙卷爆发 Burst：三阶段动画
+ *   · 蓄压（0-15%T）：水流向心汇聚 + 古籍从地下浮现（scale 0→1）
+ *   · 爆发（15-30%T）：水龙卷主体爆发 + 书页风暴（20-30 片带重力飘落）+ 翻书声波环扩散 + 中心古籍旋转
+ *   · 扩散（30-100%T）：水龙卷消散 + 书页如落雨飘落 + 古籍核心残留淡出 + 余波涟漪
+ *
+ * 人设彩蛋：
+ * - 漂浮书页用预渲染古籍文字纹理
+ * - 翻书声波环（波浪起伏圆环，卷轴金色，区分水流）
+ * - 书生愤怒态（hp<30%）：色系切换为深红，书页变焦黑
+ *
+ * 继承 BaseWeaponEffectRenderer：复用对象池/调色板派生/三阶段动画调度
  */
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
+import { BaseWeaponEffectRenderer, type ActiveBurstBase, type Palette } from './BaseWeaponEffectRenderer';
 
 // ══════════════════════════════════════════════════════
-//  颜色常量（水系）
+//  颜色常量（双轨：水系 + 古籍人设 + 愤怒态）
 // ══════════════════════════════════════════════════════
 
-const FLUID_DEEP = 0x0044aa; // 深海蓝
-const FLUID_MAIN = 0x0099ff; // 主水蓝
-const FLUID_LIGHT = 0x66ccff; // 浅水蓝
-const FLUID_HIGHLIGHT = 0xaaeeff; // 高亮浅蓝
-const FLUID_WHITE = 0xffffff; // 浪花白
-const FLUID_FOAM = 0xe0f4ff; // 泡沫白蓝
+// 水系基础色
+const FLUID_DEEP = 0x0044aa;
+const FLUID_MAIN = 0x0099ff;
+const FLUID_LIGHT = 0x66ccff;
+const FLUID_HIGHLIGHT = 0xaaeeff;
+const FLUID_WHITE = 0xffffff;
+const FLUID_FOAM = 0xe0f4ff;
 
-// 流动波纹周期（单条波纹从生成到消失的时长，ms）
+// 古籍人设色
+const PARCHMENT_OLD = 0xd4b896;
+const INK_BLACK = 0x1a1a2e;
+const SCROLL_GOLD = 0xc9a961;
+
+// 书生愤怒态色
+const ANGER_DEEP = 0x4a0a0a;
+const ANGER_MAIN = 0xcc2200;
+const ANGER_GLOW = 0xff6633;
+const BURNED_PAGE = 0x2a2a2a;
+
 const TRAIL_RIPPLE_MAX_LIFE = 1500;
+const SOUND_WAVE_INTERVAL = 1500;
 
 // ══════════════════════════════════════════════════════
 //  数据结构
 // ══════════════════════════════════════════════════════
 
-/** 活跃水流尾迹实例（光环 + 流动波纹 + 水滴 + 流向箭头） */
+interface BookPage {
+  sprite: PIXI.Sprite;
+  x: number;
+  y: number;
+  rotation: number;
+  rotationSpeed: number;
+  driftPhase: number;
+  driftRadius: number;
+  alpha: number;
+  scale: number;
+}
+
 interface ActiveTrail {
   container: PIXI.Container;
-  rippleGraphics: PIXI.Graphics; // 流动波纹（3 条扩散环）
-  auraGraphics: PIXI.Graphics; // 水流尾迹光环
-  arrowGraphics: PIXI.Graphics; // 流向箭头
+  auraGraphics: PIXI.Graphics;
+  rippleGraphics: PIXI.Graphics;
+  arrowGraphics: PIXI.Graphics;
+  bookPages: BookPage[];
   particleTimer: number;
-  rippleLife: number[]; // 3 条波纹各自的 life（ms）
+  rippleLife: number[];
   rippleMaxLife: number;
   life: number;
   maxLife: number;
@@ -44,93 +79,121 @@ interface ActiveTrail {
   y: number;
   radius: number;
   flowDir: number;
+  palette: Palette;
+  isAngry: boolean;
 }
 
-/** 活跃漩涡牵引实例（核心 + 螺旋臂 + 牵引线） */
 interface ActiveVortex {
   container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 漩涡核心（6 层同心圆）
-  armGraphics: PIXI.Graphics; // 3 条阿基米德螺旋臂
-  pullGraphics: PIXI.Graphics; // 4 条牵引曲线
+  coreGraphics: PIXI.Graphics;
+  armGraphics: PIXI.Graphics;
+  pullGraphics: PIXI.Graphics;
+  soundWaveGraphics: PIXI.Graphics;
+  soundWaveTimer: number;
+  soundWaveRings: Array<{ radius: number; alpha: number; life: number }>;
   life: number;
   maxLife: number;
   x: number;
   y: number;
   radius: number;
   pullForce: number;
-  themeColor: number;
+  palette: Palette;
+  isAngry: boolean;
 }
 
-/** 活跃水龙卷爆发实例（三阶段动画） */
-interface ActiveBurst {
-  container: PIXI.Container;
-  columnGraphics: PIXI.Graphics; // 水龙卷主体（10 层同心圆）
-  armGraphics: PIXI.Graphics; // 4 条螺旋水臂
-  coreGraphics: PIXI.Graphics; // 中心水柱白色高亮
-  splashGraphics: PIXI.Graphics; // 水花范围环
-  particleTimer: number;
-  life: number;
-  maxLife: number;
-  themeColor: number;
-  radius: number;
+interface ActiveFluidBurst extends ActiveBurstBase {
+  columnGraphics: PIXI.Graphics;
+  armGraphics: PIXI.Graphics;
+  coreGraphics: PIXI.Graphics;
+  splashGraphics: PIXI.Graphics;
+  soundWaveGraphics: PIXI.Graphics;
+  soundWaveTimer: number;
+  stormPages: BookPage[];
+  soundWaveRings: Array<{ radius: number; alpha: number; life: number }>;
   x: number;
   y: number;
+  isAngry: boolean;
 }
 
-export class FluidMasteryRenderer {
-  private fieldContainer: PIXI.Container;
-  private particlePool: ParticlePool;
-  private scale = 1;
+// ══════════════════════════════════════════════════════
+//  预渲染纹理
+// ══════════════════════════════════════════════════════
 
-  // 活跃实例池
+let bookPageTexture: PIXI.Texture | null = null;
+let bookPageBurnedTexture: PIXI.Texture | null = null;
+let scrollTextTextures: PIXI.Texture[] = [];
+
+function createBookPageTexture(burned = false): PIXI.Texture {
+  const g = new PIXI.Graphics();
+  g.rect(0, 0, 16, 16);
+  g.fill({ color: burned ? BURNED_PAGE : PARCHMENT_OLD, alpha: 0.85 });
+  g.rect(0, 0, 16, 1);
+  g.fill({ color: burned ? 0x4a0a0a : SCROLL_GOLD, alpha: 0.6 });
+  g.rect(0, 15, 16, 1);
+  g.fill({ color: burned ? 0x4a0a0a : SCROLL_GOLD, alpha: 0.6 });
+  const inkColor = burned ? 0x1a0a0a : INK_BLACK;
+  for (let i = 2; i < 15; i += 2) {
+    const w = 8 + Math.random() * 6;
+    g.rect(2, i, w, 0.8);
+    g.fill({ color: inkColor, alpha: 0.4 + Math.random() * 0.3 });
+  }
+  return g.texture;
+}
+
+function createScrollTextTextures(): PIXI.Texture[] {
+  const texts = ['鱼排都市志', '潮生明月', '书海无涯', '卷舒云水', '墨染千秋'];
+  return texts.map(() => {
+    const g = new PIXI.Graphics();
+    g.rect(0, 0, 16, 16);
+    g.fill({ color: PARCHMENT_OLD, alpha: 0.3 });
+    for (let i = 0; i < 5; i++) {
+      g.rect(2 + i * 2, 2, 1, 12);
+      g.fill({ color: INK_BLACK, alpha: 0.5 });
+    }
+    return g.texture;
+  });
+}
+
+function ensureTextures(): void {
+  if (!bookPageTexture) {
+    bookPageTexture = createBookPageTexture(false);
+    bookPageBurnedTexture = createBookPageTexture(true);
+    scrollTextTextures = createScrollTextTextures();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  渲染器
+// ══════════════════════════════════════════════════════
+
+export class FluidMasteryRenderer extends BaseWeaponEffectRenderer {
   private activeTrails: Map<string, ActiveTrail> = new Map();
   private activeVortices: Map<string, ActiveVortex> = new Map();
-  private activeBursts: Map<string, ActiveBurst> = new Map();
+  private activeBursts: Map<string, ActiveFluidBurst> = new Map();
+  private hpRatio = 1;
+  private isAngry = false;
 
   constructor(fieldContainer: PIXI.Container, particlePool: ParticlePool) {
-    this.fieldContainer = fieldContainer;
-    this.particlePool = particlePool;
+    super(fieldContainer, particlePool);
+    ensureTextures();
   }
 
-  setScale(scale: number): void {
-    this.scale = scale;
-    // 容器统一承担全局缩放，内部 graphics 维持各自的动画 scale
-    this.activeTrails.forEach((trail) => {
-      if (trail.container.destroyed) return;
-      trail.container.scale.set(scale);
-    });
-    this.activeVortices.forEach((vortex) => {
-      if (vortex.container.destroyed) return;
-      vortex.container.scale.set(scale);
-    });
-    this.activeBursts.forEach((burst) => {
-      if (burst.container.destroyed) return;
-      burst.container.scale.set(scale);
-    });
+  setHpRatio(hpRatio: number): void {
+    this.hpRatio = hpRatio;
+    this.isAngry = hpRatio < 0.3;
   }
 
-  // ══════════════════════════════════════════════════════
-  //  水流尾迹 Trail（水系普通技能）
-  // ══════════════════════════════════════════════════════
+  // ═══ 水流尾迹 Trail ═══
 
-  /**
-   * 触发水流尾迹视觉效果
-   * @param playerId 玩家 ID
-   * @param x 逻辑坐标 X
-   * @param y 逻辑坐标 Y
-   * @param radius 尾迹光环半径（逻辑 px）
-   * @param flowDir 流向角度（弧度）
-   * @param themeColor 主题色（默认主水蓝）
-   */
   triggerTrail(
     playerId: string,
     x: number,
     y: number,
     radius: number,
     flowDir: number,
-    themeColor = FLUID_MAIN,
+    themeColor: number = FLUID_MAIN,
+    isAngry: boolean = false,
   ): void {
-    // 已存在则仅更新位置、半径与方向
     const existing = this.activeTrails.get(playerId);
     if (existing) {
       existing.x = x;
@@ -138,63 +201,54 @@ export class FluidMasteryRenderer {
       existing.radius = radius;
       existing.flowDir = flowDir;
       existing.container.position.set(x, y);
-      this.drawTrailArrow(existing.arrowGraphics, radius, flowDir);
+      this.drawTrailArrow(existing.arrowGraphics, radius, flowDir, existing.palette);
       return;
     }
 
+    const palette = this.buildPalette(isAngry ? ANGER_MAIN : themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
-    container.scale.set(this.scale); // 全局缩放由容器承担
+    container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 水流尾迹光环（8 层径向渐变）
     const auraGraphics = new PIXI.Graphics();
-    this.drawTrailAura(auraGraphics, radius);
+    this.drawTrailAura(auraGraphics, radius, palette, isAngry);
     container.addChild(auraGraphics);
 
-    // 流动波纹（3 条扩散环，由 update 重绘）
     const rippleGraphics = new PIXI.Graphics();
     container.addChild(rippleGraphics);
 
-    // 流向箭头
     const arrowGraphics = new PIXI.Graphics();
-    this.drawTrailArrow(arrowGraphics, radius, flowDir);
+    this.drawTrailArrow(arrowGraphics, radius, flowDir, palette);
     container.addChild(arrowGraphics);
 
-    this.fieldContainer.addChild(container);
+    const bookPages = this.createFloatingPages(radius, isAngry);
+    for (const page of bookPages) {
+      container.addChild(page.sprite);
+    }
 
-    // 3 条波纹错峰启动（相位差 1/3 周期）
-    const trail: ActiveTrail = {
+    this.activeTrails.set(playerId, {
       container,
-      rippleGraphics,
       auraGraphics,
+      rippleGraphics,
       arrowGraphics,
+      bookPages,
       particleTimer: 0,
-      rippleLife: [
-        0,
-        TRAIL_RIPPLE_MAX_LIFE / 3,
-        (TRAIL_RIPPLE_MAX_LIFE * 2) / 3,
-      ],
+      rippleLife: [0, TRAIL_RIPPLE_MAX_LIFE / 3, (TRAIL_RIPPLE_MAX_LIFE * 2) / 3],
       rippleMaxLife: TRAIL_RIPPLE_MAX_LIFE,
       life: 0,
-      maxLife: Number.POSITIVE_INFINITY, // 常驻，直到手动移除
+      maxLife: Number.POSITIVE_INFINITY,
       x,
       y,
       radius,
       flowDir,
-    };
-    this.activeTrails.set(playerId, trail);
+      palette,
+      isAngry,
+    });
 
-    // 触发首帧水滴粒子
-    this.spawnDropletParticles(x, y, radius, themeColor);
+    this.spawnTrailParticles(x, y, radius, palette);
   }
 
-  /**
-   * 更新水流尾迹的位置与方向（由外部位置同步调用）
-   * @param playerId 玩家 ID
-   * @param x 新逻辑坐标 X
-   * @param y 新逻辑坐标 Y
-   * @param flowDir 新流向角度（弧度）
-   */
   updateTrail(playerId: string, x: number, y: number, flowDir: number): void {
     const trail = this.activeTrails.get(playerId);
     if (!trail) return;
@@ -202,84 +256,58 @@ export class FluidMasteryRenderer {
     trail.y = y;
     trail.flowDir = flowDir;
     trail.container.position.set(x, y);
-    this.drawTrailArrow(trail.arrowGraphics, trail.radius, flowDir);
+    this.drawTrailArrow(trail.arrowGraphics, trail.radius, flowDir, trail.palette);
   }
 
-  /** 移除水流尾迹 */
   removeTrail(playerId: string): void {
     const trail = this.activeTrails.get(playerId);
     if (trail) {
-      this.fieldContainer.removeChild(trail.container);
+      this.container.removeChild(trail.container);
       trail.container.destroy({ children: true });
       this.activeTrails.delete(playerId);
     }
   }
 
-  /**
-   * 绘制水流尾迹光环：8 层同心圆（主水蓝 → 深蓝 → 透明）+ 外环 + 中心水核
-   * 以 (0,0) 为中心绘制，半径单位为逻辑 px
-   */
-  private drawTrailAura(g: PIXI.Graphics, radius: number): void {
+  private drawTrailAura(g: PIXI.Graphics, radius: number, palette: Palette, isAngry: boolean): void {
     g.clear();
-
-    // 8 层同心圆叠加模拟径向渐变（中心主水蓝 → 深海蓝 → 透明）
+    const deepColor = isAngry ? ANGER_DEEP : FLUID_DEEP;
     for (let i = 0; i < 8; i++) {
-      const t = i / 7; // 0 → 1
+      const t = i / 7;
       const r = radius * (0.15 + 0.85 * t);
-      // 颜色：前半段 主水蓝 → 深蓝，后半段保持深蓝
-      const color =
-        t < 0.5
-          ? this.interpolateColor(FLUID_MAIN, FLUID_DEEP, t * 2)
-          : FLUID_DEEP;
-      const alpha = (1 - t) * 0.22; // 中心高 alpha，边缘趋近 0
+      const color = t < 0.5 ? this.interpolateColor(palette.primary, deepColor, t * 2) : deepColor;
+      const alpha = (1 - t) * 0.22;
       g.circle(0, 0, r);
       g.fill({ color, alpha });
     }
-
-    // 外环（高亮浅蓝细环）+ 内环（泡沫白蓝）
     g.circle(0, 0, radius);
-    g.stroke({ color: FLUID_HIGHLIGHT, width: 1, alpha: 0.7 });
+    g.stroke({ color: palette.highlight, width: 1, alpha: 0.7 });
     g.circle(0, 0, radius * 0.95);
     g.stroke({ color: FLUID_FOAM, width: 0.4, alpha: 0.5 });
-
-    // 中心水核：白色实心圆 r=4 + 主水蓝外环 r=6
+    if (isAngry) {
+      g.circle(0, 0, radius * 1.05);
+      g.stroke({ color: ANGER_GLOW, width: 1.5, alpha: 0.4 });
+    }
     g.circle(0, 0, 6);
-    g.stroke({ color: FLUID_MAIN, width: 1, alpha: 0.8 });
+    g.stroke({ color: palette.primary, width: 1, alpha: 0.8 });
     g.circle(0, 0, 4);
     g.fill({ color: FLUID_WHITE, alpha: 1 });
   }
 
-  /**
-   * 绘制单条流动波纹（扩散环）
-   * @param g 目标 Graphics
-   * @param radius 基准半径
-   * @param life 当前 life（ms）
-   * @param maxLife 最大 life（ms）
-   */
-  private drawTrailRipple(
-    g: PIXI.Graphics,
-    radius: number,
-    life: number,
-    maxLife: number,
-  ): void {
-    const t = life / maxLife; // 0 → 1
-    const r = radius * (0.5 + 1.0 * t); // scale 0.5 → 1.5
-    const alpha = 0.8 * (1 - t); // alpha 0.8 → 0
-    g.circle(0, 0, r);
-    g.stroke({ color: FLUID_LIGHT, width: 1.2, alpha });
+  private drawTrailRipple(g: PIXI.Graphics, radius: number, life: number, maxLife: number, palette: Palette): void {
+    const t = life / maxLife;
+    const r = radius * (0.5 + 1.0 * t);
+    const alpha = 0.8 * (1 - t);
+    const segments = 16;
+    g.moveTo(Math.cos(0) * r, Math.sin(0) * r);
+    for (let s = 1; s <= segments; s++) {
+      const angle = (s / segments) * Math.PI * 2;
+      const jitter = 1 + (Math.random() - 0.5) * 0.05;
+      g.lineTo(Math.cos(angle) * r * jitter, Math.sin(angle) * r * jitter);
+    }
+    g.stroke({ color: palette.glow, width: 1.2, alpha });
   }
 
-  /**
-   * 绘制流向箭头：细线 + 三角箭头头（半透明）
-   * @param g 目标 Graphics
-   * @param radius 基准半径
-   * @param flowDir 流向角度（弧度）
-   */
-  private drawTrailArrow(
-    g: PIXI.Graphics,
-    radius: number,
-    flowDir: number,
-  ): void {
+  private drawTrailArrow(g: PIXI.Graphics, radius: number, flowDir: number, palette: Palette): void {
     g.clear();
     const innerR = radius * 0.4;
     const outerR = radius * 0.95;
@@ -287,178 +315,188 @@ export class FluidMasteryRenderer {
     const tipY = Math.sin(flowDir) * outerR;
     const tailX = Math.cos(flowDir) * innerR;
     const tailY = Math.sin(flowDir) * innerR;
-
-    // 主线
-    g.moveTo(tailX, tailY);
-    g.lineTo(tipX, tipY);
-    g.stroke({ color: FLUID_HIGHLIGHT, width: 1, alpha: 0.6 });
-
-    // 三角箭头头（在 tip 处，左右各一条短线）
+    for (let i = 0; i < 3; i++) {
+      const offset = (i - 1) * 0.5;
+      g.moveTo(tailX + offset, tailY + offset);
+      g.lineTo(tipX + offset, tipY + offset);
+      g.stroke({ color: palette.highlight, width: 0.6, alpha: 0.4 });
+    }
     const arrowSize = 5;
     const leftA = flowDir + Math.PI - Math.PI / 6;
     const rightA = flowDir + Math.PI + Math.PI / 6;
     g.moveTo(tipX, tipY);
-    g.lineTo(
-      tipX + Math.cos(leftA) * arrowSize,
-      tipY + Math.sin(leftA) * arrowSize,
-    );
+    g.lineTo(tipX + Math.cos(leftA) * arrowSize, tipY + Math.sin(leftA) * arrowSize);
     g.moveTo(tipX, tipY);
-    g.lineTo(
-      tipX + Math.cos(rightA) * arrowSize,
-      tipY + Math.sin(rightA) * arrowSize,
-    );
-    g.stroke({ color: FLUID_HIGHLIGHT, width: 1, alpha: 0.6 });
+    g.lineTo(tipX + Math.cos(rightA) * arrowSize, tipY + Math.sin(rightA) * arrowSize);
+    g.stroke({ color: palette.highlight, width: 1, alpha: 0.6 });
   }
 
-  /**
-   * 生成水滴粒子（向外飞溅）
-   * 每 800ms 由 update 节流调用，每次 3-4 个
-   */
-  private spawnDropletParticles(
-    x: number,
-    y: number,
-    radius: number,
-    color: number,
-  ): void {
+  private createFloatingPages(radius: number, isAngry: boolean): BookPage[] {
+    const count = 3 + Math.floor(Math.random() * 3);
+    const pages: BookPage[] = [];
+    const texture = isAngry ? bookPageBurnedTexture! : (scrollTextTextures[Math.floor(Math.random() * scrollTextTextures.length)] ?? bookPageTexture!);
+    for (let i = 0; i < count; i++) {
+      const sprite = new PIXI.Sprite(texture);
+      const angle = Math.random() * Math.PI * 2;
+      const dist = radius * (0.3 + Math.random() * 0.5);
+      sprite.anchor.set(0.5);
+      sprite.position.set(Math.cos(angle) * dist, Math.sin(angle) * dist);
+      sprite.scale.set(0.5 + Math.random() * 0.4);
+      sprite.alpha = 0.3 + Math.random() * 0.2;
+      pages.push({
+        sprite,
+        x: Math.cos(angle) * dist,
+        y: Math.sin(angle) * dist,
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 1.5,
+        driftPhase: Math.random() * Math.PI * 2,
+        driftRadius: 3 + Math.random() * 5,
+        alpha: sprite.alpha,
+        scale: sprite.scale.x,
+      });
+    }
+    return pages;
+  }
+
+  private spawnTrailParticles(x: number, y: number, radius: number, palette: Palette): void {
     const s = this.scale;
-    const count = 3 + Math.floor(Math.random() * 2); // 3-4 个
+    const count = 3 + Math.floor(Math.random() * 2);
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      // 从光环中部出发
       const startDist = radius * s * (0.3 + Math.random() * 0.2);
       const px = x + Math.cos(angle) * startDist;
       const py = y + Math.sin(angle) * startDist;
-      // 向外飞溅速度（px/s）
       const speed = (25 + Math.random() * 20) * s;
+      const isPageFragment = Math.random() < 0.3;
       this.particlePool.emit({
         x: px,
         y: py,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         life: 1500,
-        scaleStart: 1,
+        scaleStart: isPageFragment ? 1.2 : 1,
         scaleEnd: 0,
         alphaStart: 0.8,
         alphaEnd: 0,
-        tint: color,
+        tint: isPageFragment ? PARCHMENT_OLD : palette.glow,
+        tintStart: isPageFragment ? SCROLL_GOLD : palette.highlight,
+        tintEnd: isPageFragment ? INK_BLACK : palette.shadow,
         radius: (1.5 + Math.random() * 1.5) * s,
+        rotationSpeed: isPageFragment ? (Math.random() - 0.5) * 8 : 0,
       });
     }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  漩涡牵引 Vortex
-  // ══════════════════════════════════════════════════════
+  // ═══ 漩涡牵引 Vortex ═══
 
-  /**
-   * 触发漩涡牵引视觉效果
-   * @param targetId 目标 ID
-   * @param x 逻辑坐标 X
-   * @param y 逻辑坐标 Y
-   * @param radius 漩涡半径（逻辑 px）
-   * @param pullForce 牵引力（0-1，影响牵引线 alpha）
-   * @param themeColor 主题色
-   */
   triggerVortex(
     targetId: string,
     x: number,
     y: number,
     radius: number,
     pullForce: number,
-    themeColor = FLUID_MAIN,
+    themeColor: number = FLUID_MAIN,
+    isAngry: boolean = false,
   ): void {
-    // 若已存在，先销毁旧实例（避免泄漏）
     const old = this.activeVortices.get(targetId);
     if (old) {
-      this.fieldContainer.removeChild(old.container);
+      this.container.removeChild(old.container);
       old.container.destroy({ children: true });
     }
 
+    const palette = this.buildPalette(isAngry ? ANGER_MAIN : themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 1. 漩涡核心（6 层同心圆 + 中心水核）
     const coreGraphics = new PIXI.Graphics();
-    this.drawVortexCore(coreGraphics, radius);
+    this.drawVortexCore(coreGraphics, radius, palette, isAngry);
     container.addChild(coreGraphics);
 
-    // 2. 螺旋臂（3 条阿基米德螺旋线）
     const armGraphics = new PIXI.Graphics();
-    this.drawVortexArms(armGraphics, radius);
+    this.drawVortexArms(armGraphics, radius, palette, isAngry);
     container.addChild(armGraphics);
 
-    // 3. 牵引线（4 条从外向内的曲线）
     const pullGraphics = new PIXI.Graphics();
-    this.drawVortexPull(pullGraphics, radius, pullForce);
+    this.drawVortexPull(pullGraphics, radius, pullForce, palette);
     container.addChild(pullGraphics);
 
-    this.fieldContainer.addChild(container);
+    const soundWaveGraphics = new PIXI.Graphics();
+    container.addChild(soundWaveGraphics);
 
-    const vortex: ActiveVortex = {
+    this.activeVortices.set(targetId, {
       container,
       coreGraphics,
       armGraphics,
       pullGraphics,
+      soundWaveGraphics,
+      soundWaveTimer: 0,
+      soundWaveRings: [],
       life: 0,
-      maxLife: 6000, // 6 秒
+      maxLife: 6000,
       x,
       y,
       radius,
       pullForce,
-      themeColor,
-    };
-    this.activeVortices.set(targetId, vortex);
+      palette,
+      isAngry,
+    });
   }
 
-  /** 移除漩涡牵引 */
   removeVortex(targetId: string): void {
     const vortex = this.activeVortices.get(targetId);
     if (vortex) {
-      this.fieldContainer.removeChild(vortex.container);
+      this.container.removeChild(vortex.container);
       vortex.container.destroy({ children: true });
       this.activeVortices.delete(targetId);
     }
   }
 
-  /**
-   * 绘制漩涡核心：6 层同心圆（主水蓝 → 深蓝 → 透明）+ 中心水核
-   */
-  private drawVortexCore(g: PIXI.Graphics, radius: number): void {
+  private drawVortexCore(g: PIXI.Graphics, radius: number, palette: Palette, isAngry: boolean): void {
     g.clear();
+    const deepColor = isAngry ? ANGER_DEEP : FLUID_DEEP;
     const coreR = radius * 0.7;
-
-    // 6 层同心圆叠加（中心主水蓝 → 深蓝 → 透明）
     for (let i = 0; i < 6; i++) {
-      const t = i / 5; // 0 → 1
+      const t = i / 5;
       const r = coreR * (0.15 + 0.85 * t);
-      const color =
-        t < 0.5
-          ? this.interpolateColor(FLUID_MAIN, FLUID_DEEP, t * 2)
-          : FLUID_DEEP;
+      const color = t < 0.5 ? this.interpolateColor(palette.primary, deepColor, t * 2) : deepColor;
       const alpha = (1 - t) * 0.25;
       g.circle(0, 0, r);
       g.fill({ color, alpha });
     }
-
-    // 中心水核：白色实心 r=5 + 浅水蓝外环 r=7
-    g.circle(0, 0, 5);
-    g.fill({ color: FLUID_WHITE, alpha: 0.9 });
-    g.circle(0, 0, 7);
-    g.stroke({ color: FLUID_LIGHT, width: 1, alpha: 0.7 });
+    const pageColor = isAngry ? BURNED_PAGE : PARCHMENT_OLD;
+    const inkColor = isAngry ? 0x4a0a0a : SCROLL_GOLD;
+    g.moveTo(-4, -5);
+    g.lineTo(-0.5, -5);
+    g.lineTo(-0.5, 5);
+    g.lineTo(-4, 5);
+    g.fill({ color: pageColor, alpha: 0.9 });
+    g.moveTo(0.5, -5);
+    g.lineTo(4, -5);
+    g.lineTo(4, 5);
+    g.lineTo(0.5, 5);
+    g.fill({ color: pageColor, alpha: 0.9 });
+    g.moveTo(-0.5, -5);
+    g.lineTo(-0.5, 5);
+    g.stroke({ color: inkColor, width: 0.8, alpha: 0.8 });
+    for (let i = -3; i <= 3; i += 2) {
+      g.moveTo(-3, i);
+      g.lineTo(-1, i);
+      g.stroke({ color: inkColor, width: 0.4, alpha: 0.5 });
+      g.moveTo(1, i);
+      g.lineTo(3, i);
+      g.stroke({ color: inkColor, width: 0.4, alpha: 0.5 });
+    }
   }
 
-  /**
-   * 绘制阿基米德螺旋臂：3 条 120° 均分的螺旋线，从中心向外旋转
-   * r = a*theta（阿基米德螺旋）
-   */
-  private drawVortexArms(g: PIXI.Graphics, radius: number): void {
+  private drawVortexArms(g: PIXI.Graphics, radius: number, palette: Palette, isAngry: boolean): void {
     g.clear();
-    const steps = 32;
-    const turns = 1.5; // 1.5 圈
+    const steps = 8;
+    const turns = 1.5;
+    const pageColor = isAngry ? BURNED_PAGE : PARCHMENT_OLD;
     for (let i = 0; i < 3; i++) {
       const baseAngle = (i * 2 * Math.PI) / 3;
-      g.moveTo(0, 0);
       for (let s = 1; s <= steps; s++) {
         const t = s / steps;
         const theta = t * Math.PI * 2 * turns;
@@ -466,497 +504,461 @@ export class FluidMasteryRenderer {
         const angle = baseAngle + theta;
         const x = Math.cos(angle) * r;
         const y = Math.sin(angle) * r;
-        g.lineTo(x, y);
+        const size = 2 + t * 4;
+        g.moveTo(x - size / 2, y - size / 2);
+        g.lineTo(x + size / 2, y - size / 2);
+        g.lineTo(x + size / 2, y + size / 2);
+        g.lineTo(x - size / 2, y + size / 2);
+        g.fill({ color: pageColor, alpha: 0.6 * (1 - t * 0.5) });
+        if (s > 1) {
+          const prevT = (s - 1) / steps;
+          const prevTheta = prevT * Math.PI * 2 * turns;
+          const prevR = prevT * radius;
+          const prevAngle = baseAngle + prevTheta;
+          const prevX = Math.cos(prevAngle) * prevR;
+          const prevY = Math.sin(prevAngle) * prevR;
+          g.moveTo(prevX, prevY);
+          g.lineTo(x, y);
+          g.stroke({ color: palette.glow, width: 0.8, alpha: 0.5 });
+        }
       }
-      // 主螺旋臂（浅水蓝粗线）
-      g.stroke({ color: FLUID_LIGHT, width: 1.5, alpha: 0.8 });
     }
   }
 
-  /**
-   * 绘制牵引曲线：4 条 quadraticCurveTo 从外向内汇聚
-   * @param radius 漩涡半径
-   * @param pullForce 牵引力 0-1，影响 alpha
-   */
-  private drawVortexPull(
-    g: PIXI.Graphics,
-    radius: number,
-    pullForce: number,
-  ): void {
+  private drawVortexPull(g: PIXI.Graphics, radius: number, pullForce: number, palette: Palette): void {
     g.clear();
-    const baseAlpha = 0.4 + 0.4 * pullForce; // 0.4 → 0.8
+    const baseAlpha = 0.4 + 0.4 * pullForce;
     for (let i = 0; i < 4; i++) {
-      const a = (i * Math.PI) / 2;
-      const startX = Math.cos(a) * radius * 1.2;
-      const startY = Math.sin(a) * radius * 1.2;
-      // 控制点：偏离直线方向，制造弧形牵引感
-      const midR = radius * 0.6;
-      const offset = Math.PI / 4;
-      const cpX = Math.cos(a + offset) * midR;
-      const cpY = Math.sin(a + offset) * midR;
+      const angle = (i * Math.PI) / 2 + Math.PI / 4;
+      const startX = Math.cos(angle) * radius;
+      const startY = Math.sin(angle) * radius;
+      const ctrlAngle = angle + Math.PI / 6;
+      const ctrlX = Math.cos(ctrlAngle) * radius * 0.6;
+      const ctrlY = Math.sin(ctrlAngle) * radius * 0.6;
       g.moveTo(startX, startY);
-      g.quadraticCurveTo(cpX, cpY, 0, 0);
-      g.stroke({ color: FLUID_HIGHLIGHT, width: 1, alpha: baseAlpha });
+      g.quadraticCurveTo(ctrlX, ctrlY, 0, 0);
+      g.stroke({ color: palette.highlight, width: 1, alpha: baseAlpha });
+      g.circle(startX, startY, 1.5);
+      g.fill({ color: palette.primary, alpha: baseAlpha });
     }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  水龙卷爆发 Burst（三阶段动画）
-  // ══════════════════════════════════════════════════════
+  private drawSoundWaveRing(g: PIXI.Graphics, radius: number, alpha: number, isAngry: boolean): void {
+    const segments = 32;
+    const waveAmp = 2;
+    const color = isAngry ? ANGER_GLOW : SCROLL_GOLD;
+    g.moveTo(Math.cos(0) * (radius + waveAmp), Math.sin(0) * (radius + waveAmp));
+    for (let s = 1; s <= segments; s++) {
+      const angle = (s / segments) * Math.PI * 2;
+      const wave = Math.sin(angle * 8) * waveAmp;
+      g.lineTo(Math.cos(angle) * (radius + wave), Math.sin(angle) * (radius + wave));
+    }
+    g.stroke({ color, width: 1.2, alpha });
+  }
 
-  /**
-   * 触发水龙卷爆发视觉效果
-   * @param playerId 玩家 ID
-   * @param x 逻辑坐标 X
-   * @param y 逻辑坐标 Y
-   * @param radius 爆发范围（逻辑 px）
-   * @param themeColor 主题色
-   * @param durationMs 持续时间（ms），默认 5000
-   */
+  // ═══ 水龙卷爆发 Burst ═══
+
   triggerBurst(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = FLUID_MAIN,
+    themeColor: number = FLUID_MAIN,
     durationMs?: number,
+    isAngry: boolean = false,
   ): void {
-    // 若已存在，先销毁旧实例
-    const old = this.activeBursts.get(playerId);
-    if (old) {
-      this.fieldContainer.removeChild(old.container);
-      old.container.destroy({ children: true });
+    const existing = this.activeBursts.get(playerId);
+    if (existing) {
+      this.removeBurstInstance(existing);
     }
 
+    const palette = this.buildPalette(isAngry ? ANGER_MAIN : themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 1. 水龙卷主体（10 层同心圆：深蓝 → 主水蓝 → 浅蓝 → 透明）
     const columnGraphics = new PIXI.Graphics();
-    this.drawBurstColumn(columnGraphics, radius);
-    container.addChild(columnGraphics);
-
-    // 2. 螺旋水臂（4 条从底部向上旋转）
     const armGraphics = new PIXI.Graphics();
-    this.drawBurstArms(armGraphics, radius);
-    container.addChild(armGraphics);
-
-    // 3. 中心水柱（白色高亮核心）
     const coreGraphics = new PIXI.Graphics();
-    this.drawBurstCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
-
-    // 4. 水花范围环（外圈暴雨范围）
     const splashGraphics = new PIXI.Graphics();
-    this.drawBurstSplash(splashGraphics, radius);
-    container.addChild(splashGraphics);
+    const soundWaveGraphics = new PIXI.Graphics();
+    container.addChild(columnGraphics, armGraphics, coreGraphics, splashGraphics, soundWaveGraphics);
 
-    this.fieldContainer.addChild(container);
+    const stormPages = this.createStormPages(radius, isAngry);
+    for (const page of stormPages) {
+      container.addChild(page.sprite);
+    }
 
-    const burst: ActiveBurst = {
+    this.activeBursts.set(playerId, {
       container,
+      life: 0,
+      maxLife: durationMs ?? 4000,
+      themeColor,
+      radius,
+      particleTimer: 0,
+      palette,
       columnGraphics,
       armGraphics,
       coreGraphics,
       splashGraphics,
-      particleTimer: 0,
-      life: 0,
-      maxLife: durationMs ?? 5000,
-      themeColor,
-      radius,
+      soundWaveGraphics,
+      soundWaveTimer: 0,
+      stormPages,
+      soundWaveRings: [],
       x,
       y,
-    };
-    this.activeBursts.set(playerId, burst);
+      isAngry,
+    });
   }
 
-  /**
-   * 绘制水龙卷主体：10 层同心圆（深蓝 → 主水蓝 → 浅蓝 → 透明）
-   * "高度递增"以层叠 alpha 模拟水柱从下到上的递进
-   */
-  private drawBurstColumn(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    const columnR = radius * 0.7;
+  private createStormPages(radius: number, isAngry: boolean): BookPage[] {
+    const count = 20 + Math.floor(Math.random() * 11);
+    const pages: BookPage[] = [];
+    const texture = isAngry ? bookPageBurnedTexture! : bookPageTexture!;
+    for (let i = 0; i < count; i++) {
+      const sprite = new PIXI.Sprite(texture);
+      const angle = Math.random() * Math.PI * 2;
+      const dist = radius * (0.2 + Math.random() * 0.8);
+      sprite.anchor.set(0.5);
+      sprite.position.set(Math.cos(angle) * dist, Math.sin(angle) * dist);
+      sprite.scale.set(0.4 + Math.random() * 0.6);
+      sprite.alpha = 0.5 + Math.random() * 0.3;
+      pages.push({
+        sprite,
+        x: Math.cos(angle) * dist,
+        y: Math.sin(angle) * dist,
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 6,
+        driftPhase: Math.random() * Math.PI * 2,
+        driftRadius: 5 + Math.random() * 15,
+        alpha: sprite.alpha,
+        scale: sprite.scale.x,
+      });
+    }
+    return pages;
+  }
 
-    // 10 层同心圆叠加（深蓝 → 主水蓝 → 浅蓝 → 透明）
+  private drawBurstColumn(g: PIXI.Graphics, radius: number, palette: Palette, progress: number, isAngry: boolean): void {
+    g.clear();
+    const deepColor = isAngry ? ANGER_DEEP : FLUID_DEEP;
     for (let i = 0; i < 10; i++) {
-      const t = i / 9; // 0 → 1
-      const r = columnR * (0.1 + 0.9 * t);
-      // 颜色分段：深蓝 → 主水蓝 → 浅蓝 → 高亮
-      let color: number;
-      if (t < 0.33) {
-        color = this.interpolateColor(FLUID_DEEP, FLUID_MAIN, t / 0.33);
-      } else if (t < 0.66) {
-        color = this.interpolateColor(
-          FLUID_MAIN,
-          FLUID_LIGHT,
-          (t - 0.33) / 0.33,
-        );
-      } else {
-        color = this.interpolateColor(
-          FLUID_LIGHT,
-          FLUID_HIGHLIGHT,
-          (t - 0.66) / 0.34,
-        );
-      }
-      const alpha = (1 - t) * 0.25;
+      const t = i / 9;
+      const r = radius * (0.1 + 0.9 * t) * progress;
+      const color = t < 0.5 ? this.interpolateColor(palette.primary, deepColor, t * 2) : deepColor;
+      const alpha = (1 - t) * 0.2 * progress;
       g.circle(0, 0, r);
       g.fill({ color, alpha });
     }
+    for (let i = 0; i < 4; i++) {
+      const t = i / 3;
+      g.ellipse(0, 0, radius * progress * (0.3 + t * 0.2), radius * progress * (0.1 + t * 0.05));
+      g.stroke({ color: palette.glow, width: 0.8, alpha: 0.4 * progress });
+    }
   }
 
-  /**
-   * 绘制螺旋水臂：4 条从底部向上旋转的螺旋线
-   * 以 2D 投影表达 3D 螺旋（向上 = 向外 + 旋转）
-   */
-  private drawBurstArms(g: PIXI.Graphics, radius: number): void {
+  private drawBurstArms(g: PIXI.Graphics, radius: number, palette: Palette, progress: number): void {
     g.clear();
-    const steps = 40;
-    const turns = 2.5; // 2.5 圈
+    const steps = 24;
+    const turns = 1.5;
     for (let i = 0; i < 4; i++) {
       const baseAngle = (i * Math.PI) / 2;
       g.moveTo(0, 0);
       for (let s = 1; s <= steps; s++) {
         const t = s / steps;
         const theta = t * Math.PI * 2 * turns;
-        const r = t * radius;
+        const r = t * radius * progress;
         const angle = baseAngle + theta;
-        const x = Math.cos(angle) * r;
-        const y = Math.sin(angle) * r;
-        g.lineTo(x, y);
+        g.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
       }
-      // 螺旋水臂（主水蓝粗线）
-      g.stroke({ color: FLUID_MAIN, width: 2, alpha: 0.8 });
+      g.stroke({ color: palette.glow, width: 1.5, alpha: 0.7 * progress });
     }
   }
 
-  /**
-   * 绘制中心水柱：白色高亮核心 + 主水蓝外环 + 高亮辉光
-   */
-  private drawBurstCore(g: PIXI.Graphics, radius: number): void {
+  private drawBurstCore(g: PIXI.Graphics, radius: number, palette: Palette, progress: number, isAngry: boolean): void {
     g.clear();
-    const coreR = radius * 0.15;
-    // 中心白色实心
-    g.circle(0, 0, coreR);
-    g.fill({ color: FLUID_WHITE, alpha: 1 });
-    // 外环（主水蓝）
-    g.circle(0, 0, coreR * 1.5);
-    g.stroke({ color: FLUID_MAIN, width: 1.5, alpha: 0.9 });
-    // 高亮辉光
-    g.circle(0, 0, coreR * 2);
-    g.stroke({ color: FLUID_HIGHLIGHT, width: 0.5, alpha: 0.5 });
-  }
-
-  /**
-   * 绘制水花范围环：双层细环 + 内圈虚线感（多段短弧）
-   */
-  private drawBurstSplash(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    // 外环（高亮浅蓝）
-    g.circle(0, 0, radius);
-    g.stroke({ color: FLUID_HIGHLIGHT, width: 0.6, alpha: 0.7 });
-    // 中环（泡沫白蓝）
-    g.circle(0, 0, radius * 0.95);
-    g.stroke({ color: FLUID_FOAM, width: 0.4, alpha: 0.5 });
-    // 内圈虚线感（16 段短弧）
-    const innerR = radius * 0.85;
-    const segments = 16;
-    for (let i = 0; i < segments; i++) {
-      const a1 = (i * 2 * Math.PI) / segments;
-      const a2 = a1 + Math.PI / segments;
-      g.moveTo(Math.cos(a1) * innerR, Math.sin(a1) * innerR);
-      g.lineTo(Math.cos(a2) * innerR, Math.sin(a2) * innerR);
-      g.stroke({ color: FLUID_LIGHT, width: 0.8, alpha: 0.4 });
+    const pageColor = isAngry ? BURNED_PAGE : PARCHMENT_OLD;
+    const inkColor = isAngry ? 0x4a0a0a : SCROLL_GOLD;
+    const size = radius * 0.15 * progress;
+    g.moveTo(-size, -size * 0.8);
+    g.lineTo(-size * 0.1, -size);
+    g.lineTo(-size * 0.1, size);
+    g.lineTo(-size, size * 0.8);
+    g.fill({ color: pageColor, alpha: 0.85 });
+    g.moveTo(size * 0.1, -size);
+    g.lineTo(size, -size * 0.8);
+    g.lineTo(size, size * 0.8);
+    g.lineTo(size * 0.1, size);
+    g.fill({ color: pageColor, alpha: 0.85 });
+    g.moveTo(-size * 0.1, -size);
+    g.lineTo(-size * 0.1, size);
+    g.stroke({ color: inkColor, width: 1, alpha: 0.8 });
+    for (let i = -2; i <= 2; i++) {
+      g.moveTo(-size * 0.8, i * size * 0.3);
+      g.lineTo(-size * 0.2, i * size * 0.3);
+      g.stroke({ color: inkColor, width: 0.3, alpha: 0.5 });
+      g.moveTo(size * 0.2, i * size * 0.3);
+      g.lineTo(size * 0.8, i * size * 0.3);
+      g.stroke({ color: inkColor, width: 0.3, alpha: 0.5 });
     }
   }
 
-  /**
-   * 生成水龙卷粒子（按阶段决定方向）
-   * @param phase 1=吸水(向心) 2=形成(切向旋转) 3=扩散(离心暴雨)
-   */
-  private spawnBurstParticles(
-    x: number,
-    y: number,
-    radius: number,
-    phase: 1 | 2 | 3,
-    color: number,
-  ): void {
+  private drawBurstSplash(g: PIXI.Graphics, radius: number, palette: Palette, progress: number): void {
+    g.clear();
+    g.circle(0, 0, radius * progress);
+    g.stroke({ color: palette.highlight, width: 2, alpha: 0.5 * (1 - progress) });
+  }
+
+  // ═══ 三阶段动画钩子 ═══
+
+  protected phase1Charge(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveFluidBurst;
+    const ease = this.easeOutCubic(t);
+    b.columnGraphics.clear();
+    const shrinkR = b.radius * (1 - ease * 0.7);
+    for (let i = 0; i < 8; i++) {
+      const layerT = i / 7;
+      const r = shrinkR * (0.15 + 0.85 * layerT);
+      b.columnGraphics.circle(0, 0, r);
+      b.columnGraphics.fill({ color: b.palette.primary, alpha: 0.15 * (1 - layerT) });
+    }
+    this.drawBurstCore(b.coreGraphics, b.radius * 0.5, b.palette, ease, b.isAngry);
+    b.coreGraphics.alpha = ease;
+    b.particleTimer += 16;
+    if (b.particleTimer > 40) {
+      b.particleTimer = 0;
+      this.spawnConvergeParticles(b, 2);
+    }
+    b.armGraphics.alpha = 0;
+    b.splashGraphics.alpha = 0;
+  }
+
+  protected phase2Burst(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveFluidBurst;
+    const ease = this.easeOutCubic(t);
+    this.drawBurstColumn(b.columnGraphics, b.radius, b.palette, ease, b.isAngry);
+    b.columnGraphics.alpha = 1;
+    this.drawBurstArms(b.armGraphics, b.radius, b.palette, ease);
+    b.armGraphics.alpha = 1;
+    b.coreGraphics.rotation = ease * Math.PI * 2;
+    this.drawBurstSplash(b.splashGraphics, b.radius, b.palette, ease);
+    b.splashGraphics.alpha = 1;
+    b.soundWaveTimer += 16;
+    if (b.soundWaveTimer > 200) {
+      b.soundWaveTimer = 0;
+      b.soundWaveRings.push({ radius: 0, alpha: 0.8, life: 0 });
+    }
+    this.updateSoundWaves(b);
+    b.particleTimer += 16;
+    if (b.particleTimer > 50) {
+      b.particleTimer = 0;
+      this.spawnStormParticles(b, 3);
+    }
+  }
+
+  protected phase3Diffuse(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveFluidBurst;
+    const ease = this.easeOutCubic(t);
+    b.columnGraphics.scale.set(1 + ease * 0.5);
+    b.columnGraphics.alpha = 1 - ease;
+    b.armGraphics.alpha = (1 - ease) * 0.6;
+    b.coreGraphics.alpha = (1 - ease) * 0.7;
+    b.splashGraphics.clear();
+    for (let i = 0; i < 4; i++) {
+      const ringT = (ease + i * 0.25) % 1;
+      const r = b.radius * (0.5 + ringT * 1.5);
+      b.splashGraphics.circle(0, 0, r);
+      b.splashGraphics.stroke({ color: b.palette.glow, width: 0.8, alpha: 0.4 * (1 - ringT) });
+    }
+    b.splashGraphics.alpha = 1;
+    this.updateSoundWaves(b);
+    b.particleTimer += 16;
+    if (b.particleTimer > 80) {
+      b.particleTimer = 0;
+      this.spawnStormParticles(b, 1);
+    }
+  }
+
+  private updateSoundWaves(b: ActiveFluidBurst): void {
+    b.soundWaveGraphics.clear();
+    const alive: typeof b.soundWaveRings = [];
+    for (const ring of b.soundWaveRings) {
+      ring.life += 16;
+      const t = ring.life / 1500;
+      if (t >= 1) continue;
+      ring.radius = b.radius * 1.5 * t;
+      ring.alpha = 0.8 * (1 - t);
+      this.drawSoundWaveRing(b.soundWaveGraphics, ring.radius, ring.alpha, b.isAngry);
+      alive.push(ring);
+    }
+    b.soundWaveRings = alive;
+  }
+
+  private spawnConvergeParticles(b: ActiveFluidBurst, count: number): void {
     const s = this.scale;
-    if (phase === 1) {
-      // 吸水阶段：从外围向中心汇聚（粒子在 outer ring 生成，向心运动）
-      for (let i = 0; i < 2; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const startDist = radius * s * (0.85 + Math.random() * 0.15);
-        const px = x + Math.cos(angle) * startDist;
-        const py = y + Math.sin(angle) * startDist;
-        // 向心速度
-        const speed = (40 + Math.random() * 20) * s;
-        this.particlePool.emit({
-          x: px,
-          y: py,
-          vx: -Math.cos(angle) * speed,
-          vy: -Math.sin(angle) * speed,
-          life: 800,
-          scaleStart: 1,
-          scaleEnd: 0.3,
-          alphaStart: 0.9,
-          alphaEnd: 0,
-          tint: color,
-          radius: (1.5 + Math.random() * 1.5) * s,
-        });
-      }
-    } else if (phase === 2) {
-      // 形成阶段：螺旋上升（在中等半径绕中心旋转）
-      for (let i = 0; i < 2; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const startDist = radius * s * (0.3 + Math.random() * 0.3);
-        const px = x + Math.cos(angle) * startDist;
-        const py = y + Math.sin(angle) * startDist;
-        // 切向速度（旋转）
-        const speed = (30 + Math.random() * 15) * s;
-        this.particlePool.emit({
-          x: px,
-          y: py,
-          vx: -Math.sin(angle) * speed,
-          vy: Math.cos(angle) * speed,
-          life: 1000,
-          scaleStart: 1,
-          scaleEnd: 0,
-          alphaStart: 0.7,
-          alphaEnd: 0,
-          tint: FLUID_LIGHT,
-          radius: (1.2 + Math.random() * 1.2) * s,
-        });
-      }
-    } else {
-      // 扩散阶段：暴雨飞溅（从中心向外飞）
-      for (let i = 0; i < 4; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const startDist = radius * s * (0.1 + Math.random() * 0.2);
-        const px = x + Math.cos(angle) * startDist;
-        const py = y + Math.sin(angle) * startDist;
-        // 离心速度
-        const speed = (50 + Math.random() * 30) * s;
-        this.particlePool.emit({
-          x: px,
-          y: py,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          life: 1200,
-          scaleStart: 1.2,
-          scaleEnd: 0,
-          alphaStart: 1,
-          alphaEnd: 0,
-          tint: i % 2 === 0 ? FLUID_WHITE : color,
-          radius: (1.5 + Math.random() * 1.5) * s,
-        });
-      }
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = b.radius * s * 0.8;
+      const px = b.x + Math.cos(angle) * dist;
+      const py = b.y + Math.sin(angle) * dist;
+      this.particlePool.emit({
+        x: px,
+        y: py,
+        vx: -Math.cos(angle) * 60,
+        vy: -Math.sin(angle) * 60,
+        life: 600,
+        scaleStart: 1,
+        scaleEnd: 0,
+        alphaStart: 0.8,
+        alphaEnd: 0,
+        tint: b.palette.glow,
+        radius: 1.5 * s,
+        drag: 0.5,
+      });
     }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  更新循环
-  // ══════════════════════════════════════════════════════
+  private spawnStormParticles(b: ActiveFluidBurst, count: number): void {
+    const s = this.scale;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = (40 + Math.random() * 60) * s;
+      const isPage = Math.random() < 0.5;
+      this.particlePool.emit({
+        x: b.x,
+        y: b.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 30,
+        ax: 0,
+        ay: 150,
+        drag: 0.3,
+        life: 1000 + Math.random() * 800,
+        scaleStart: isPage ? 1.5 : 1,
+        scaleEnd: 0,
+        alphaStart: 0.9,
+        alphaEnd: 0,
+        tint: isPage ? (b.isAngry ? BURNED_PAGE : PARCHMENT_OLD) : b.palette.glow,
+        tintStart: isPage ? (b.isAngry ? 0x4a0a0a : SCROLL_GOLD) : b.palette.highlight,
+        tintEnd: isPage ? (b.isAngry ? 0x1a0a0a : INK_BLACK) : b.palette.shadow,
+        radius: (1.5 + Math.random() * 2) * s,
+        rotationSpeed: (Math.random() - 0.5) * 10,
+      });
+    }
+  }
 
-  /** 每帧更新（由 EffectRenderer 调用，dt 单位 ms） */
+  // ═══ 生命周期 ═══
+
   update(dt: number): void {
-    // ── 水流尾迹：光环呼吸 + 波纹扩散 + 水滴粒子 ──
     this.activeTrails.forEach((trail) => {
+      if (trail.container.destroyed) return;
       trail.life += dt;
-      // 光环呼吸 scale 1.0↔1.05（2s 周期）
-      const breath = 1 + 0.05 * Math.sin(trail.life * 0.001 * Math.PI);
+      const breath = 1 + 0.05 * Math.sin(trail.life * 0.002 * Math.PI);
       trail.auraGraphics.scale.set(breath);
-      // 光环脉动 alpha 0.7↔0.95
-      const pulse = 0.82 + 0.13 * Math.sin(trail.life * 0.001 * Math.PI);
-      trail.auraGraphics.alpha = pulse;
-      // 流向箭头随呼吸轻微脉动
-      trail.arrowGraphics.alpha =
-        0.7 + 0.15 * Math.sin(trail.life * 0.001 * Math.PI);
-
-      // 流动波纹：3 条波纹各自 life 推进，到达 maxLife 自动重置
       trail.rippleGraphics.clear();
       for (let i = 0; i < 3; i++) {
         trail.rippleLife[i] += dt;
-        if (trail.rippleLife[i] >= trail.rippleMaxLife) {
+        if (trail.rippleLife[i] > trail.rippleMaxLife) {
           trail.rippleLife[i] -= trail.rippleMaxLife;
         }
-        this.drawTrailRipple(
-          trail.rippleGraphics,
-          trail.radius,
-          trail.rippleLife[i],
-          trail.rippleMaxLife,
-        );
+        this.drawTrailRipple(trail.rippleGraphics, trail.radius, trail.rippleLife[i], trail.rippleMaxLife, trail.palette);
       }
-
-      // 水滴粒子：每 800ms 生成 3-4 个
+      for (const page of trail.bookPages) {
+        page.rotation += page.rotationSpeed * (dt / 1000);
+        page.driftPhase += dt * 0.001;
+        const driftX = Math.cos(page.driftPhase) * page.driftRadius;
+        const driftY = Math.sin(page.driftPhase) * page.driftRadius;
+        page.sprite.position.set(page.x + driftX, page.y + driftY);
+        page.sprite.rotation = page.rotation;
+      }
       trail.particleTimer += dt;
       if (trail.particleTimer > 800) {
         trail.particleTimer = 0;
-        this.spawnDropletParticles(trail.x, trail.y, trail.radius, FLUID_MAIN);
+        this.spawnTrailParticles(trail.x, trail.y, trail.radius, trail.palette);
       }
     });
 
-    // ── 漩涡：核心缓慢旋转 + 螺旋臂反向旋转 + 牵引线脉动 + 自动过期 ──
-    this.activeVortices.forEach((vortex, targetId) => {
+    this.activeVortices.forEach((vortex) => {
+      if (vortex.container.destroyed) return;
       vortex.life += dt;
-      if (vortex.life >= vortex.maxLife) {
-        this.removeVortex(targetId);
-        return;
+      vortex.coreGraphics.rotation = vortex.life * 0.001 * Math.PI;
+      vortex.armGraphics.rotation = -vortex.life * 0.0008 * Math.PI;
+      vortex.soundWaveTimer += dt;
+      if (vortex.soundWaveTimer > SOUND_WAVE_INTERVAL) {
+        vortex.soundWaveTimer = 0;
+        vortex.soundWaveRings.push({ radius: 0, alpha: 0.8, life: 0 });
       }
-      // 核心缓慢旋转 0.3 转/秒
-      vortex.coreGraphics.rotation += dt * 0.001 * Math.PI * 0.6;
-      // 螺旋臂反向旋转 0.8 转/秒（产生漩涡感）
-      vortex.armGraphics.rotation -= dt * 0.001 * Math.PI * 1.6;
-      // 牵引线脉动 alpha 0.6↔1.0
-      vortex.pullGraphics.alpha =
-        0.6 + 0.4 * Math.sin(vortex.life * 0.002 * Math.PI);
-      // 核心呼吸 scale 0.95↔1.05
-      const breath = 1 + 0.05 * Math.sin(vortex.life * 0.001 * Math.PI);
-      vortex.coreGraphics.scale.set(breath);
+      vortex.soundWaveGraphics.clear();
+      const aliveRings: typeof vortex.soundWaveRings = [];
+      for (const ring of vortex.soundWaveRings) {
+        ring.life += dt;
+        const t = ring.life / 1500;
+        if (t >= 1) continue;
+        ring.radius = vortex.radius * 1.5 * t;
+        ring.alpha = 0.8 * (1 - t);
+        this.drawSoundWaveRing(vortex.soundWaveGraphics, ring.radius, ring.alpha, vortex.isAngry);
+        aliveRings.push(ring);
+      }
+      vortex.soundWaveRings = aliveRings;
     });
 
-    // ── 水龙卷爆发：三阶段动画 ──
-    this.activeBursts.forEach((burst, playerId) => {
-      burst.life += dt;
-      const T = burst.maxLife;
-      if (burst.life >= T) {
-        this.removeBurst(playerId);
+    const expired: string[] = [];
+    this.activeBursts.forEach((burst, key) => {
+      if (burst.container.destroyed) {
+        expired.push(key);
         return;
       }
-      const phase1End = T * 0.2; // 0-20%：吸水
-      const phase2End = T * 0.4; // 20%-40%：龙卷形成
-      // 阶段3：40%-100%：龙卷扩散
-
-      if (burst.life < phase1End) {
-        // 阶段1 吸水：水柱从地面开始升起 scale 0→0.3，alpha 0→0.5
-        //   螺旋臂/核心未显现，水花环未展开
-        //   粒子从外围向中心汇聚
-        const t = burst.life / phase1End;
-        burst.columnGraphics.scale.set(0.3 * t);
-        burst.columnGraphics.alpha = 0.5 * t;
-        burst.armGraphics.alpha = 0;
-        burst.coreGraphics.alpha = 0;
-        burst.splashGraphics.alpha = 0;
-        burst.splashGraphics.scale.set(0.3);
-        // 粒子：向心运动
-        burst.particleTimer += dt;
-        if (burst.particleTimer > 60) {
-          burst.particleTimer = 0;
-          this.spawnBurstParticles(
-            burst.x,
-            burst.y,
-            burst.radius,
-            1,
-            burst.themeColor,
-          );
-        }
-      } else if (burst.life < phase2End) {
-        // 阶段2 龙卷形成：水柱升至全高 scale 0.3→1.0(easeOutCubic)，alpha 0.5→1.0
-        //   螺旋水臂显现 alpha 0→0.8，中心水柱 alpha 0→1
-        //   水花环未展开
-        const t = (burst.life - phase1End) / (phase2End - phase1End);
-        const eased = this.easeOutCubic(t);
-        burst.columnGraphics.scale.set(0.3 + 0.7 * eased);
-        burst.columnGraphics.alpha = 0.5 + 0.5 * t;
-        // 螺旋臂旋转加速（4 转/秒）
-        burst.armGraphics.rotation += dt * 0.001 * Math.PI * 4;
-        burst.armGraphics.alpha = 0.8 * t;
-        burst.coreGraphics.alpha = t; // 0 → 1
-        burst.splashGraphics.alpha = 0;
-        // 粒子：螺旋上升
-        burst.particleTimer += dt;
-        if (burst.particleTimer > 80) {
-          burst.particleTimer = 0;
-          this.spawnBurstParticles(
-            burst.x,
-            burst.y,
-            burst.radius,
-            2,
-            burst.themeColor,
-          );
-        }
-      } else {
-        // 阶段3 龙卷扩散：水柱扩散 scale 1.0→1.5 alpha 1.0→0
-        //   螺旋臂消散 alpha 0.8→0，水花环展开 scale 1.0→2.0 alpha 0→0.8→0
-        //   中心水柱 alpha 1.0→0.3
-        //   粒子：暴雨向外飞溅
-        const t = (burst.life - phase2End) / (T - phase2End);
-        burst.columnGraphics.scale.set(1.0 + 0.5 * t);
-        burst.columnGraphics.alpha = 1.0 - t;
-        // 螺旋臂加速旋转并消散（6 转/秒）
-        burst.armGraphics.rotation += dt * 0.001 * Math.PI * 6;
-        burst.armGraphics.alpha = 0.8 * (1.0 - t);
-        // 中心水柱
-        burst.coreGraphics.alpha = 1.0 - 0.7 * t;
-        // 水花环：先展开 alpha 0→0.8（前半），后消散 alpha 0.8→0（后半）
-        burst.splashGraphics.scale.set(1.0 + 1.0 * t);
-        if (t < 0.5) {
-          burst.splashGraphics.alpha = 0.8 * (t * 2);
-        } else {
-          burst.splashGraphics.alpha = 0.8 * (1.0 - (t - 0.5) * 2);
-        }
-        // 粒子：暴雨向外飞溅（频率更高）
-        burst.particleTimer += dt;
-        if (burst.particleTimer > 50) {
-          burst.particleTimer = 0;
-          this.spawnBurstParticles(
-            burst.x,
-            burst.y,
-            burst.radius,
-            3,
-            burst.themeColor,
-          );
-        }
+      for (const page of burst.stormPages) {
+        page.rotation += page.rotationSpeed * (dt / 1000);
+        page.driftPhase += dt * 0.001;
+        const driftX = Math.cos(page.driftPhase) * page.driftRadius;
+        const driftY = Math.sin(page.driftPhase) * page.driftRadius;
+        page.sprite.position.set(page.x + driftX, page.y + driftY);
+        page.sprite.rotation = page.rotation;
+      }
+      const isExpired = this.runBurstAnimation(burst, dt);
+      if (isExpired) {
+        expired.push(key);
       }
     });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  移除与清理
-  // ══════════════════════════════════════════════════════
-
-  /** 移除水龙卷爆发特效 */
-  removeBurst(playerId: string): void {
-    const burst = this.activeBursts.get(playerId);
-    if (burst) {
-      this.fieldContainer.removeChild(burst.container);
-      burst.container.destroy({ children: true });
-      this.activeBursts.delete(playerId);
+    for (const key of expired) {
+      const b = this.activeBursts.get(key);
+      if (b) this.removeBurstInstance(b);
+      this.activeBursts.delete(key);
     }
   }
 
-  /** 清除所有特效（不销毁渲染器） */
+  private removeBurstInstance(b: ActiveFluidBurst): void {
+    this.container.removeChild(b.container);
+    b.container.destroy({ children: true });
+  }
+
+  protected onScaleChange(scale: number): void {
+    this.activeTrails.forEach((t) => {
+      if (!t.container.destroyed) t.container.scale.set(scale);
+    });
+    this.activeVortices.forEach((v) => {
+      if (!v.container.destroyed) v.container.scale.set(scale);
+    });
+    this.activeBursts.forEach((b) => {
+      if (!b.container.destroyed) b.container.scale.set(scale);
+    });
+  }
+
   clear(): void {
-    this.activeTrails.forEach((_, playerId) => this.removeTrail(playerId));
-    this.activeVortices.forEach((_, targetId) => this.removeVortex(targetId));
-    this.activeBursts.forEach((_, playerId) => this.removeBurst(playerId));
-  }
-
-  destroy(): void {
-    this.clear();
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  工具方法
-  // ══════════════════════════════════════════════════════
-
-  /** 颜色插值（from → to，t ∈ [0,1]） */
-  private interpolateColor(from: number, to: number, t: number): number {
-    const fr = (from >> 16) & 0xff;
-    const fg = (from >> 8) & 0xff;
-    const fb = from & 0xff;
-    const tr = (to >> 16) & 0xff;
-    const tg = (to >> 8) & 0xff;
-    const tb = to & 0xff;
-    const r = Math.round(fr + (tr - fr) * t);
-    const g = Math.round(fg + (tg - fg) * t);
-    const b = Math.round(fb + (tb - fb) * t);
-    return (r << 16) | (g << 8) | b;
-  }
-
-  /** easeOutCubic 缓动 */
-  private easeOutCubic(t: number): number {
-    return 1 - Math.pow(1 - t, 3);
+    this.activeTrails.forEach((t) => {
+      this.container.removeChild(t.container);
+      t.container.destroy({ children: true });
+    });
+    this.activeTrails.clear();
+    this.activeVortices.forEach((v) => {
+      this.container.removeChild(v.container);
+      v.container.destroy({ children: true });
+    });
+    this.activeVortices.clear();
+    this.activeBursts.forEach((b) => {
+      this.container.removeChild(b.container);
+      b.container.destroy({ children: true });
+    });
+    this.activeBursts.clear();
   }
 }

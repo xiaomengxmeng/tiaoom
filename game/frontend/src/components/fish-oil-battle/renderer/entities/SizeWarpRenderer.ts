@@ -1,87 +1,78 @@
 /**
- * 体积扭曲 (Size Warp) - 变奏者流派
+ * 体积扭曲 (Size Warp) - 控制者流派
  * 前端视觉渲染器
  *
- * 视觉设计（变奏者金 + 扭曲青双色调）：
- * - 体积扭曲场 Warp：扭曲核心（8 层径向渐变）+ 多层扩散缩放指示环 + 扭曲粒子
- * - 爆发 Burst：扭曲核心（8 层渐变）+ 缩放环爆发 + 扭曲脉冲 + 三阶段动画（压缩→爆发→恢复）
+ * 视觉设计（控制者青色系 —— 体积压缩与形变）：
+ * - 扭曲场 WarpField：椭圆 squash/stretch 呼吸变形（宽高比周期变化）
+ *   + 4 条体积刻度条（上下左右，带刻度标记）
+ *   + 3 层压缩波纹（向外扩散的椭圆波）
+ *   + 8 层径向渐变光环 + 中心扭曲核
+ * - 爆发 Burst：三阶段动画
+ *   · 蓄压（0-15%T）：椭圆场剧烈压缩，刻度条向中心收缩
+ *   · 扭曲（15%-30%T）：体积坍缩奇点 + 形变网格收缩 + 尺寸刻度环展开
+ *   · 余波（30%-100%T）：刻度环外扩消散，扭曲场恢复，青色粒子飘散
+ *
+ * API：triggerWarp / removeWarp / triggerBurst / update / setScale / clear / destroy
  */
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
+import { BaseWeaponEffectRenderer, type ActiveBurstBase, type Palette } from './BaseWeaponEffectRenderer';
 
 // ══════════════════════════════════════════════════════
-//  颜色常量（变奏者金）
+//  颜色常量（控制者青色系）
 // ══════════════════════════════════════════════════════
 
-const SIZE_DEEP = 0x3a2a0a; // 深褐金（渐变外缘）
-const SIZE_MAIN = 0xccaa22; // 主金（扭曲主色）
-const SIZE_LIGHT = 0xffdd55; // 浅亮金（中层渐变）
-const SIZE_HIGHLIGHT = 0xffee99; // 高亮浅金（内层渐变）
-const SIZE_WHITE = 0xffffff; // 白色（核心高亮）
-const SIZE_CYAN = 0x00ffcc; // 扭曲青（缩放环/扭曲色）
-
-/** 缩放指示环数量（多层扩散） */
-const SIZE_RING_COUNT = 4;
+const SIZE_DEEP = 0x0a2a3a;      // 深青（渐变外缘）
+const SIZE_MAIN = 0x00ccaa;     // 主青（扭曲主色）
+const SIZE_LIGHT = 0x33ffdd;    // 浅亮青（中层渐变）
+const SIZE_HIGHLIGHT = 0x66ffee; // 高亮浅青（内层渐变）
+const SIZE_WHITE = 0xffffff;    // 白色（核心高亮）
 
 // ══════════════════════════════════════════════════════
 //  数据结构
 // ══════════════════════════════════════════════════════
 
-/** 活跃体积扭曲场实例（常驻） */
-interface ActiveWarp {
+/** 活跃扭曲场实例（常驻） */
+interface ActiveWarpField {
   container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 扭曲核心（8 层径向渐变）
-  ringGraphics: PIXI.Graphics; // 多层扩散缩放指示环（独立旋转）
+  ellipseGraphics: PIXI.Graphics;    // 椭圆 squash/stretch
+  scaleBarGraphics: PIXI.Graphics;   // 4 条体积刻度条
+  waveGraphics: PIXI.Graphics;       // 3 层压缩波纹
+  haloGraphics: PIXI.Graphics;       // 光晕 + 中心核
   particleTimer: number;
-  life: number; // ms 累计
+  life: number;
   maxLife: number;
   x: number;
   y: number;
   radius: number;
-}
-
-/** 活跃爆发特效（压缩→爆发→恢复 三阶段） */
-interface ActiveBurst {
-  container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 扭曲核心（8 层渐变）
-  ringGraphics: PIXI.Graphics; // 缩放环爆发
-  pulseGraphics: PIXI.Graphics; // 扭曲脉冲
-  life: number;
-  maxLife: number;
   themeColor: number;
-  radius: number;
+  palette: Palette;
 }
 
-export class SizeWarpRenderer {
-  private fieldContainer: PIXI.Container;
-  private particlePool: ParticlePool;
-  private scale = 1;
+/** 活跃爆发特效（蓄压→撕裂→余波 三阶段） */
+interface ActiveSizeBurst extends ActiveBurstBase {
+  coreGraphics: PIXI.Graphics;       // 体积坍缩奇点
+  gridGraphics: PIXI.Graphics;       // 形变网格
+  ringGraphics: PIXI.Graphics;       // 尺寸刻度环
+  haloGraphics: PIXI.Graphics;       // 余波光晕
+  x: number;
+  y: number;
+}
 
-  // 活跃实例池
-  private activeWarps: Map<string, ActiveWarp> = new Map();
-  private activeBursts: Map<string, ActiveBurst> = new Map();
+// ══════════════════════════════════════════════════════
+//  SizeWarpRenderer
+// ══════════════════════════════════════════════════════
+
+export class SizeWarpRenderer extends BaseWeaponEffectRenderer {
+  private activeFields = new Map<string, ActiveWarpField>();
+  private activeBursts = new Map<string, ActiveSizeBurst>();
 
   constructor(fieldContainer: PIXI.Container, particlePool: ParticlePool) {
-    this.fieldContainer = fieldContainer;
-    this.particlePool = particlePool;
+    super(fieldContainer, particlePool);
   }
 
-  setScale(scale: number): void {
-    this.scale = scale;
-    this.activeWarps.forEach((w) => {
-      if (w.container.destroyed) return;
-      w.container.scale.set(scale);
-    });
-    this.activeBursts.forEach((b) => {
-      if (b.container.destroyed) return;
-      b.container.scale.set(scale);
-    });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  体积扭曲场 Warp（常驻）
-  // ══════════════════════════════════════════════════════
+  // ═══ 扭曲场 ═══
 
   /**
    * 触发体积扭曲场视觉效果
@@ -89,425 +80,355 @@ export class SizeWarpRenderer {
    * @param x 逻辑坐标 X
    * @param y 逻辑坐标 Y
    * @param radius 扭曲场半径（逻辑 px）
-   * @param themeColor 主题色（默认变奏者金）
+   * @param themeColor 主题色（默认控制者青）
    */
   triggerWarp(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = SIZE_MAIN,
+    themeColor: number = SIZE_MAIN,
   ): void {
-    // 已存在则仅更新位置与半径
-    const existing = this.activeWarps.get(playerId);
+    // 已存在则仅更新位置
+    const existing = this.activeFields.get(playerId);
     if (existing) {
       existing.x = x;
       existing.y = y;
-      existing.radius = radius;
       existing.container.position.set(x, y);
       return;
     }
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 扭曲核心（8 层径向渐变 + 主环 + 中心核）
-    const coreGraphics = new PIXI.Graphics();
-    this.drawWarpCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
+    const ellipseGraphics = new PIXI.Graphics();
+    const scaleBarGraphics = new PIXI.Graphics();
+    const waveGraphics = new PIXI.Graphics();
+    const haloGraphics = new PIXI.Graphics();
+    container.addChild(ellipseGraphics, scaleBarGraphics, waveGraphics, haloGraphics);
 
-    // 多层扩散缩放指示环（独立旋转）
-    const ringGraphics = new PIXI.Graphics();
-    this.drawScaleRings(ringGraphics, radius);
-    container.addChild(ringGraphics);
-
-    this.fieldContainer.addChild(container);
-
-    const warp: ActiveWarp = {
-      container,
-      coreGraphics,
-      ringGraphics,
-      particleTimer: 0,
-      life: 0,
-      maxLife: Number.POSITIVE_INFINITY, // 常驻，直到手动移除
-      x,
-      y,
-      radius,
+    const field: ActiveWarpField = {
+      container, ellipseGraphics, scaleBarGraphics, waveGraphics, haloGraphics,
+      particleTimer: 0, life: 0, maxLife: Infinity,
+      x, y, radius, themeColor, palette,
     };
-    this.activeWarps.set(playerId, warp);
-
-    // 触发首帧扭曲粒子
-    this.spawnWarpParticles(x, y, radius, SIZE_CYAN);
-    void themeColor;
+    this.drawFieldHalo(haloGraphics, radius, palette);
+    this.activeFields.set(playerId, field);
   }
 
   /** 移除体积扭曲场 */
   removeWarp(playerId: string): void {
-    const warp = this.activeWarps.get(playerId);
-    if (warp) {
-      this.fieldContainer.removeChild(warp.container);
-      warp.container.destroy({ children: true });
-      this.activeWarps.delete(playerId);
-    }
+    const f = this.activeFields.get(playerId);
+    if (!f) return;
+    this.container.removeChild(f.container);
+    f.container.destroy({ children: true });
+    this.activeFields.delete(playerId);
   }
 
-  /**
-   * 绘制扭曲核心：8 层同心圆径向渐变（白→高亮→浅金→主金→深褐金）+ 主环 + 中心核
-   * 以 (0,0) 为中心绘制
-   */
-  private drawWarpCore(g: PIXI.Graphics, radius: number): void {
+  /** 绘制椭圆 squash/stretch 呼吸变形 */
+  private drawSquashEllipse(g: PIXI.Graphics, radius: number, palette: Palette, life: number): void {
     g.clear();
-
-    // 8 层同心圆叠加模拟径向渐变
+    // squash/stretch: 宽高比周期变化（0.7~1.3）
+    const phase = life * 0.002 * Math.PI;
+    const scaleX = 1 + 0.3 * Math.sin(phase);
+    const scaleY = 1 - 0.3 * Math.sin(phase);
+    // 8 层渐变椭圆
     for (let i = 0; i < 8; i++) {
-      const t = i / 7; // 0 → 1
-      const r = radius * (0.15 + 0.85 * t);
-      // 颜色分段：白 → 高亮 → 浅金 → 主金 → 深褐金
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(SIZE_WHITE, SIZE_HIGHLIGHT, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(
-          SIZE_HIGHLIGHT,
-          SIZE_LIGHT,
-          (t - 0.25) / 0.25,
-        );
-      } else if (t < 0.75) {
-        color = this.interpolateColor(
-          SIZE_LIGHT,
-          SIZE_MAIN,
-          (t - 0.5) / 0.25,
-        );
-      } else {
-        color = this.interpolateColor(
-          SIZE_MAIN,
-          SIZE_DEEP,
-          (t - 0.75) / 0.25,
-        );
-      }
-      const alpha = (1 - t) * 0.22;
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
+      const t = i / 7;
+      const rx = Math.max(0.5, radius * (1 - t * 0.9) * scaleX);
+      const ry = Math.max(0.5, radius * (1 - t * 0.9) * scaleY);
+      g.ellipse(0, 0, rx, ry);
+      g.fill({ color: this.interpolateColor(palette.highlight, palette.shadow, t), alpha: (1 - t) * 0.35 });
     }
-
-    // 扭曲主环：深褐金描边 + 主金主环 + 高亮内环
-    g.circle(0, 0, radius);
-    g.stroke({ color: SIZE_DEEP, width: 1.5, alpha: 0.6 });
-    g.circle(0, 0, radius * 0.97);
-    g.stroke({ color: SIZE_MAIN, width: 1, alpha: 0.7 });
-    g.circle(0, 0, radius * 0.93);
-    g.stroke({ color: SIZE_HIGHLIGHT, width: 0.4, alpha: 0.5 });
-
-    // 中心核：白色实心圆 r=4 + 扭曲青外环 r=6
-    g.circle(0, 0, 6);
-    g.stroke({ color: SIZE_CYAN, width: 1, alpha: 0.8 });
-    g.circle(0, 0, 4);
-    g.fill({ color: SIZE_WHITE, alpha: 1 });
+    // 双层椭圆主环
+    g.ellipse(0, 0, radius * scaleX, radius * scaleY);
+    g.stroke({ color: palette.glow, width: 1, alpha: 0.7 });
+    g.ellipse(0, 0, radius * 0.95 * scaleX, radius * 0.95 * scaleY);
+    g.stroke({ color: palette.highlight, width: 0.4, alpha: 0.5 });
   }
 
-  /**
-   * 绘制多层扩散缩放指示环：4 层环由内到外，扭曲青色
-   * 由 ringGraphics 独立承担缩放呼吸动画
-   */
-  private drawScaleRings(g: PIXI.Graphics, radius: number): void {
+  /** 绘制 4 条体积刻度条（上下左右，带刻度标记） */
+  private drawScaleBars(g: PIXI.Graphics, radius: number, palette: Palette, life: number): void {
     g.clear();
-    // 4 层缩放指示环：由内到外半径递增，alpha 递减
-    for (let i = 0; i < SIZE_RING_COUNT; i++) {
-      const t = i / (SIZE_RING_COUNT - 1); // 0 → 1
-      const r = radius * (0.4 + 0.6 * t);
-      // 颜色交替：内层扭曲青，外层高亮
-      const color = i % 2 === 0 ? SIZE_CYAN : SIZE_LIGHT;
-      const alpha = 0.7 - t * 0.3;
-      g.circle(0, 0, r);
-      g.stroke({ color, width: 1.5 - t * 0.5, alpha });
+    const directions = [
+      { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+    ];
+    const breath = 1 + 0.05 * Math.sin(life * 0.003 * Math.PI);
+    for (const dir of directions) {
+      const barLen = radius * 0.3 * breath;
+      const startX = dir.dx * radius * 1.1;
+      const startY = dir.dy * radius * 1.1;
+      const endX = startX + dir.dx * barLen;
+      const endY = startY + dir.dy * barLen;
+      // 主刻度条
+      g.moveTo(startX, startY);
+      g.lineTo(endX, endY);
+      g.stroke({ color: palette.glow, width: 1.5, alpha: 0.6 });
+      // 刻度标记（5 个小刻度）
+      for (let i = 1; i <= 5; i++) {
+        const t = i / 5;
+        const mx = startX + dir.dx * barLen * t;
+        const my = startY + dir.dy * barLen * t;
+        const perpX = -dir.dy * 3;
+        const perpY = dir.dx * 3;
+        g.moveTo(mx - perpX, my - perpY);
+        g.lineTo(mx + perpX, my + perpY);
+        g.stroke({ color: palette.highlight, width: 0.8, alpha: 0.5 });
+      }
     }
   }
 
-  /**
-   * 生成扭曲粒子（向外扩散，表现体积扭曲场扩张感）
-   * 利用 particlePool.emit，每帧由 update 节流调用
-   */
-  private spawnWarpParticles(
-    x: number,
-    y: number,
-    radius: number,
-    color: number,
-  ): void {
-    const s = this.scale;
-    for (let i = 0; i < 2; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      // 从核心附近出发
-      const startDist = radius * s * (0.2 + Math.random() * 0.2);
-      const px = x + Math.cos(angle) * startDist;
-      const py = y + Math.sin(angle) * startDist;
-      // 向外扩散速度（px/s），表现体积扭曲扩张
-      const speed = (22 + Math.random() * 18) * s;
-      this.particlePool.emit({
-        x: px,
-        y: py,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 2000,
-        scaleStart: 1,
-        scaleEnd: 0,
-        alphaStart: 0.8,
-        alphaEnd: 0,
-        tint: color,
-        radius: (1.5 + Math.random() * 1.5) * s,
-      });
+  /** 绘制 3 层压缩波纹（向外扩散的椭圆波） */
+  private drawCompressionWaves(g: PIXI.Graphics, radius: number, palette: Palette, life: number): void {
+    g.clear();
+    for (let i = 0; i < 3; i++) {
+      const phase = (life * 0.001 + i * 0.33) % 1;
+      const r = radius * (0.3 + phase * 0.8);
+      const alpha = (1 - phase) * 0.4;
+      g.ellipse(0, 0, r, r * 0.8);
+      g.stroke({ color: palette.highlight, width: 1, alpha });
     }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  爆发特效（压缩→爆发→恢复 三阶段动画）
-  // ══════════════════════════════════════════════════════
+  private drawFieldHalo(g: PIXI.Graphics, radius: number, palette: Palette): void {
+    g.clear();
+    this.drawMultilayerCircle(
+      g, radius * 0.3, 6,
+      (t) => this.interpolateColor(palette.highlight, palette.primary, t),
+      (t) => (1 - t) * 0.6,
+    );
+    g.circle(0, 0, 4);
+    g.fill({ color: SIZE_WHITE });
+    g.circle(0, 0, 6);
+    g.stroke({ color: palette.glow, width: 1, alpha: 0.8 });
+  }
+
+  // ═══ 爆发 ═══
 
   /**
-   * 触发爆发视觉效果
+   * 触发体积扭曲爆发
    * @param playerId 玩家 ID
    * @param x 逻辑坐标 X
    * @param y 逻辑坐标 Y
-   * @param radius 爆发范围（逻辑 px）
-   * @param themeColor 主题色
-   * @param durationMs 持续时间（ms），默认 5000
+   * @param radius 爆发半径（逻辑 px）
+   * @param themeColor 主题色（默认控制者青）
+   * @param durationMs 爆发持续时间（ms，默认 1500）
    */
   triggerBurst(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = SIZE_MAIN,
+    themeColor: number = SIZE_MAIN,
     durationMs?: number,
   ): void {
     // 若已存在，先销毁旧实例
-    const old = this.activeBursts.get(playerId);
-    if (old) {
-      this.fieldContainer.removeChild(old.container);
-      old.container.destroy({ children: true });
-    }
+    const existing = this.activeBursts.get(playerId);
+    if (existing) this.removeBurstInstance(existing);
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 1. 扭曲核心（8 层径向渐变 + 中心核）
     const coreGraphics = new PIXI.Graphics();
-    this.drawBurstCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
-
-    // 2. 缩放环爆发（多层扩散缩放指示环）
+    const gridGraphics = new PIXI.Graphics();
     const ringGraphics = new PIXI.Graphics();
-    this.drawScaleRings(ringGraphics, radius * 0.8);
-    container.addChild(ringGraphics);
+    const haloGraphics = new PIXI.Graphics();
+    container.addChild(coreGraphics, gridGraphics, ringGraphics, haloGraphics);
 
-    // 3. 扭曲脉冲（双层细高亮环）
-    const pulseGraphics = new PIXI.Graphics();
-    this.drawBurstPulse(pulseGraphics, radius);
-    container.addChild(pulseGraphics);
-
-    this.fieldContainer.addChild(container);
-
-    const burst: ActiveBurst = {
-      container,
-      coreGraphics,
-      ringGraphics,
-      pulseGraphics,
-      life: 0,
-      maxLife: durationMs ?? 5000,
-      themeColor,
-      radius,
+    const burst: ActiveSizeBurst = {
+      container, life: 0, maxLife: durationMs ?? 1500, themeColor, radius, particleTimer: 0, palette,
+      coreGraphics, gridGraphics, ringGraphics, haloGraphics, x, y,
     };
     this.activeBursts.set(playerId, burst);
   }
 
-  /**
-   * 绘制爆发扭曲核心：8 层同心圆（白→高亮→浅金→主金→深褐金）+ 中心核
-   */
-  private drawBurstCore(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    const coreR = radius * 0.6;
+  // ═══ 三阶段钩子 ═══
 
-    // 8 层同心圆叠加
-    for (let i = 0; i < 8; i++) {
-      const t = i / 7;
-      const r = coreR * (0.1 + 0.9 * t);
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(SIZE_WHITE, SIZE_HIGHLIGHT, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(
-          SIZE_HIGHLIGHT,
-          SIZE_LIGHT,
-          (t - 0.25) / 0.25,
-        );
-      } else if (t < 0.75) {
-        color = this.interpolateColor(
-          SIZE_LIGHT,
-          SIZE_MAIN,
-          (t - 0.5) / 0.25,
-        );
-      } else {
-        color = this.interpolateColor(
-          SIZE_MAIN,
-          SIZE_DEEP,
-          (t - 0.75) / 0.25,
-        );
-      }
-      const alpha = (1 - t) * 0.28;
+  /** 阶段1 蓄压（0-15%T）：椭圆场剧烈压缩，坍缩奇点逐渐显现 */
+  protected phase1Charge(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveSizeBurst;
+    const ease = this.easeOutCubic(t);
+    // 椭圆场剧烈压缩（6 层椭圆，squash 形变加剧）
+    b.gridGraphics.clear();
+    const r = b.radius * (1 - ease * 0.8);
+    for (let i = 0; i < 6; i++) {
+      const ti = i / 5;
+      g_ellipse(b.gridGraphics, r * (1 - ti * 0.9) * (1 + ease * 0.2), r * (1 - ti * 0.9) * (1 - ease * 0.2));
+      b.gridGraphics.fill({
+        color: this.interpolateColor(b.palette.glow, b.palette.shadow, ti),
+        alpha: (1 - ti) * 0.5 * (1 - t * 0.5),
+      });
+    }
+    // 坍缩奇点逐渐显现
+    b.coreGraphics.clear();
+    this.drawCollapseCore(b.coreGraphics, b.radius * 0.05 * ease, b.palette, t * 0.5);
+    b.ringGraphics.alpha = 0;
+    b.haloGraphics.alpha = 0;
+  }
+
+  /** 阶段2 撕裂（15%-30%T）：坍缩奇点满显 + 尺寸刻度环展开 + 粒子飞散 */
+  protected phase2Burst(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveSizeBurst;
+    const ease = this.easeOutCubic(t);
+    // 体积坍缩奇点满显
+    b.coreGraphics.clear();
+    this.drawCollapseCore(b.coreGraphics, b.radius * 0.1, b.palette, 1);
+    // 尺寸刻度环展开
+    this.drawScaleRings(b.ringGraphics, b.radius * ease, b.palette, ease);
+    b.ringGraphics.alpha = 1;
+    // 网格消散
+    b.gridGraphics.alpha = 1 - t;
+    // 发射扭曲粒子
+    b.particleTimer += 16;
+    if (b.particleTimer > 60) {
+      b.particleTimer = 0;
+      this.spawnWarpParticles(b, 2);
+    }
+  }
+
+  /** 阶段3 余波（30%-100%T）：刻度环外扩消散，奇点残留淡出，余波光晕 */
+  protected phase3Diffuse(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveSizeBurst;
+    const ease = this.easeOutCubic(t);
+    // 刻度环外扩消散
+    this.drawScaleRings(b.ringGraphics, b.radius * (1 + ease * 0.5), b.palette, 1 - ease);
+    b.ringGraphics.alpha = 1 - ease;
+    // 奇点残留淡出
+    b.coreGraphics.clear();
+    this.drawCollapseCore(b.coreGraphics, b.radius * 0.1 * (1 + ease), b.palette, 1 - ease);
+    // 余波光晕
+    this.drawBurstHalo(b.haloGraphics, b.radius, b.palette, ease);
+    b.haloGraphics.alpha = (1 - ease) * 0.6;
+  }
+
+  /** 绘制体积坍缩奇点（10 层径向渐变 + 白色核心） */
+  private drawCollapseCore(g: PIXI.Graphics, radius: number, palette: Palette, intensity: number): void {
+    g.clear();
+    this.drawMultilayerCircle(
+      g, radius, 10,
+      (t) => this.interpolateColor(SIZE_WHITE, palette.primary, t),
+      (t) => (1 - t * 0.5) * intensity,
+    );
+    g.circle(0, 0, Math.max(0.5, radius * 0.3));
+    g.fill({ color: SIZE_WHITE, alpha: intensity });
+  }
+
+  /** 绘制尺寸刻度环（4 层同心环 + 8 方位刻度标记） */
+  private drawScaleRings(g: PIXI.Graphics, radius: number, palette: Palette, progress: number): void {
+    g.clear();
+    for (let i = 0; i < 4; i++) {
+      const r = radius * (0.5 + i * 0.15);
       g.circle(0, 0, r);
-      g.fill({ color, alpha });
+      g.stroke({ color: palette.glow, width: 1.5 - i * 0.2, alpha: 0.6 * progress });
+      // 刻度标记（8 个方位）
+      for (let j = 0; j < 8; j++) {
+        const angle = (j * Math.PI) / 4;
+        const mx = Math.cos(angle) * r;
+        const my = Math.sin(angle) * r;
+        g.circle(mx, my, 1);
+        g.fill({ color: palette.highlight, alpha: 0.8 * progress });
+      }
     }
-
-    // 中心核 r=6
-    g.circle(0, 0, 6);
-    g.fill({ color: SIZE_WHITE, alpha: 1 });
-
-    // 扭曲青边缘辉光
-    g.circle(0, 0, 8);
-    g.stroke({ color: SIZE_CYAN, width: 1.5, alpha: 0.8 });
   }
 
-  /**
-   * 绘制扭曲脉冲：双层细高亮环（主金 + 扭曲青）
-   */
-  private drawBurstPulse(g: PIXI.Graphics, radius: number): void {
+  /** 绘制余波光晕（4 层椭圆扩散） */
+  private drawBurstHalo(g: PIXI.Graphics, radius: number, palette: Palette, progress: number): void {
     g.clear();
-    g.circle(0, 0, radius);
-    g.stroke({ color: SIZE_LIGHT, width: 0.6, alpha: 0.7 });
-    g.circle(0, 0, radius * 0.95);
-    g.stroke({ color: SIZE_CYAN, width: 0.3, alpha: 0.5 });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  更新循环
-  // ══════════════════════════════════════════════════════
-
-  /** 每帧更新（由 EffectRenderer 调用，dt 单位 ms） */
-  update(dt: number): void {
-    // ── 体积扭曲场：核心呼吸 + 缩放环脉动 + 扭曲粒子 ──
-    this.activeWarps.forEach((warp) => {
-      warp.life += dt;
-      // 核心呼吸 scale 1.0↔1.05（2s 周期）
-      const breath = 1 + 0.05 * Math.sin(warp.life * 0.001 * Math.PI);
-      warp.coreGraphics.scale.set(breath);
-      // 核心脉动 alpha 0.7↔0.95
-      const pulse = 0.8 + 0.15 * Math.sin(warp.life * 0.001 * Math.PI);
-      warp.coreGraphics.alpha = pulse;
-      // 缩放环脉动：scale 0.95↔1.05（错峰相位），表现缩放指示
-      const ringScale =
-        1.0 + 0.05 * Math.sin(warp.life * 0.0015 * Math.PI * 2);
-      warp.ringGraphics.scale.set(ringScale);
-      // 缩放环 alpha 0.6↔1.0 脉动
-      warp.ringGraphics.alpha =
-        0.8 + 0.2 * Math.sin(warp.life * 0.002 * Math.PI * 2);
-      // 扭曲粒子：每 1.3s 生成 2 个
-      warp.particleTimer += dt;
-      if (warp.particleTimer > 1300) {
-        warp.particleTimer = 0;
-        this.spawnWarpParticles(warp.x, warp.y, warp.radius, SIZE_CYAN);
-      }
-    });
-
-    // ── 爆发：三阶段动画（压缩→爆发→恢复） ──
-    this.activeBursts.forEach((burst, playerId) => {
-      burst.life += dt;
-      const T = burst.maxLife;
-      if (burst.life >= T) {
-        this.removeBurst(playerId);
-        return;
-      }
-      const phase1End = T * 0.2; // 压缩阶段
-      const phase2End = T * 0.4; // 爆发阶段
-
-      if (burst.life < phase1End) {
-        // 阶段1 压缩：核心收缩 scale 1.0→0.3(easeInCubic)，缩放环收缩，脉冲未展开
-        const t = burst.life / phase1End;
-        const eased = this.easeInCubic(t);
-        burst.coreGraphics.scale.set(1.0 - 0.7 * eased); // 1.0 → 0.3 压缩
-        burst.coreGraphics.alpha = 1.0 - 0.3 * t;
-        burst.ringGraphics.scale.set(1.0 - 0.5 * eased); // 缩放环收缩
-        burst.ringGraphics.alpha = 1.0 - 0.5 * t;
-        burst.ringGraphics.rotation += dt * 0.003 * Math.PI; // 压缩旋转
-        burst.pulseGraphics.alpha = 0;
-        burst.pulseGraphics.scale.set(0.3);
-      } else if (burst.life < phase2End) {
-        // 阶段2 爆发：核心爆发 scale 0.3→1.5(easeOutCubic)，缩放环爆发扩张，脉冲展开
-        const t = (burst.life - phase1End) / (phase2End - phase1End);
-        const eased = this.easeOutCubic(t);
-        burst.coreGraphics.scale.set(0.3 + 1.2 * eased); // 0.3 → 1.5 爆发
-        burst.coreGraphics.alpha = 0.7 + 0.3 * t;
-        burst.ringGraphics.scale.set(0.5 + 1.0 * eased); // 缩放环爆发扩张
-        burst.ringGraphics.alpha = 0.5 + 0.5 * t;
-        burst.ringGraphics.rotation += dt * 0.005 * Math.PI; // 快速旋转
-        // 脉冲展开 scale 0.3→1.0
-        burst.pulseGraphics.scale.set(0.3 + 0.7 * eased);
-        burst.pulseGraphics.alpha = t;
-      } else {
-        // 阶段3 恢复：核心恢复 scale 1.5→1.0，缩放环恢复，脉冲扩散消散
-        const t = (burst.life - phase2End) / (T - phase2End);
-        const eased = this.easeOutCubic(t);
-        burst.coreGraphics.scale.set(1.5 - 0.5 * eased); // 1.5 → 1.0 恢复
-        burst.coreGraphics.alpha = 1.0 - 0.7 * t; // 渐隐
-        burst.ringGraphics.scale.set(1.5 - 0.3 * t); // 恢复
-        burst.ringGraphics.alpha = 1.0 - t;
-        burst.ringGraphics.rotation += dt * 0.002 * Math.PI;
-        // 脉冲扩散 scale 1.0→2.0 alpha 1.0→0
-        burst.pulseGraphics.scale.set(1.0 + 1.0 * t);
-        burst.pulseGraphics.alpha = 1.0 - t;
-      }
-    });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  移除与清理
-  // ══════════════════════════════════════════════════════
-
-  /** 移除爆发特效 */
-  removeBurst(playerId: string): void {
-    const burst = this.activeBursts.get(playerId);
-    if (burst) {
-      this.fieldContainer.removeChild(burst.container);
-      burst.container.destroy({ children: true });
-      this.activeBursts.delete(playerId);
+    const r = radius * (1 + progress * 0.5);
+    for (let i = 0; i < 4; i++) {
+      g.ellipse(0, 0, r * (0.8 + i * 0.05), r * (1 + i * 0.05));
+      g.stroke({ color: palette.glow, width: 0.8, alpha: 0.3 - i * 0.05 });
     }
   }
 
-  /** 清除所有特效（不销毁渲染器） */
+  /** 发射扭曲粒子（带 tintStart/tintEnd 渐变 + 阻力衰减） */
+  private spawnWarpParticles(b: ActiveSizeBurst, count: number): void {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 60 + Math.random() * 80;
+      this.particlePool.emit({
+        x: b.x, y: b.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        drag: 0.6,
+        life: 700,
+        scaleStart: 1.2, scaleEnd: 0,
+        alphaStart: 0.8, alphaEnd: 0,
+        tint: b.palette.glow,
+        tintStart: b.palette.highlight,
+        tintEnd: b.palette.dim,
+        radius: 2,
+      });
+    }
+  }
+
+  // ═══ 生命周期 ═══
+
+  update(dt: number): void {
+    // 更新扭曲场
+    this.activeFields.forEach((f) => {
+      f.life += dt;
+      this.drawSquashEllipse(f.ellipseGraphics, f.radius, f.palette, f.life);
+      this.drawScaleBars(f.scaleBarGraphics, f.radius, f.palette, f.life);
+      this.drawCompressionWaves(f.waveGraphics, f.radius, f.palette, f.life);
+      const breath = 1 + 0.05 * Math.sin(f.life * 0.002 * Math.PI);
+      f.haloGraphics.scale.set(breath);
+      // 漂浮粒子
+      f.particleTimer += dt;
+      if (f.particleTimer > 250) {
+        f.particleTimer = 0;
+        this.particlePool.emit({
+          x: f.x, y: f.y,
+          vx: (Math.random() - 0.5) * 40,
+          vy: (Math.random() - 0.5) * 40,
+          drag: 0.7, life: 500,
+          scaleStart: 0.8, scaleEnd: 0,
+          alphaStart: 0.5, alphaEnd: 0,
+          tint: f.palette.glow, radius: 1.5,
+        });
+      }
+    });
+
+    // 更新爆发（三阶段调度）
+    const expired: string[] = [];
+    this.activeBursts.forEach((b, key) => {
+      if (this.runBurstAnimation(b, dt)) expired.push(key);
+    });
+    for (const key of expired) {
+      const b = this.activeBursts.get(key);
+      if (b) this.removeBurstInstance(b);
+      this.activeBursts.delete(key);
+    }
+  }
+
+  private removeBurstInstance(b: ActiveSizeBurst): void {
+    this.container.removeChild(b.container);
+    b.container.destroy({ children: true });
+  }
+
+  protected onScaleChange(scale: number): void {
+    this.activeFields.forEach((f) => { if (!f.container.destroyed) f.container.scale.set(scale); });
+    this.activeBursts.forEach((b) => { if (!b.container.destroyed) b.container.scale.set(scale); });
+  }
+
   clear(): void {
-    this.activeWarps.forEach((_, playerId) => this.removeWarp(playerId));
-    this.activeBursts.forEach((_, playerId) => this.removeBurst(playerId));
+    this.activeFields.forEach((f) => {
+      this.container.removeChild(f.container);
+      f.container.destroy({ children: true });
+    });
+    this.activeFields.clear();
+    this.activeBursts.forEach((b) => this.removeBurstInstance(b));
+    this.activeBursts.clear();
   }
+}
 
-  destroy(): void {
-    this.clear();
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  工具方法
-  // ══════════════════════════════════════════════════════
-
-  /** 颜色插值（from → to，t ∈ [0,1]） */
-  private interpolateColor(from: number, to: number, t: number): number {
-    const fr = (from >> 16) & 0xff;
-    const fg = (from >> 8) & 0xff;
-    const fb = from & 0xff;
-    const tr = (to >> 16) & 0xff;
-    const tg = (to >> 8) & 0xff;
-    const tb = to & 0xff;
-    const r = Math.round(fr + (tr - fr) * t);
-    const g = Math.round(fg + (tg - fg) * t);
-    const b = Math.round(fb + (tb - fb) * t);
-    return (r << 16) | (g << 8) | b;
-  }
-
-  /** easeOutCubic 缓动 */
-  private easeOutCubic(t: number): number {
-    return 1 - Math.pow(1 - t, 3);
-  }
-
-  /** easeInCubic 缓动 */
-  private easeInCubic(t: number): number {
-    return t * t * t;
-  }
+// 辅助函数（避免与 Graphics.ellipse 方法名冲突）
+function g_ellipse(g: PIXI.Graphics, rx: number, ry: number): void {
+  g.ellipse(0, 0, Math.max(0.5, rx), Math.max(0.5, ry));
 }

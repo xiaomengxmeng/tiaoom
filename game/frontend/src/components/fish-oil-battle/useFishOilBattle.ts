@@ -562,6 +562,7 @@ export function useFishOilBattle(
             x: data.x, y: data.y,
             radius: data.radius ?? 45,
             flowDir: data.fluidFlowDir ?? 0,
+            isAngry: data.isAngry,
           });
         }
         break;
@@ -574,6 +575,7 @@ export function useFishOilBattle(
             x: data.x, y: data.y,
             radius: data.radius ?? 45,
             pullForce: data.fluidPullForce ?? 0.5,
+            isAngry: data.isAngry,
           });
         }
         break;
@@ -585,6 +587,7 @@ export function useFishOilBattle(
             playerId: data.playerId,
             x: data.x, y: data.y,
             radius: data.radius ?? 220,
+            isAngry: data.isAngry,
           });
         }
         break;

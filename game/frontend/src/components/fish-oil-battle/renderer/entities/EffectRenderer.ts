@@ -968,8 +968,9 @@ export class EffectRenderer {
     radius: number,
     flowDir: number,
     themeColor?: number,
+    isAngry?: boolean,
   ): void {
-    this.fluidMasteryRenderer.triggerTrail(playerId, x, y, radius, flowDir, themeColor);
+    this.fluidMasteryRenderer.triggerTrail(playerId, x, y, radius, flowDir, themeColor, isAngry);
   }
 
   /** 更新水流尾迹位置与流向 */
@@ -990,8 +991,9 @@ export class EffectRenderer {
     radius: number,
     pullForce: number,
     themeColor?: number,
+    isAngry?: boolean,
   ): void {
-    this.fluidMasteryRenderer.triggerVortex(targetId, x, y, radius, pullForce, themeColor);
+    this.fluidMasteryRenderer.triggerVortex(targetId, x, y, radius, pullForce, themeColor, isAngry);
   }
 
   /** 移除漩涡牵引 */
@@ -1007,10 +1009,11 @@ export class EffectRenderer {
     radius: number,
     themeColor?: number,
     durationMs?: number,
+    isAngry?: boolean,
   ): void {
     const cfg = this.buildFluidMasteryVisualCfg();
     this.fluidMasteryRenderer.triggerBurst(
-      playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs,
+      playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs, isAngry,
     );
   }
 

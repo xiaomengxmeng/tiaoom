@@ -268,6 +268,8 @@ export class CyberFishRenderer {
     hunterX?: number;
     /** 追猎协议：追猎者位置 Y（PURSUIT_PROTOCOL_MARK 专用，追踪线起点） */
     hunterY?: number;
+    /** KE：书生愤怒态（hp<30% 时触发，色系切换为深红） */
+    isAngry?: boolean;
   }): void {
     // 映射所有坐标参数
     const mapCfg: typeof config & Record<string, any> = { ...config };
@@ -599,6 +601,7 @@ export class CyberFishRenderer {
             config.radius ?? 45,
             config.flowDir ?? 0,
             themeColor ?? config.factionColor,
+            config.isAngry,
           );
         }
         break;
@@ -611,6 +614,7 @@ export class CyberFishRenderer {
             config.radius ?? 45,
             config.pullForce ?? 0.5,
             themeColor ?? config.factionColor,
+            config.isAngry,
           );
         }
         break;
@@ -622,6 +626,8 @@ export class CyberFishRenderer {
             mapCfg.x, mapCfg.y,
             config.radius ?? 220,
             themeColor ?? config.factionColor,
+            undefined,
+            config.isAngry,
           );
         }
         break;

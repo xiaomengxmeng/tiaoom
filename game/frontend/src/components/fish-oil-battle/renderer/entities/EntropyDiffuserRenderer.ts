@@ -2,14 +2,15 @@
  * 熵增扩散器 (Entropy Diffuser) - 控制者流派
  * 前端视觉渲染器
  *
- * 视觉设计（控制者蓝紫色系 —— 熵增扩散，混乱效果）：
- * - 熵增场 EntropyField：10 层径向渐变光环（白→高亮蓝紫→浅蓝紫→主蓝紫→深蓝紫透明）
- *   + 双层主环（外环高亮蓝紫 + 内环白）+ 中心熵增核（白实心 + 混乱青外晕）
- *   + 扩散波纹（多层从中心向外扩散的圆环，循环播放）+ 混乱粒子（随机方向飞散，蓝紫/青色）
- * - 爆发 Burst：三阶段动画
- *   · 蓄能（0-15%T）：熵增场收缩，能量向中心汇聚
- *   · 扩散爆发（15%-30%T）：熵增奇点爆发（10 层渐变核心）+ 6 条扩散线闪现 + 视界环展开
- *   · 混乱余波（30%-100%T）：混乱波纹扩散消散
+ * 视觉设计（熵增热寂混乱 —— 三大独特视觉符号）：
+ * - 熵增场 EntropyField：
+ *   · 3 层错相位扩散波纹（12 边不规则多边形，相位错开 0.33）
+ *   · 混乱方向粒子（随机加速度 ax/ay + drag 阻力 + 热→冷颜色渐变）
+ *   · 8 层径向渐变光环 + 双层主环 + 中心熵增核
+ * - 爆发 Burst（热寂奇点）：三阶段动画
+ *   · 蓄压（0-15%T）：扩散波纹收缩汇聚至中心
+ *   · 爆发（15%-30%T）：热扩散云（6 层 8 边不规则云）+ 混沌粒子风暴（强随机加速度）
+ *   · 扩散（30%-100%T）：热云消散 + 余波波纹展开 + 残留粒子飞散
  *
  * API：triggerEntropyField / removeEntropyField / triggerBurst / update / setScale / clear / destroy
  * 所有动画由 update(dt) 驱动，不使用 rAF / setTimeout。
@@ -17,17 +18,19 @@
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
+import {
+  BaseWeaponEffectRenderer,
+  type ActiveBurstBase,
+  type Palette,
+} from './BaseWeaponEffectRenderer';
 
 // ══════════════════════════════════════════════════════
-//  颜色常量（控制者蓝紫）
+//  颜色常量（熵增热寂：热橙 → 混乱黄 → 冷蓝）
 // ══════════════════════════════════════════════════════
 
-const ENTROPY_DEEP = 0x0a0a4a; // 深蓝紫（渐变末端）
-const ENTROPY_MAIN = 0x2200cc; // 主蓝紫
-const ENTROPY_LIGHT = 0x5566ff; // 浅蓝紫
-const ENTROPY_HIGHLIGHT = 0x99bbff; // 高亮蓝紫
-const ENTROPY_WHITE = 0xffffff; // 白色
-const ENTROPY_CYAN = 0x00ffcc; // 混乱青色
+const ENTROPY_HEAT = 0xff4400; // 热橙（粒子起始色 / 熵增热源）
+const ENTROPY_CHAOS = 0xffcc00; // 混乱黄（默认主题色 / 中层过渡）
+const ENTROPY_COLD = 0x3300cc; // 冷蓝（粒子终止色 / 熵增冷寂）
 
 // ══════════════════════════════════════════════════════
 //  数据结构
@@ -36,63 +39,39 @@ const ENTROPY_CYAN = 0x00ffcc; // 混乱青色
 /** 活跃熵增场实例（常驻，扩散波纹循环播放） */
 interface ActiveEntropyField {
   container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 10 层渐变光环 + 双层主环 + 中心熵增核
-  rippleGraphics: PIXI.Graphics; // 扩散波纹（多层从中心向外扩散的圆环）
+  rippleGraphics: PIXI.Graphics; // 3 层错相位扩散波纹（不规则多边形）
+  haloGraphics: PIXI.Graphics; // 8 层渐变光环 + 双层主环 + 中心核
   particleTimer: number; // 混乱粒子节流计时器
-  rippleTimer: number; // 扩散波纹节流计时器
-  ripplePhase: number; // 扩散波纹相位（驱动波纹扩散动画）
   life: number; // ms 累计
   maxLife: number;
   x: number;
   y: number;
   radius: number;
   themeColor: number;
+  palette: Palette;
 }
 
-/** 活跃爆发特效（三阶段：蓄能 → 扩散爆发 → 混乱余波） */
-interface ActiveBurst {
-  container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 熵增奇点核心（10 层渐变）
-  horizonGraphics: PIXI.Graphics; // 视界环（双层细高亮环）
-  diffuseGraphics: PIXI.Graphics; // 扩散线（6 条向心汇聚）
-  haloGraphics: PIXI.Graphics; // 混乱波纹（多层细环）
-  life: number;
-  maxLife: number;
-  themeColor: number;
-  radius: number;
-  particleTimer: number; // 扩散阶段粒子节流
+/** 活跃爆发特效（蓄压 → 热寂奇点 → 扩散） */
+interface ActiveEntropyBurst extends ActiveBurstBase {
+  coreGraphics: PIXI.Graphics; // 热扩散云（多层不规则云）
+  haloGraphics: PIXI.Graphics; // 收缩波纹 / 余波光晕
+  x: number;
+  y: number;
 }
 
-export class EntropyDiffuserRenderer {
-  private fieldContainer: PIXI.Container;
-  private particlePool: ParticlePool;
-  private scale = 1;
+// ══════════════════════════════════════════════════════
+//  渲染器
+// ══════════════════════════════════════════════════════
 
-  // 活跃实例池
-  private activeFields: Map<string, ActiveEntropyField> = new Map();
-  private activeBursts: Map<string, ActiveBurst> = new Map();
+export class EntropyDiffuserRenderer extends BaseWeaponEffectRenderer {
+  private activeFields = new Map<string, ActiveEntropyField>();
+  private activeBursts = new Map<string, ActiveEntropyBurst>();
 
   constructor(fieldContainer: PIXI.Container, particlePool: ParticlePool) {
-    this.fieldContainer = fieldContainer;
-    this.particlePool = particlePool;
+    super(fieldContainer, particlePool);
   }
 
-  setScale(scale: number): void {
-    this.scale = scale;
-    // 容器统一承担全局缩放，内部 graphics 维持各自的动画 scale
-    this.activeFields.forEach((f) => {
-      if (f.container.destroyed) return;
-      f.container.scale.set(scale);
-    });
-    this.activeBursts.forEach((b) => {
-      if (b.container.destroyed) return;
-      b.container.scale.set(scale);
-    });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  熵增场 EntropyField（常驻，扩散波纹循环播放）
-  // ══════════════════════════════════════════════════════
+  // ═══ 熵增场 ═══
 
   /**
    * 触发熵增场视觉效果
@@ -100,14 +79,14 @@ export class EntropyDiffuserRenderer {
    * @param x 逻辑坐标 X
    * @param y 逻辑坐标 Y
    * @param radius 熵增场半径（逻辑 px）
-   * @param themeColor 主题色（默认主蓝紫）
+   * @param themeColor 主题色（默认混乱黄）
    */
   triggerEntropyField(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = ENTROPY_MAIN,
+    themeColor: number = ENTROPY_CHAOS,
   ): void {
     // 已存在则仅更新位置与半径
     const existing = this.activeFields.get(playerId);
@@ -119,173 +98,132 @@ export class EntropyDiffuserRenderer {
       return;
     }
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
-    container.scale.set(this.scale); // 全局缩放由容器承担
+    container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 10 层渐变光环 + 双层主环 + 中心熵增核
-    const coreGraphics = new PIXI.Graphics();
-    this.drawEntropyCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
-
-    // 扩散波纹（多层从中心向外扩散的圆环，由 update 驱动动画）
+    const haloGraphics = new PIXI.Graphics();
     const rippleGraphics = new PIXI.Graphics();
-    container.addChild(rippleGraphics);
+    container.addChild(haloGraphics, rippleGraphics);
 
-    this.fieldContainer.addChild(container);
+    this.drawFieldHalo(haloGraphics, radius, palette);
 
     const field: ActiveEntropyField = {
       container,
-      coreGraphics,
       rippleGraphics,
+      haloGraphics,
       particleTimer: 0,
-      rippleTimer: 0,
-      ripplePhase: 0,
       life: 0,
-      maxLife: Number.POSITIVE_INFINITY, // 常驻，直到手动移除
+      maxLife: Infinity, // 常驻，直到手动移除
       x,
       y,
       radius,
       themeColor,
+      palette,
     };
     this.activeFields.set(playerId, field);
-
-    // 触发首帧混乱粒子
-    this.spawnChaosParticles(x, y, radius, ENTROPY_MAIN);
   }
 
   /** 移除熵增场 */
   removeEntropyField(playerId: string): void {
     const f = this.activeFields.get(playerId);
-    if (f) {
-      this.fieldContainer.removeChild(f.container);
-      f.container.destroy({ children: true });
-      this.activeFields.delete(playerId);
-    }
+    if (!f) return;
+    this.container.removeChild(f.container);
+    f.container.destroy({ children: true });
+    this.activeFields.delete(playerId);
   }
 
   /**
-   * 绘制熵增核心：10 层同心圆径向渐变（白→高亮蓝紫→浅蓝紫→主蓝紫→深蓝紫透明）
-   * + 双层主环 + 中心熵增核（混乱青外晕）
-   * 以 (0,0) 为中心绘制，半径单位为逻辑 px
+   * 绘制场光晕：8 层径向渐变（高亮→阴影）+ 双层主环 + 中心熵增核
    */
-  private drawEntropyCore(g: PIXI.Graphics, radius: number): void {
+  private drawFieldHalo(g: PIXI.Graphics, radius: number, palette: Palette): void {
     g.clear();
-
-    // 10 层渐变光环：中心白 → 高亮蓝紫 → 浅蓝紫 → 主蓝紫 → 深蓝紫透明
-    for (let i = 0; i < 10; i++) {
-      const t = i / 9; // 0 → 1
-      const r = radius * (0.1 + 0.9 * t);
-      // 颜色四段插值：白→高亮蓝紫→浅蓝紫→主蓝紫→深蓝紫
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(ENTROPY_WHITE, ENTROPY_HIGHLIGHT, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(
-          ENTROPY_HIGHLIGHT,
-          ENTROPY_LIGHT,
-          (t - 0.25) / 0.25,
-        );
-      } else if (t < 0.75) {
-        color = this.interpolateColor(
-          ENTROPY_LIGHT,
-          ENTROPY_MAIN,
-          (t - 0.5) / 0.25,
-        );
-      } else {
-        color = this.interpolateColor(
-          ENTROPY_MAIN,
-          ENTROPY_DEEP,
-          (t - 0.75) / 0.25,
-        );
-      }
-      const alpha = (1 - t) * 0.2; // 中心高 alpha，边缘趋近 0
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
-    }
-
-    // 双层主环：外环高亮蓝紫 + 内环白
+    this.drawMultilayerCircle(
+      g,
+      radius,
+      8,
+      (t) => this.interpolateColor(palette.highlight, palette.shadow, t),
+      (t) => (1 - t) * 0.35,
+    );
+    // 双层主环
     g.circle(0, 0, radius);
-    g.stroke({ color: ENTROPY_HIGHLIGHT, width: 1, alpha: 0.7 });
+    g.stroke({ color: palette.glow, width: 1, alpha: 0.7 });
     g.circle(0, 0, radius * 0.95);
-    g.stroke({ color: ENTROPY_WHITE, width: 0.4, alpha: 0.5 });
-
-    // 中心熵增核：白色实心圆 r=4 + 混乱青外环 r=6（混乱感）
-    g.circle(0, 0, 6);
-    g.stroke({ color: ENTROPY_CYAN, width: 1, alpha: 0.8 });
+    g.stroke({ color: palette.highlight, width: 0.4, alpha: 0.5 });
+    // 中心熵增核（高亮实心 + 主色辉光外环）
     g.circle(0, 0, 4);
-    g.fill({ color: ENTROPY_WHITE, alpha: 1 });
+    g.fill({ color: palette.highlight, alpha: 1 });
+    g.circle(0, 0, 6);
+    g.stroke({ color: palette.glow, width: 1, alpha: 0.8 });
   }
 
   /**
-   * 绘制扩散波纹：3 层从中心向外扩散的圆环（由 ripplePhase 驱动扩散）
-   * @param g rippleGraphics
-   * @param radius 最大半径
-   * @param phase 扩散相位（0 → 1 循环），3 层波纹错相位扩散
+   * 绘制 3 层错相位扩散波纹（12 边不规则多边形）
+   * - 每层相位错开 0.33，形成连续向外扩散的视觉
+   * - 顶点带正弦抖动，呈现熵增不规则形态
+   * @param life 时间(ms)，驱动波纹扩散
    */
-  private drawDiffuseRipples(
+  private drawDiffusionWaves(
     g: PIXI.Graphics,
     radius: number,
-    phase: number,
+    palette: Palette,
+    life: number,
   ): void {
     g.clear();
-    // 3 层波纹，相位错开 1/3
-    const layers = 3;
-    for (let i = 0; i < layers; i++) {
-      // 每层波纹的相位（0 → 1 循环）
-      const p = (phase + i / layers) % 1;
-      const r = radius * p; // 半径随相位从 0 → radius
-      const alpha = (1 - p) * 0.5; // 透明度随相位从 0.5 → 0
-      g.circle(0, 0, r);
-      g.stroke({
-        color: i === 1 ? ENTROPY_CYAN : ENTROPY_LIGHT, // 中层用混乱青色突出
-        width: 0.8,
-        alpha,
-      });
+    for (let i = 0; i < 3; i++) {
+      const phase = (life * 0.0008 + i * 0.33) % 1;
+      const r = radius * (0.2 + phase * 0.9);
+      // 12 边不规则多边形
+      const sides = 12;
+      const points: [number, number][] = [];
+      for (let j = 0; j < sides; j++) {
+        const angle = (j * Math.PI * 2) / sides;
+        const jitter = 1 + 0.1 * Math.sin(j * 2.3 + life * 0.001);
+        points.push([Math.cos(angle) * r * jitter, Math.sin(angle) * r * jitter]);
+      }
+      g.moveTo(points[0][0], points[0][1]);
+      for (let j = 1; j < sides; j++) g.lineTo(points[j][0], points[j][1]);
+      g.closePath();
+      g.stroke({ color: palette.glow, width: 1.5, alpha: (1 - phase) * 0.5 });
     }
   }
 
   /**
-   * 生成混乱粒子（随机方向飞散，蓝紫/青色）
-   * 利用 particlePool.emit，由 update 节流调用
+   * 生成混乱方向粒子（核心独特符号）
+   * - 方向完全随机（不是径向向外）
+   * - 速度随机（20-120 px/s）
+   * - 随机加速度 ax/ay（混乱轨迹）
+   * - drag 阻力衰减（粒子最终减速）
+   * - tintStart→tintEnd 热→冷颜色渐变（熵增热寂）
    */
-  private spawnChaosParticles(
-    x: number,
-    y: number,
-    radius: number,
-    color: number,
-  ): void {
-    const s = this.scale;
+  private spawnChaosParticles(f: ActiveEntropyField): void {
     for (let i = 0; i < 2; i++) {
       const angle = Math.random() * Math.PI * 2;
-      // 从熵增核附近出发
-      const startDist = radius * s * (0.2 + Math.random() * 0.5);
-      const px = x + Math.cos(angle) * startDist;
-      const py = y + Math.sin(angle) * startDist;
-      // 混乱方向速度（px/s）—— 完全随机方向，非纯向外
-      const chaosAngle = Math.random() * Math.PI * 2;
-      const speed = (15 + Math.random() * 30) * s;
-      // 30% 概率使用混乱青色，70% 使用主题色
-      const tint = Math.random() < 0.3 ? ENTROPY_CYAN : color;
+      const speed = 20 + Math.random() * 100;
       this.particlePool.emit({
-        x: px,
-        y: py,
-        vx: Math.cos(chaosAngle) * speed,
-        vy: Math.sin(chaosAngle) * speed,
-        life: 1200,
-        scaleStart: 1,
+        x: f.x + (Math.random() - 0.5) * f.radius,
+        y: f.y + (Math.random() - 0.5) * f.radius,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        ax: (Math.random() - 0.5) * 100, // 随机加速度（混乱方向）
+        ay: (Math.random() - 0.5) * 100,
+        drag: 0.8, // 阻力衰减
+        life: 600 + Math.random() * 400,
+        scaleStart: 1.5,
         scaleEnd: 0,
-        alphaStart: 0.8,
+        alphaStart: 0.7,
         alphaEnd: 0,
-        tint,
-        radius: (1.5 + Math.random() * 1.5) * s,
+        tint: f.palette.glow,
+        tintStart: ENTROPY_HEAT,
+        tintEnd: ENTROPY_COLD, // 热→冷渐变
+        radius: 2,
       });
     }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  爆发特效（三阶段：蓄能 → 扩散爆发 → 混乱余波）
-  // ══════════════════════════════════════════════════════
+  // ═══ 爆发特效（热寂奇点：蓄压 → 爆发 → 扩散） ═══
 
   /**
    * 触发爆发视觉效果
@@ -294,321 +232,221 @@ export class EntropyDiffuserRenderer {
    * @param y 逻辑坐标 Y
    * @param radius 爆发范围（逻辑 px）
    * @param themeColor 主题色
-   * @param durationMs 持续时间（ms），默认 5000
+   * @param durationMs 持续时间（ms），默认 1500
    */
   triggerBurst(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = ENTROPY_MAIN,
+    themeColor: number = ENTROPY_CHAOS,
     durationMs?: number,
   ): void {
     // 若已存在，先销毁旧实例
-    const old = this.activeBursts.get(playerId);
-    if (old) {
-      this.fieldContainer.removeChild(old.container);
-      old.container.destroy({ children: true });
+    const existing = this.activeBursts.get(playerId);
+    if (existing) {
+      this.removeBurstInstance(existing);
     }
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 1. 熵增奇点核心（10 层渐变 + 白核 + 混乱青边缘辉光）
-    const coreGraphics = new PIXI.Graphics();
-    this.drawBurstCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
+    const coreGraphics = new PIXI.Graphics(); // 热扩散云
+    const haloGraphics = new PIXI.Graphics(); // 收缩波纹 / 余波光晕
+    container.addChild(coreGraphics, haloGraphics);
 
-    // 2. 视界环（双层细高亮环）
-    const horizonGraphics = new PIXI.Graphics();
-    this.drawBurstHorizon(horizonGraphics, radius);
-    container.addChild(horizonGraphics);
-
-    // 3. 扩散线（6 条 quadraticCurveTo 从外向内汇聚）
-    const diffuseGraphics = new PIXI.Graphics();
-    this.drawBurstDiffuses(diffuseGraphics, radius);
-    container.addChild(diffuseGraphics);
-
-    // 4. 混乱波纹（多层细环）
-    const haloGraphics = new PIXI.Graphics();
-    this.drawBurstHalo(haloGraphics, radius);
-    container.addChild(haloGraphics);
-
-    this.fieldContainer.addChild(container);
-
-    const burst: ActiveBurst = {
+    const burst: ActiveEntropyBurst = {
       container,
-      coreGraphics,
-      horizonGraphics,
-      diffuseGraphics,
-      haloGraphics,
       life: 0,
-      maxLife: durationMs ?? 5000,
+      maxLife: durationMs ?? 1500,
       themeColor,
       radius,
       particleTimer: 0,
+      palette,
+      coreGraphics,
+      haloGraphics,
+      x,
+      y,
     };
     this.activeBursts.set(playerId, burst);
   }
 
-  /**
-   * 绘制熵增奇点核心：10 层同心圆（深蓝紫 → 主蓝紫 → 浅蓝紫 → 高亮蓝紫 → 白）
-   * + 白核 + 混乱青边缘辉光
-   */
-  private drawBurstCore(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    const coreR = radius * 0.6; // 奇点核心区域半径
+  // ═══ 三阶段动画钩子 ═══
 
-    // 10 层同心圆叠加（深蓝紫 → 主蓝紫 → 浅蓝紫 → 高亮蓝紫 → 白）
-    for (let i = 0; i < 10; i++) {
-      const t = i / 9; // 0 → 1
-      const r = coreR * (0.1 + 0.9 * t);
-      // 颜色四段插值：深蓝紫→主蓝紫→浅蓝紫→高亮蓝紫→白
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(ENTROPY_DEEP, ENTROPY_MAIN, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(
-          ENTROPY_MAIN,
-          ENTROPY_LIGHT,
-          (t - 0.25) / 0.25,
-        );
-      } else if (t < 0.75) {
-        color = this.interpolateColor(
-          ENTROPY_LIGHT,
-          ENTROPY_HIGHLIGHT,
-          (t - 0.5) / 0.25,
-        );
-      } else {
-        color = this.interpolateColor(
-          ENTROPY_HIGHLIGHT,
-          ENTROPY_WHITE,
-          (t - 0.75) / 0.25,
-        );
-      }
-      const alpha = (1 - t) * 0.25;
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
-    }
-
-    // 熵增核 r=6（白色实心）
-    g.circle(0, 0, 6);
-    g.fill({ color: ENTROPY_WHITE, alpha: 1 });
-
-    // 混乱青色边缘辉光
-    g.circle(0, 0, 8);
-    g.stroke({ color: ENTROPY_CYAN, width: 1.5, alpha: 0.8 });
+  /** 阶段1 蓄压（0-15%T）：扩散波纹收缩汇聚至中心 */
+  protected phase1Charge(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveEntropyBurst;
+    const ease = this.easeOutCubic(t);
+    // 扩散波纹收缩：半径 1.0 → 0.2，alpha 1.0 → 0.7
+    this.drawDiffusionWaves(b.haloGraphics, b.radius * (1 - ease * 0.8), b.palette, b.life);
+    b.haloGraphics.alpha = 1 - t * 0.3;
+    // 热扩散云蓄压隐藏
+    b.coreGraphics.alpha = 0;
   }
 
-  /**
-   * 绘制视界环：双层细高亮环
-   */
-  private drawBurstHorizon(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    g.circle(0, 0, radius);
-    g.stroke({ color: ENTROPY_HIGHLIGHT, width: 0.6, alpha: 0.7 });
-    g.circle(0, 0, radius * 0.95);
-    g.stroke({ color: ENTROPY_WHITE, width: 0.3, alpha: 0.5 });
-  }
+  /** 阶段2 爆发（15%-30%T）：热扩散云 + 混沌粒子风暴 */
+  protected phase2Burst(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveEntropyBurst;
+    const ease = this.easeOutCubic(t);
 
-  /**
-   * 绘制扩散线：6 条 quadraticCurveTo 从外向内汇聚（扩散汇聚感）
-   */
-  private drawBurstDiffuses(g: PIXI.Graphics, radius: number): void {
-    g.clear();
+    // 热扩散云：6 层 8 边不规则云（高亮→阴影渐变）
+    b.coreGraphics.clear();
     for (let i = 0; i < 6; i++) {
-      const a = (i * Math.PI) / 3;
-      const startX = Math.cos(a) * radius;
-      const startY = Math.sin(a) * radius;
-      // 控制点偏离直线方向，形成弧形扩散感
-      const midR = radius * 0.5;
-      const offset = Math.PI / 6;
-      const cpX = Math.cos(a + offset) * midR;
-      const cpY = Math.sin(a + offset) * midR;
-      g.moveTo(startX, startY);
-      g.quadraticCurveTo(cpX, cpY, 0, 0);
-      g.stroke({ color: ENTROPY_CYAN, width: 1, alpha: 0.8 });
-    }
-  }
-
-  /**
-   * 绘制混乱波纹：4 层细环（白 → 高亮蓝紫 → 浅蓝紫 → 主蓝紫）
-   */
-  private drawBurstHalo(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    const colors = [
-      ENTROPY_WHITE,
-      ENTROPY_HIGHLIGHT,
-      ENTROPY_LIGHT,
-      ENTROPY_MAIN,
-    ];
-    for (let i = 0; i < colors.length; i++) {
-      const r = radius * (0.8 + i * 0.1);
-      g.circle(0, 0, r);
-      g.stroke({ color: colors[i], width: 0.5, alpha: 0.4 });
-    }
-  }
-
-  /**
-   * 扩散阶段喷射粒子（从核心向外飞散的混乱蓝紫/青色粒子）
-   */
-  private spawnBurstParticles(burst: ActiveBurst): void {
-    const s = this.scale;
-    const count = 3;
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const startDist = burst.radius * s * 0.1;
-      const px = burst.container.position.x + Math.cos(angle) * startDist;
-      const py = burst.container.position.y + Math.sin(angle) * startDist;
-      const speed = (60 + Math.random() * 40) * s;
-      this.particlePool.emit({
-        x: px,
-        y: py,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 800,
-        scaleStart: 1.2,
-        scaleEnd: 0,
-        alphaStart: 1,
-        alphaEnd: 0,
-        tint: Math.random() < 0.4 ? ENTROPY_CYAN : ENTROPY_LIGHT,
-        radius: (1.5 + Math.random() * 1.5) * s,
+      const r = b.radius * (0.1 + i * 0.12) * ease;
+      const sides = 8;
+      const points: [number, number][] = [];
+      for (let j = 0; j < sides; j++) {
+        const angle = (j * Math.PI * 2) / sides;
+        const jitter = 1 + 0.2 * Math.sin(j * 3.7 + b.life * 0.002);
+        points.push([Math.cos(angle) * r * jitter, Math.sin(angle) * r * jitter]);
+      }
+      b.coreGraphics.moveTo(points[0][0], points[0][1]);
+      for (let j = 1; j < sides; j++) {
+        b.coreGraphics.lineTo(points[j][0], points[j][1]);
+      }
+      b.coreGraphics.closePath();
+      b.coreGraphics.fill({
+        color: this.interpolateColor(b.palette.highlight, b.palette.shadow, i / 5),
+        alpha: 0.3 * ease,
       });
     }
+    b.coreGraphics.alpha = 1;
+
+    // 收缩波纹消散
+    b.haloGraphics.alpha = (1 - t) * 0.5;
+
+    // 混沌粒子风暴：每帧节流喷射 6 个强随机加速度粒子
+    b.particleTimer += 16;
+    if (b.particleTimer > 30) {
+      b.particleTimer = 0;
+      for (let i = 0; i < 6; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 80 + Math.random() * 150;
+        this.particlePool.emit({
+          x: b.x,
+          y: b.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          ax: (Math.random() - 0.5) * 200, // 强随机加速度（风暴感）
+          ay: (Math.random() - 0.5) * 200,
+          drag: 0.5,
+          life: 800,
+          scaleStart: 2,
+          scaleEnd: 0,
+          alphaStart: 1,
+          alphaEnd: 0,
+          tint: ENTROPY_HEAT,
+          tintStart: ENTROPY_HEAT,
+          tintEnd: ENTROPY_COLD, // 热→冷渐变
+          radius: 2.5,
+        });
+      }
+    }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  更新循环
-  // ══════════════════════════════════════════════════════
+  /** 阶段3 扩散（30%-100%T）：热云消散 + 余波波纹 + 残留粒子 */
+  protected phase3Diffuse(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveEntropyBurst;
+    const ease = this.easeOutCubic(t);
+
+    // 热扩散云消散（缩小 + 淡出）
+    b.coreGraphics.alpha = (1 - ease) * 0.7;
+    b.coreGraphics.scale.set(1 + ease * 0.3);
+
+    // 余波波纹展开
+    this.drawDiffusionWaves(b.haloGraphics, b.radius * (1 + ease * 0.5), b.palette, b.life);
+    b.haloGraphics.alpha = (1 - ease) * 0.4;
+
+    // 残留粒子（较弱加速度，继续飞散）
+    b.particleTimer += 16;
+    if (b.particleTimer > 100) {
+      b.particleTimer = 0;
+      for (let i = 0; i < 2; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 40 + Math.random() * 80;
+        this.particlePool.emit({
+          x: b.x,
+          y: b.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          ax: (Math.random() - 0.5) * 100,
+          ay: (Math.random() - 0.5) * 100,
+          drag: 0.7,
+          life: 600,
+          scaleStart: 1.5,
+          scaleEnd: 0,
+          alphaStart: 0.6,
+          alphaEnd: 0,
+          tint: ENTROPY_CHAOS,
+          tintStart: ENTROPY_HEAT,
+          tintEnd: ENTROPY_COLD,
+          radius: 2,
+        });
+      }
+    }
+  }
+
+  // ═══ 生命周期 ═══
 
   /** 每帧更新（由 EffectRenderer 调用，dt 单位 ms） */
   update(dt: number): void {
-    // ── 熵增场：呼吸 scale + 脉动 alpha + 扩散波纹 + 混乱粒子 ──
-    this.activeFields.forEach((field) => {
-      field.life += dt;
-      // 呼吸 scale 1.0↔1.05（2s 周期）
-      const breath = 1 + 0.05 * Math.sin(field.life * 0.001 * Math.PI);
-      field.coreGraphics.scale.set(breath);
-      // 脉动 alpha 0.6↔0.9
-      const pulse = 0.75 + 0.15 * Math.sin(field.life * 0.001 * Math.PI);
-      field.coreGraphics.alpha = pulse;
-      // 扩散波纹：相位推进（2s 一个周期）
-      field.rippleTimer += dt;
-      if (field.rippleTimer > 33) {
-        // 每 33ms 推进相位，2000ms 完成一次扩散循环
-        field.ripplePhase = (field.ripplePhase + dt / 2000) % 1;
-        field.rippleTimer = 0;
-        this.drawDiffuseRipples(
-          field.rippleGraphics,
-          field.radius,
-          field.ripplePhase,
-        );
-      }
-      // 混乱粒子：每 1s 生成 2 个（随机方向飞散）
-      field.particleTimer += dt;
-      if (field.particleTimer > 1000) {
-        field.particleTimer = 0;
-        this.spawnChaosParticles(field.x, field.y, field.radius, ENTROPY_MAIN);
+    // ── 熵增场：扩散波纹动画 + 光晕呼吸 + 混乱粒子 ──
+    this.activeFields.forEach((f) => {
+      f.life += dt;
+      // 重绘 3 层错相位扩散波纹（动画驱动）
+      this.drawDiffusionWaves(f.rippleGraphics, f.radius, f.palette, f.life);
+      // 光晕呼吸 scale 1.0↔1.05（1s 周期）
+      const breath = 1 + 0.05 * Math.sin(f.life * 0.002 * Math.PI);
+      f.haloGraphics.scale.set(breath);
+      // 混乱粒子：每 200ms 生成 2 个（随机方向 + 随机加速度）
+      f.particleTimer += dt;
+      if (f.particleTimer > 200) {
+        f.particleTimer = 0;
+        this.spawnChaosParticles(f);
       }
     });
 
-    // ── 爆发：三阶段动画 ──
-    this.activeBursts.forEach((burst, playerId) => {
-      burst.life += dt;
-      const T = burst.maxLife;
-      if (burst.life >= T) {
-        this.removeBurst(playerId);
-        return;
-      }
-      const phase1End = T * 0.15; // 蓄能阶段结束
-      const phase2End = T * 0.30; // 扩散爆发阶段结束
-
-      if (burst.life < phase1End) {
-        // 阶段1 蓄能：波纹收缩 scale 1.0→0.3，alpha 1.0→0.3，熵增核显现
-        const t = burst.life / phase1End;
-        burst.haloGraphics.scale.set(1.0 - 0.7 * t);
-        burst.haloGraphics.alpha = 1.0 - 0.7 * t;
-        burst.coreGraphics.alpha = t; // 0 → 1 显现
-        burst.diffuseGraphics.alpha = 0;
-        burst.horizonGraphics.alpha = 0;
-        burst.horizonGraphics.scale.set(0.3);
-      } else if (burst.life < phase2End) {
-        // 阶段2 扩散爆发：奇点爆发 scale 0.3→1.0(easeOutCubic)，扩散线闪现 alpha 0→0.8，视界环展开
-        const t = (burst.life - phase1End) / (phase2End - phase1End);
-        const eased = this.easeOutCubic(t);
-        burst.haloGraphics.scale.set(0.3 + 0.7 * eased);
-        burst.haloGraphics.alpha = 0.3 + 0.4 * t; // 0.3 → 0.7
-        burst.coreGraphics.alpha = 1.0;
-        burst.diffuseGraphics.alpha = 0.8 * t; // 0 → 0.8
-        burst.horizonGraphics.scale.set(0.3 + 0.7 * eased);
-        burst.horizonGraphics.alpha = t; // 0 → 1
-        // 扩散阶段喷射粒子（每 80ms）
-        burst.particleTimer += dt;
-        if (burst.particleTimer > 80) {
-          burst.particleTimer = 0;
-          this.spawnBurstParticles(burst);
-        }
-      } else {
-        // 阶段3 混乱余波：视界环扩散 scale 1.0→2.0 alpha 1.0→0，混乱波纹消散 alpha 0.7→0（sin 波动），
-        //                 扩散线消散 alpha 0.8→0，熵增核保持但透明 alpha 1.0→0.3
-        const t = (burst.life - phase2End) / (T - phase2End);
-        burst.horizonGraphics.scale.set(1.0 + 1.0 * t);
-        burst.horizonGraphics.alpha = 1.0 - t;
-        burst.haloGraphics.alpha = 0.7 * (1.0 - t);
-        burst.haloGraphics.rotation = Math.sin(t * Math.PI * 4) * 0.5;
-        burst.diffuseGraphics.alpha = 0.8 * (1.0 - t);
-        burst.coreGraphics.alpha = 1.0 - 0.7 * t;
+    // ── 爆发：三阶段动画调度 ──
+    const expired: string[] = [];
+    this.activeBursts.forEach((b, key) => {
+      const isExpired = this.runBurstAnimation(b, dt);
+      if (isExpired) {
+        expired.push(key);
       }
     });
+    for (const key of expired) {
+      const b = this.activeBursts.get(key);
+      if (b) this.removeBurstInstance(b);
+      this.activeBursts.delete(key);
+    }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  移除与清理
-  // ══════════════════════════════════════════════════════
+  private removeBurstInstance(b: ActiveEntropyBurst): void {
+    this.container.removeChild(b.container);
+    b.container.destroy({ children: true });
+  }
 
-  /** 移除爆发特效 */
-  removeBurst(playerId: string): void {
-    const burst = this.activeBursts.get(playerId);
-    if (burst) {
-      this.fieldContainer.removeChild(burst.container);
-      burst.container.destroy({ children: true });
-      this.activeBursts.delete(playerId);
-    }
+  /** 缩放变化时同步已有实体 */
+  protected onScaleChange(scale: number): void {
+    this.activeFields.forEach((f) => {
+      if (!f.container.destroyed) f.container.scale.set(scale);
+    });
+    this.activeBursts.forEach((b) => {
+      if (!b.container.destroyed) b.container.scale.set(scale);
+    });
   }
 
   /** 清除所有特效（不销毁渲染器） */
   clear(): void {
-    this.activeFields.forEach((_, playerId) =>
-      this.removeEntropyField(playerId),
-    );
-    this.activeBursts.forEach((_, playerId) => this.removeBurst(playerId));
-  }
-
-  destroy(): void {
-    this.clear();
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  工具方法
-  // ══════════════════════════════════════════════════════
-
-  /** 颜色插值（from → to，t ∈ [0,1]） */
-  private interpolateColor(from: number, to: number, t: number): number {
-    const fr = (from >> 16) & 0xff;
-    const fg = (from >> 8) & 0xff;
-    const fb = from & 0xff;
-    const tr = (to >> 16) & 0xff;
-    const tg = (to >> 8) & 0xff;
-    const tb = to & 0xff;
-    const r = Math.round(fr + (tr - fr) * t);
-    const g = Math.round(fg + (tg - fg) * t);
-    const b = Math.round(fb + (tb - fb) * t);
-    return (r << 16) | (g << 8) | b;
-  }
-
-  /** easeOutCubic 缓动 */
-  private easeOutCubic(t: number): number {
-    return 1 - Math.pow(1 - t, 3);
+    this.activeFields.forEach((f) => {
+      this.container.removeChild(f.container);
+      f.container.destroy({ children: true });
+    });
+    this.activeFields.clear();
+    this.activeBursts.forEach((b) => this.removeBurstInstance(b));
+    this.activeBursts.clear();
   }
 }

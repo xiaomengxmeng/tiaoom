@@ -131,17 +131,19 @@ export class EffectRenderer {
       this.canvasW, this.canvasH,
     );
 
-    // 光学斩击渲染器
-    this.opticalSlashRenderer = new OpticalSlashEffectRenderer(fieldContainer, hologramContainer);
+    // 光学斩击渲染器（注入 particlePool 用于飞行拖尾 / 爆发光学粒子飞溅）
+    this.opticalSlashRenderer = new OpticalSlashEffectRenderer(
+      fieldContainer, hologramContainer, 20, particlePool,
+    );
 
-    // 空气斥力场渲染器
-    this.airRepulsionFieldRenderer = new AirRepulsionFieldRenderer(fieldContainer);
+    // 空气斥力场渲染器（注入 particlePool 用于懒散/扬尘粒子）
+    this.airRepulsionFieldRenderer = new AirRepulsionFieldRenderer(fieldContainer, particlePool);
 
     // 熵寂之触渲染器
     this.entropicTouchRenderer = new EntropicTouchRenderer(fieldContainer, particlePool);
 
-    // 画作实体化渲染器
-    this.drawingManifestRenderer = new DrawingManifestRenderer(entityContainer, fieldContainer);
+    // 画作实体化渲染器（注入 particlePool 用于墨水粒子）
+    this.drawingManifestRenderer = new DrawingManifestRenderer(entityContainer, fieldContainer, particlePool);
 
     // 放电猫猫渲染器
     this.dischargeCatRenderer = new DischargeCatRenderer(entityContainer, fieldContainer);
@@ -1081,6 +1083,9 @@ export class EffectRenderer {
   update(dt: number): void {
     // 更新熵寂之触渲染器
     this.entropicTouchRenderer.update(dt);
+
+    // 更新画作实体化渲染器（驱动兔子呼吸/光环脉动/墨水粒子）
+    this.drawingManifestRenderer.update(dt);
 
     // 更新预知透镜渲染器（驱动"已看透"文字等基于 update(dt) 的生命周期）
     this.precognitiveLensRenderer.update(dt);

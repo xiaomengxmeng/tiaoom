@@ -128,7 +128,7 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
   const firewallRenderer = new FirewallEffectRenderer(l3Field, 16);
   const hiveRenderer = new HiveEffectRenderer(l2Entity, l5Hologram, particlePool, logicalW, logicalH, 60);
   const opticalSlashRenderer = new OpticalSlashEffectRenderer(l3Field, l5Hologram);
-  const airRepulsionRenderer = new AirRepulsionFieldRenderer(l3Field);
+  const airRepulsionRenderer = new AirRepulsionFieldRenderer(l3Field, particlePool);
   const entropicTouchRenderer = new EntropicTouchRenderer(l3Field, particlePool);
   const drawingManifestRenderer = new DrawingManifestRenderer(l2Entity, l3Field);
   const dischargeCatRenderer = new DischargeCatRenderer(l2Entity, l3Field);

@@ -501,4 +501,25 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
     },
     triggerCooldowns: { minIntervalMs: 350 },
   },
+
+  // ── 沐里 - 植物伙伴派对（植物伙伴流派）──────────
+  [WeaponId.BOTANICAL_CONTROL]: {
+    damage: 3,                    // 暴躁型每秒伤害
+    burstDamage: 6,               // 爆发期暴躁型伤害翻倍
+    maxEnergy: 100,
+    energyPerHit: 25,             // 每次碰撞获得 25 能量
+    burstEnergyCost: 100,
+    damageRadius: 40,             // 植物影响半径
+    aoeMaxRadius: 60,             // 爆发影响范围
+    visualRadius: 40,
+    visualDurationMs: 6000,       // 植物持续 6 秒
+    burstDurationSec: 4,          // 爆发持续 4 秒
+    cooldownMs: 8000,             // 爆发冷却
+    field: {
+      maxCount: 5,                // 最大 5 株
+      durationSec: 6,
+      radius: 40,
+    },
+    triggerCooldowns: { minIntervalMs: 500 }, // 生成冷却 0.5 秒
+  },
 };

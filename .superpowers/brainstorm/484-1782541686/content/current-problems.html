@@ -1,0 +1,104 @@
+<h2>🔍 鱼油大战武器特效 — 当前问题诊断</h2>
+<p class="subtitle">所有特效均用 PIXI.Graphics 矢量图元每帧重绘，无纹理、无滤镜、无物理</p>
+
+<div class="section">
+  <h3>📊 问题汇总</h3>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:16px 0">
+    <div style="background:#1a1a2e;padding:14px;border-radius:8px;border-left:3px solid #ff0044">
+      <div style="color:#ff5577;font-weight:bold;font-size:13px">🔴 渲染管线</div>
+      <ul style="margin:8px 0 0 0;padding-left:18px;font-size:13px;line-height:1.7">
+        <li>全部用 <code>Graphics.circle().fill()</code> 矢量重绘</li>
+        <li>每帧 <code>clear()</code> 重建几何，CPU 开销大</li>
+        <li>粒子是 Graphics 非 Sprite，无 batching</li>
+        <li>粒子池仅 300，同屏易耗尽</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a2e;padding:14px;border-radius:8px;border-left:3px solid #ffaa00">
+      <div style="color:#ffaa00;font-weight:bold;font-size:13px">🟡 视觉表现</div>
+      <ul style="margin:8px 0 0 0;padding-left:18px;font-size:13px;line-height:1.7">
+        <li>"光晕"只是 alpha=0.15 的粗描边</li>
+        <li>无 BlurFilter/GlowFilter，全硬边</li>
+        <li>粒子是纯色实心圆，无纹理</li>
+        <li>tint 常量，无颜色渐变</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a2e;padding:14px;border-radius:8px;border-left:3px solid #00bfff">
+      <div style="color:#00bfff;font-weight:bold;font-size:13px">🔵 物理层面</div>
+      <ul style="margin:8px 0 0 0;padding-left:18px;font-size:13px;line-height:1.7">
+        <li>粒子匀速直线，无重力/阻力</li>
+        <li>无湍流、噪声场、引力源</li>
+        <li>蜂群仅 cos/sin 圆周，无 boids</li>
+        <li>无旋转扰动、无抖动</li>
+      </ul>
+    </div>
+    <div style="background:#1a1a2e;padding:14px;border-radius:8px;border-left:3px solid #aa00ff">
+      <div style="color:#cc66ff;font-weight:bold;font-size:13px">🟣 后处理层面</div>
+      <ul style="margin:8px 0 0 0;padding-left:18px;font-size:13px;line-height:1.7">
+        <li>无 BloomFilter（PixiJS v8 不内置）</li>
+        <li>混合模式使用混乱</li>
+        <li>无屏幕震动、无径向模糊</li>
+        <li>爆发只是整屏涂色块渐隐</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>🎨 视觉对比：当前 vs 目标</h3>
+  <p class="subtitle" style="margin-bottom:16px">冲击波特效为例 — 左为当前实现，右为优化目标</p>
+
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">当前：硬边描边圆环</div>
+      <div class="mockup-body" style="background:#000;display:flex;align-items:center;justify-content:center;height:220px">
+        <svg width="200" height="200" viewBox="-100 -100 200 200">
+          <circle cx="0" cy="0" r="80" fill="none" stroke="#ff00ff" stroke-width="12" opacity="0.15"/>
+          <circle cx="0" cy="0" r="80" fill="none" stroke="#ff00ff" stroke-width="7" opacity="0.4"/>
+          <circle cx="0" cy="0" r="80" fill="none" stroke="#ff88ff" stroke-width="4" opacity="0.85"/>
+        </svg>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">目标：径向渐变光晕 + 粒子</div>
+      <div class="mockup-body" style="background:#000;display:flex;align-items:center;justify-content:center;height:220px;position:relative">
+        <svg width="200" height="200" viewBox="-100 -100 200 200">
+          <defs>
+            <radialGradient id="glow1">
+              <stop offset="60%" stop-color="#ff00ff" stop-opacity="0"/>
+              <stop offset="75%" stop-color="#ff44ff" stop-opacity="0.3"/>
+              <stop offset="85%" stop-color="#ff88ff" stop-opacity="0.6"/>
+              <stop offset="100%" stop-color="#ff00ff" stop-opacity="0"/>
+            </radialGradient>
+            <filter id="blur1"><feGaussianBlur stdDeviation="3"/></filter>
+          </defs>
+          <circle cx="0" cy="0" r="95" fill="url(#glow1)" filter="url(#blur1)"/>
+          <circle cx="0" cy="0" r="80" fill="none" stroke="#ffaaff" stroke-width="2" opacity="0.9" filter="url(#blur1)"/>
+          <circle cx="-70" cy="-40" r="2" fill="#ffffff" opacity="0.9"/>
+          <circle cx="60" cy="-55" r="1.5" fill="#ffaaff" opacity="0.8"/>
+          <circle cx="75" cy="30" r="2" fill="#ff44ff" opacity="0.7"/>
+          <circle cx="-50" cy="65" r="1.5" fill="#ffffff" opacity="0.8"/>
+          <circle cx="40" cy="70" r="1" fill="#ff88ff" opacity="0.6"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>⚙️ 11 把武器的特效类型分布</h3>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;font-size:12px">
+    <div style="background:#2a1a3e;padding:8px;border-radius:6px;border-left:3px solid #ff00ff">💥 <b>冲击波</b><br><span style="color:#888">扩散环 + 爆裂粒子</span></div>
+    <div style="background:#2a1a3e;padding:8px;border-radius:6px;border-left:3px solid #ff6600">🔥 <b>防火墙</b><br><span style="color:#888">线型屏障 + 火焰</span></div>
+    <div style="background:#2a1a3e;padding:8px;border-radius:6px;border-left:3px solid #39ff14">🐝 <b>蜂巢母体</b><br><span style="color:#888">投射物 + 蜂群公转</span></div>
+    <div style="background:#2a1a3e;padding:8px;border-radius:6px;border-left:3px solid #ffaa00">⚡ <b>光学斩击</b><br><span style="color:#888">光束 + 斩击痕</span></div>
+    <div style="background:#2a1a3e;padding:8px;border-radius:6px;border-left:3px solid #00bfff">🌀 <b>空气斥力场</b><br><span style="color:#888">力场环 + 涟漪</span></div>
+    <div style="background:#2a1a3e;padding:8px;border-radius:6px;border-left:3px solid #888888">❄️ <b>熵寂之触</b><br><span style="color:#888">减速场 + 冰晶</span></div>
+    <div style="background:#2a1a3e;padding:8px;border-radius:6px;border-left:3px solid #ff69b4">🎨 <b>画作实体化</b><br><span style="color:#888">形状生成</span></div>
+    <div style="background:#2a1a3e;padding:8px;border-radius:6px;border-left:3px solid #ffdd00">🐱 <b>放电猫猫</b><br><span style="color:#888">闪电链</span></div>
+    <div style="background:#2a1a3e;padding:8px;border-radius:6px;border-left:3px solid #9370db">🔮 <b>预知透镜</b><br><span style="color:#888">预测轨迹</span></div>
+    <div style="background:#2a1a3e;padding:8px;border-radius:6px;border-left:3px solid #ffd700">🌤️ <b>情绪天气</b><br><span style="color:#888">区域环境</span></div>
+    <div style="background:#2a1a3e;padding:8px;border-radius:6px;border-left:3px solid #c0c0c0">🎭 <b>情绪掌控</b><br><span style="color:#888">状态光环</span></div>
+  </div>
+</div>
+
+<p class="subtitle" style="text-align:center;margin-top:20px">接下来在终端继续讨论优化方向 ➡️</p>

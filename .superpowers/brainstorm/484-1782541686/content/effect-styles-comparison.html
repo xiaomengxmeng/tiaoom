@@ -1,0 +1,309 @@
+<h2>🎨 特效风格方案对比 — 冲击波为例</h2>
+<p class="subtitle">5 种完全不同的视觉风格，请选择你最喜欢的方向</p>
+
+<div class="section">
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:16px 0">
+
+    <!-- 方案 A: WebGL Shader 扭曲 -->
+    <div class="card" data-choice="shader" onclick="toggleSelect(this)" style="cursor:pointer">
+      <div class="card-image" style="background:#000;height:180px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">
+        <svg width="220" height="180" viewBox="-110 -90 220 180">
+          <defs>
+            <radialGradient id="shaderGlow">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0"/>
+              <stop offset="40%" stop-color="#ff00ff" stop-opacity="0.1"/>
+              <stop offset="65%" stop-color="#ff44ff" stop-opacity="0.5"/>
+              <stop offset="78%" stop-color="#ffffff" stop-opacity="0.9"/>
+              <stop offset="85%" stop-color="#ff00ff" stop-opacity="0.6"/>
+              <stop offset="100%" stop-color="#440044" stop-opacity="0"/>
+            </radialGradient>
+            <filter id="shaderBlur"><feGaussianBlur stdDeviation="2"/></filter>
+          </defs>
+          <!-- 能量扭曲环 -->
+          <circle cx="0" cy="0" r="65" fill="url(#shaderGlow)" filter="url(#shaderBlur)"/>
+          <!-- 内部能量纹 -->
+          <circle cx="0" cy="0" r="55" fill="none" stroke="#ffaaff" stroke-width="0.8" opacity="0.7"/>
+          <circle cx="0" cy="0" r="50" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.5"/>
+          <circle cx="0" cy="0" r="60" fill="none" stroke="#ff44ff" stroke-width="0.6" opacity="0.6"/>
+          <!-- 中心强光 -->
+          <circle cx="0" cy="0" r="8" fill="#ffffff" opacity="0.95" filter="url(#shaderBlur)"/>
+          <circle cx="0" cy="0" r="3" fill="#ffffff"/>
+          <!-- 扭曲射线 -->
+          <g opacity="0.4">
+            <line x1="-90" y1="0" x2="-70" y2="0" stroke="#ff88ff" stroke-width="1"/>
+            <line x1="70" y1="0" x2="90" y2="0" stroke="#ff88ff" stroke-width="1"/>
+            <line x1="0" y1="-90" x2="0" y2="-70" stroke="#ff88ff" stroke-width="1"/>
+            <line x1="0" y1="70" x2="0" y2="90" stroke="#ff88ff" stroke-width="1"/>
+            <line x1="-65" y1="-65" x2="-55" y2="-55" stroke="#ff88ff" stroke-width="0.8"/>
+            <line x1="55" y1="55" x2="65" y2="65" stroke="#ff88ff" stroke-width="0.8"/>
+          </g>
+        </svg>
+      </div>
+      <div class="card-body">
+        <h3 style="color:#ff66ff">A. WebGL Shader 能量扭曲</h3>
+        <p style="font-size:12px;color:#aaa">自定义 GLSL fragment shader，真正 GPU 发光 + 能量扭曲 + 等离子纹路</p>
+        <div style="margin-top:8px;font-size:11px">
+          <span style="color:#4ade80">✅ 视觉顶级</span> ·
+          <span style="color:#fbbf24">⚠️ 工作量大</span> ·
+          <span style="color:#4ade80">✅ GPU 加速</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 方案 B: 高质量纹理 + Bloom -->
+    <div class="card" data-choice="bloom" onclick="toggleSelect(this)" style="cursor:pointer">
+      <div class="card-image" style="background:#000;height:180px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">
+        <svg width="220" height="180" viewBox="-110 -90 220 180">
+          <defs>
+            <radialGradient id="bloomGlow">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+              <stop offset="20%" stop-color="#ffccff" stop-opacity="0.8"/>
+              <stop offset="45%" stop-color="#ff44ff" stop-opacity="0.5"/>
+              <stop offset="70%" stop-color="#ff00ff" stop-opacity="0.2"/>
+              <stop offset="100%" stop-color="#ff00ff" stop-opacity="0"/>
+            </radialGradient>
+            <filter id="bloomBlur"><feGaussianBlur stdDeviation="6"/></filter>
+            <filter id="bloomBlur2"><feGaussianBlur stdDeviation="2"/></filter>
+          </defs>
+          <!-- 大范围发光晕 -->
+          <circle cx="0" cy="0" r="90" fill="url(#bloomGlow)" filter="url(#bloomBlur)"/>
+          <!-- 多层叠加 -->
+          <circle cx="0" cy="0" r="75" fill="url(#bloomGlow)" filter="url(#bloomBlur2)" opacity="0.7"/>
+          <!-- 高亮核心环 -->
+          <circle cx="0" cy="0" r="70" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="1"/>
+          <circle cx="0" cy="0" r="68" fill="none" stroke="#ffaaff" stroke-width="3" opacity="0.6"/>
+          <!-- 散射光斑 -->
+          <circle cx="-40" cy="-30" r="3" fill="#ffffff" opacity="1" filter="url(#bloomBlur2)"/>
+          <circle cx="35" cy="40" r="2.5" fill="#ffffff" opacity="0.9"/>
+          <circle cx="-50" cy="20" r="2" fill="#ffccff" opacity="0.8"/>
+          <circle cx="45" cy="-25" r="1.5" fill="#ffffff" opacity="0.7"/>
+        </svg>
+      </div>
+      <div class="card-body">
+        <h3 style="color:#ffaa44">B. 高质量纹理 + Bloom 后处理</h3>
+        <p style="font-size:12px;color:#aaa">预渲染多层发光纹理 + BlurFilter 后处理模拟 Bloom + 大量高质量粒子</p>
+        <div style="margin-top:8px;font-size:11px">
+          <span style="color:#4ade80">✅ 视觉好</span> ·
+          <span style="color:#4ade80">✅ 工作量适中</span> ·
+          <span style="color:#4ade80">✅ 可实现</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 方案 C: GPU 粒子风暴 -->
+    <div class="card" data-choice="particles" onclick="toggleSelect(this)" style="cursor:pointer">
+      <div class="card-image" style="background:#000;height:180px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">
+        <svg width="220" height="180" viewBox="-110 -90 220 180">
+          <defs>
+            <radialGradient id="partGlow">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.8"/>
+              <stop offset="100%" stop-color="#ff00ff" stop-opacity="0"/>
+            </radialGradient>
+            <filter id="partBlur"><feGaussianBlur stdDeviation="1"/></filter>
+          </defs>
+          <!-- 中心爆发 -->
+          <circle cx="0" cy="0" r="15" fill="url(#partGlow)" filter="url(#partBlur)"/>
+          <!-- 大量爆裂粒子（带拖尾感） -->
+          <g filter="url(#partBlur)">
+            <line x1="0" y1="0" x2="70" y2="-50" stroke="#ff88ff" stroke-width="1.5" opacity="0.7"/>
+            <line x1="0" y1="0" x2="-65" y2="-30" stroke="#ffffff" stroke-width="1" opacity="0.6"/>
+            <line x1="0" y1="0" x2="80" y2="20" stroke="#ff44ff" stroke-width="1.2" opacity="0.8"/>
+            <line x1="0" y1="0" x2="-70" y2="40" stroke="#ffaaff" stroke-width="1" opacity="0.6"/>
+            <line x1="0" y1="0" x2="20" y2="-80" stroke="#ffffff" stroke-width="0.8" opacity="0.5"/>
+            <line x1="0" y1="0" x2="-30" y2="75" stroke="#ff88ff" stroke-width="1" opacity="0.7"/>
+            <line x1="0" y1="0" x2="55" y2="60" stroke="#ffffff" stroke-width="0.7" opacity="0.5"/>
+            <line x1="0" y1="0" x2="-55" y2="-60" stroke="#ff44ff" stroke-width="0.9" opacity="0.6"/>
+          </g>
+          <!-- 粒子头 -->
+          <g>
+            <circle cx="70" cy="-50" r="2.5" fill="#ffffff"/>
+            <circle cx="-65" cy="-30" r="2" fill="#ff88ff"/>
+            <circle cx="80" cy="20" r="2.5" fill="#ffffff"/>
+            <circle cx="-70" cy="40" r="2" fill="#ffaaff"/>
+            <circle cx="20" cy="-80" r="1.5" fill="#ff44ff"/>
+            <circle cx="-30" cy="75" r="2" fill="#ffffff"/>
+            <circle cx="55" cy="60" r="1.8" fill="#ff88ff"/>
+            <circle cx="-55" cy="-60" r="2.2" fill="#ffffff"/>
+            <!-- 散射小粒子 -->
+            <circle cx="40" cy="-65" r="1" fill="#ffaaff" opacity="0.7"/>
+            <circle cx="-40" cy="50" r="1" fill="#ffffff" opacity="0.6"/>
+            <circle cx="60" cy="35" r="0.8" fill="#ff44ff" opacity="0.5"/>
+            <circle cx="-75" cy="-10" r="1.2" fill="#ffffff" opacity="0.8"/>
+          </g>
+          <!-- 扩散环 -->
+          <circle cx="0" cy="0" r="45" fill="none" stroke="#ff00ff" stroke-width="0.8" opacity="0.4"/>
+        </svg>
+      </div>
+      <div class="card-body">
+        <h3 style="color:#44ddff">C. GPU 粒子风暴</h3>
+        <p style="font-size:12px;color:#aaa">数千粒子爆发 + 拖尾 + 引力/湍流，爆裂感强烈，AAA 游戏风格</p>
+        <div style="margin-top:8px;font-size:11px">
+          <span style="color:#4ade80">✅ 爆裂感强</span> ·
+          <span style="color:#fbbf24">⚠️ 需 ParticleContainer</span> ·
+          <span style="color:#4ade80">✅ 性能好</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 方案 D: 赛博朋克霓虹 -->
+    <div class="card" data-choice="cyberpunk" onclick="toggleSelect(this)" style="cursor:pointer">
+      <div class="card-image" style="background:#000;height:180px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">
+        <svg width="220" height="180" viewBox="-110 -90 220 180">
+          <defs>
+            <filter id="cyberBlur"><feGaussianBlur stdDeviation="1.5"/></filter>
+            <filter id="cyberBlurStrong"><feGaussianBlur stdDeviation="4"/></filter>
+          </defs>
+          <!-- 故障感多重环 -->
+          <circle cx="0" cy="0" r="70" fill="none" stroke="#ff00ff" stroke-width="2" opacity="0.9" filter="url(#cyberBlur)"/>
+          <circle cx="2" cy="0" r="68" fill="none" stroke="#00ffff" stroke-width="1.5" opacity="0.7" filter="url(#cyberBlur)"/>
+          <circle cx="-2" cy="0" r="72" fill="none" stroke="#ff00ff" stroke-width="1" opacity="0.5"/>
+          <!-- 网格分段 -->
+          <g stroke="#ff00ff" stroke-width="1.2" opacity="0.85" filter="url(#cyberBlur)">
+            <line x1="0" y1="-70" x2="0" y2="-50"/>
+            <line x1="49" y1="-49" x2="35" y2="-35"/>
+            <line x1="70" y1="0" x2="50" y2="0"/>
+            <line x1="49" y1="49" x2="35" y2="35"/>
+            <line x1="0" y1="70" x2="0" y2="50"/>
+            <line x1="-49" y1="49" x2="-35" y2="35"/>
+            <line x1="-70" y1="0" x2="-50" y2="0"/>
+            <line x1="-49" y1="-49" x2="-35" y2="-35"/>
+          </g>
+          <!-- 霓虹光晕 -->
+          <circle cx="0" cy="0" r="70" fill="none" stroke="#ff44ff" stroke-width="6" opacity="0.3" filter="url(#cyberBlurStrong)"/>
+          <!-- 扫描线 -->
+          <g opacity="0.4">
+            <rect x="-100" y="-5" width="200" height="0.5" fill="#00ffff"/>
+            <rect x="-100" y="3" width="200" height="0.3" fill="#ff00ff"/>
+          </g>
+          <!-- 中心强光 -->
+          <circle cx="0" cy="0" r="5" fill="#ffffff" opacity="1" filter="url(#cyberBlur)"/>
+        </svg>
+      </div>
+      <div class="card-body">
+        <h3 style="color:#ff00ff">D. 赛博朋克霓虹故障</h3>
+        <p style="font-size:12px;color:#aaa">RGB 分离 + 霓虹辉光 + 网格分段 + 扫描线，强烈赛博朋克美学</p>
+        <div style="margin-top:8px;font-size:11px">
+          <span style="color:#4ade80">✅ 风格强烈</span> ·
+          <span style="color:#4ade80">✅ 性能好</span> ·
+          <span style="color:#fbbf24">⚠️ 风格独特</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 方案 E: 写实物理爆裂 -->
+    <div class="card" data-choice="realistic" onclick="toggleSelect(this)" style="cursor:pointer">
+      <div class="card-image" style="background:#000;height:180px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">
+        <svg width="220" height="180" viewBox="-110 -90 220 180">
+          <defs>
+            <radialGradient id="realFire">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+              <stop offset="25%" stop-color="#ffff44" stop-opacity="0.9"/>
+              <stop offset="50%" stop-color="#ff8800" stop-opacity="0.7"/>
+              <stop offset="75%" stop-color="#ff2200" stop-opacity="0.4"/>
+              <stop offset="100%" stop-color="#440000" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="realSmoke">
+              <stop offset="0%" stop-color="#666666" stop-opacity="0.5"/>
+              <stop offset="100%" stop-color="#222222" stop-opacity="0"/>
+            </radialGradient>
+            <filter id="realBlur"><feGaussianBlur stdDeviation="3"/></filter>
+          </defs>
+          <!-- 烟雾外层 -->
+          <circle cx="-15" cy="-10" r="40" fill="url(#realSmoke)" filter="url(#realBlur)"/>
+          <circle cx="20" cy="15" r="35" fill="url(#realSmoke)" filter="url(#realBlur)"/>
+          <!-- 火焰核心 -->
+          <circle cx="0" cy="0" r="55" fill="url(#realFire)" filter="url(#realBlur)"/>
+          <circle cx="-5" cy="-5" r="30" fill="url(#realFire)" opacity="0.8"/>
+          <!-- 高亮中心 -->
+          <circle cx="0" cy="0" r="12" fill="#ffffff" opacity="0.9"/>
+          <!-- 飞溅碎片 -->
+          <g>
+            <polygon points="60,-30 65,-25 62,-20" fill="#ff8800" opacity="0.8"/>
+            <polygon points="-55,20 -50,25 -58,28" fill="#ffaa44" opacity="0.7"/>
+            <polygon points="40,55 45,50 48,58" fill="#ff6600" opacity="0.6"/>
+            <circle cx="65" cy="-40" r="1.5" fill="#ffff44"/>
+            <circle cx="-60" cy="35" r="1" fill="#ff8800"/>
+            <circle cx="50" cy="60" r="1.2" fill="#ffaa44"/>
+          </g>
+        </svg>
+      </div>
+      <div class="card-body">
+        <h3 style="color:#ff8800">E. 写实物理爆裂</h3>
+        <p style="font-size:12px;color:#aaa">火焰 + 烟雾 + 飞溅碎片 + 真实物理，电影级爆炸质感</p>
+        <div style="margin-top:8px;font-size:11px">
+          <span style="color:#4ade80">✅ 写实震撼</span> ·
+          <span style="color:#fbbf24">⚠️ 工作量大</span> ·
+          <span style="color:#ef4444">❌ 不太契合赛博风</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 方案 F: 混合终极 -->
+    <div class="card" data-choice="hybrid" onclick="toggleSelect(this)" style="cursor:pointer;grid-column:span 2">
+      <div class="card-image" style="background:#000;height:180px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">
+        <svg width="320" height="180" viewBox="-160 -90 320 180">
+          <defs>
+            <radialGradient id="hybGlow">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+              <stop offset="30%" stop-color="#ffccff" stop-opacity="0.7"/>
+              <stop offset="60%" stop-color="#ff44ff" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="#ff00ff" stop-opacity="0"/>
+            </radialGradient>
+            <filter id="hybBlur"><feGaussianBlur stdDeviation="4"/></filter>
+            <filter id="hybBlurS"><feGaussianBlur stdDeviation="1"/></filter>
+          </defs>
+          <!-- Bloom 大光晕 -->
+          <circle cx="0" cy="0" r="85" fill="url(#hybGlow)" filter="url(#hybBlur)"/>
+          <!-- 能量扭曲环 -->
+          <circle cx="0" cy="0" r="60" fill="none" stroke="#ffaaff" stroke-width="1" opacity="0.7"/>
+          <circle cx="0" cy="0" r="55" fill="none" stroke="#ffffff" stroke-width="0.6" opacity="0.5"/>
+          <!-- 主环高亮 -->
+          <circle cx="0" cy="0" r="65" fill="none" stroke="#ffffff" stroke-width="2" opacity="1" filter="url(#hybBlurS)"/>
+          <circle cx="0" cy="0" r="63" fill="none" stroke="#ff44ff" stroke-width="4" opacity="0.5" filter="url(#hybBlur)"/>
+          <!-- 爆裂粒子拖尾 -->
+          <g filter="url(#hybBlurS)">
+            <line x1="0" y1="0" x2="75" y2="-40" stroke="#ff88ff" stroke-width="1.2" opacity="0.7"/>
+            <line x1="0" y1="0" x2="-70" y2="-25" stroke="#ffffff" stroke-width="0.9" opacity="0.6"/>
+            <line x1="0" y1="0" x2="80" y2="30" stroke="#ff44ff" stroke-width="1" opacity="0.7"/>
+            <line x1="0" y1="0" x2="-65" y2="50" stroke="#ffaaff" stroke-width="0.8" opacity="0.6"/>
+          </g>
+          <!-- 粒子头 -->
+          <circle cx="75" cy="-40" r="2" fill="#ffffff"/>
+          <circle cx="-70" cy="-25" r="1.8" fill="#ff88ff"/>
+          <circle cx="80" cy="30" r="2" fill="#ffffff"/>
+          <circle cx="-65" cy="50" r="1.5" fill="#ffaaff"/>
+          <!-- 中心爆发 -->
+          <circle cx="0" cy="0" r="6" fill="#ffffff" opacity="1" filter="url(#hybBlurS)"/>
+          <circle cx="0" cy="0" r="3" fill="#ffffff"/>
+          <!-- 扫描线（赛博） -->
+          <g opacity="0.2">
+            <rect x="-150" y="-3" width="300" height="0.5" fill="#00ffff"/>
+          </g>
+        </svg>
+      </div>
+      <div class="card-body">
+        <h3 style="color:#ffd700">F. 混合终极方案 ⭐ 推荐</h3>
+        <p style="font-size:12px;color:#aaa">Bloom 后处理 + Shader 扭曲 + GPU 粒子 + 轻度赛博朋克元素，集各家所长</p>
+        <div style="margin-top:8px;font-size:11px">
+          <span style="color:#4ade80">✅ 视觉顶级</span> ·
+          <span style="color:#4ade80">✅ 风格统一</span> ·
+          <span style="color:#fbbf24">⚠️ 工作量大</span> ·
+          <span style="color:#4ade80">✅ 分阶段可实现</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div style="background:#1a2a1a;border-left:3px solid #4ade80;padding:12px 14px;border-radius:6px;margin:16px 0;font-size:13px">
+  <div style="color:#4ade80;font-weight:bold;margin-bottom:6px">💡 技术说明</div>
+  <ul style="margin:0;padding-left:18px;line-height:1.7">
+    <li><b>Shader 方案</b>：用 PIXI.Filter + GLSL，可做扭曲/能量场/等离子</li>
+    <li><b>Bloom 方案</b>：用 RenderTexture + BlurFilter + ADD 叠加，无需第三方库</li>
+    <li><b>GPU 粒子</b>：用 PIXI.ParticleContainer（v8 内置），可渲染数千粒子</li>
+    <li><b>混合方案</b>：可分阶段实施，先 Bloom + 粒子，再加 Shader</li>
+  </ul>
+</div>
+
+<p class="subtitle" style="text-align:center;margin-top:20px">点击你最喜欢的方案，或在终端告诉我你的想法 🎯</p>

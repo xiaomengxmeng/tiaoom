@@ -51,6 +51,9 @@ import {
 import {
   InfiniteFoldRenderer,
 } from './InfiniteFoldRenderer';
+import {
+  BotanicalPartyRenderer,
+} from './BotanicalPartyRenderer';
 import type {
   ShockwaveVisualConfig,
   FirewallVisualConfig,
@@ -100,6 +103,7 @@ export class EffectRenderer {
   private fluidMasteryRenderer: FluidMasteryRenderer;
   private memoryCorridorRenderer: MemoryCorridorRenderer;
   private infiniteFoldRenderer: InfiniteFoldRenderer;
+  private botanicalPartyRenderer: BotanicalPartyRenderer;
 
   // ── 形状特效池 ────────────────────────────────────────
   private shapeEffectPool: ShapeEffectPool;
@@ -124,8 +128,10 @@ export class EffectRenderer {
     particlePool: ParticlePool,
   ) {
     // 初始化子渲染器
-    this.shockwaveRenderer = new ShockwaveEffectRenderer(fieldContainer, this.canvasW, this.canvasH);
-    this.firewallRenderer = new FirewallEffectRenderer(fieldContainer);
+    // 冲击波渲染器（注入 particlePool 用于震波飞溅粒子）
+    this.shockwaveRenderer = new ShockwaveEffectRenderer(fieldContainer, this.canvasW, this.canvasH, particlePool);
+    // 防火墙渲染器（注入 particlePool 用于数据流粒子）
+    this.firewallRenderer = new FirewallEffectRenderer(fieldContainer, particlePool);
     this.hiveRenderer = new HiveEffectRenderer(
       entityContainer, hologramContainer, particlePool,
       this.canvasW, this.canvasH,
@@ -164,6 +170,9 @@ export class EffectRenderer {
     // 无限折叠渲染器（陈厌孑）
     this.infiniteFoldRenderer = new InfiniteFoldRenderer(fieldContainer, particlePool);
 
+    // 植物伙伴派对渲染器（沐里）
+    this.botanicalPartyRenderer = new BotanicalPartyRenderer(fieldContainer, particlePool);
+
     // 初始化形状特效池
     this.shapeEffectPool = new ShapeEffectPool(fieldContainer, 20);
   }
@@ -190,6 +199,7 @@ export class EffectRenderer {
     this.fluidMasteryRenderer.setScale(s);
     this.memoryCorridorRenderer.setScale(s);
     this.infiniteFoldRenderer.setScale(s);
+    this.botanicalPartyRenderer.setScale(s);
   }
 
   // ════════════════════════════════════════
@@ -1077,6 +1087,84 @@ export class EffectRenderer {
   }
 
   // ══════════════════════════════════════════════════════
+  //  公开 API：植物伙伴派对（沐里）
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * 从 WeaponRangeConfig 构建植物伙伴派对视觉配置
+   */
+  private buildBotanicalPartyVisualCfg() {
+    const rc = WEAPON_RANGE_CONFIG[WeaponId.BOTANICAL_CONTROL];
+    return {
+      plantRadius: rc?.field?.radius ?? 40,
+      burstRadius: rc?.aoeMaxRadius ?? 60,
+      burstDurationMs: (rc?.burstDurationSec ?? 4) * 1000,
+    };
+  }
+
+  /**
+   * 触发植物生成视觉效果
+   * @param plantId 植物 ID
+   * @param x 逻辑坐标 X
+   * @param y 逻辑坐标 Y
+   * @param personality 性格（gentle 温柔 / fierce 暴躁 / curious 好奇）
+   * @param radius 植物影响半径（逻辑 px）
+   * @param themeColor 主题色
+   */
+  triggerPlantSpawn(
+    plantId: string,
+    x: number,
+    y: number,
+    personality: 'gentle' | 'fierce' | 'curious',
+    radius: number,
+    themeColor?: number,
+  ): void {
+    const cfg = this.buildBotanicalPartyVisualCfg();
+    this.botanicalPartyRenderer.triggerPlantSpawn(
+      plantId, x, y, personality, radius ?? cfg.plantRadius, themeColor,
+    );
+  }
+
+  /**
+   * 触发单株植物枯萎（飘出咖啡香气粒子）
+   */
+  triggerPlantDecay(plantId: string): void {
+    this.botanicalPartyRenderer.triggerPlantDecay(plantId);
+  }
+
+  /**
+   * 移除单株植物
+   */
+  removePlant(plantId: string): void {
+    this.botanicalPartyRenderer.removePlant(plantId);
+  }
+
+  /**
+   * 触发植物派对爆发视觉效果
+   * @param playerId 玩家 ID
+   * @param x 逻辑坐标 X
+   * @param y 逻辑坐标 Y
+   * @param radius 爆发范围（逻辑 px）
+   * @param plantCount 当前植物数量
+   * @param themeColor 主题色
+   * @param durationMs 持续时间（ms）
+   */
+  triggerBotanicalBurst(
+    playerId: string,
+    x: number,
+    y: number,
+    radius: number,
+    plantCount: number,
+    themeColor?: number,
+    durationMs?: number,
+  ): void {
+    const cfg = this.buildBotanicalPartyVisualCfg();
+    this.botanicalPartyRenderer.triggerBurst(
+      playerId, x, y, radius, plantCount, themeColor, durationMs ?? cfg.burstDurationMs,
+    );
+  }
+
+  // ══════════════════════════════════════════════════════
   //  生命周期
   // ══════════════════════════════════════════════════════
 
@@ -1101,6 +1189,9 @@ export class EffectRenderer {
 
     // 更新无限折叠渲染器（驱动闪避/重组/爆发动画）
     this.infiniteFoldRenderer.update(dt);
+
+    // 更新植物伙伴派对渲染器（驱动植物出生/呼吸/枯萎+爆发三阶段动画）
+    this.botanicalPartyRenderer.update(dt);
 
     // 更新形状特效池
     this.shapeEffectPool.tick(dt);
@@ -1137,6 +1228,7 @@ export class EffectRenderer {
     this.fluidMasteryRenderer.clear();
     this.memoryCorridorRenderer.clear();
     this.infiniteFoldRenderer.clear();
+    this.botanicalPartyRenderer.clear();
   }
 
   destroy(): void {
@@ -1158,6 +1250,7 @@ export class EffectRenderer {
     this.fluidMasteryRenderer.destroy();
     this.memoryCorridorRenderer.destroy();
     this.infiniteFoldRenderer.destroy();
+    this.botanicalPartyRenderer.destroy();
     this.shapeEffectPool.destroy();
   }
 }

@@ -703,6 +703,10 @@ export default class FishOilRoom extends GameRoom {
         foldDodgeSuccess: evt.metadata?.dodgeSuccess,
         foldCount: evt.metadata?.foldCount,
         foldDisplacementRange: evt.metadata?.displacementRange,
+        // 沐里 - 植物伙伴派对
+        botanicalPlantId: evt.metadata?.plantId,
+        botanicalPersonality: evt.metadata?.personality,
+        botanicalPlantCount: evt.metadata?.plantCount,
       });
     }
     return result;

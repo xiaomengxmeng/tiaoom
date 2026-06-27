@@ -23,6 +23,7 @@ import { EmotionMasteryWeapon } from '../skills/weapons/EmotionMasteryWeapon';
 import { FluidMasteryWeapon } from '../skills/weapons/FluidMasteryWeapon';
 import { MemoryCorridorWeapon } from '../skills/weapons/MemoryCorridorWeapon';
 import { InfiniteFoldWeapon } from '../skills/weapons/InfiniteFoldWeapon';
+import { BotanicalControlWeapon } from '../skills/weapons/BotanicalControlWeapon';
 
 // ── 武器元信息（工厂模式） ──────────────────────────────────
 export interface WeaponEntry {
@@ -224,6 +225,15 @@ export const REGISTRY: Record<string, WeaponEntry> = {
     difficulty: 3,
     iconId: 'game-icons:folded-paper',
     factory: () => new InfiniteFoldWeapon(),
+  },
+  // ── 沐里 - 植物伙伴派对 ──────────────────────────
+  [WeaponId.BOTANICAL_CONTROL]: {
+    id: WeaponId.BOTANICAL_CONTROL,
+    name: WeaponName.BOTANICAL_CONTROL,
+    school: School.WILD,
+    difficulty: 3,
+    iconId: 'game-icons:plant-party',
+    factory: () => new BotanicalControlWeapon(),
   },
 };
 

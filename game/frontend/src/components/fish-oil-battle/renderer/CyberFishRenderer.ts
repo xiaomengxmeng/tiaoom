@@ -256,6 +256,14 @@ export class CyberFishRenderer {
     dodgeSuccess?: boolean;
     /** 陈厌孑：折叠次数 */
     foldCount?: number;
+    /** 沐里：植物 ID（BOTANICAL_PLANT_SPAWN/DECAY 专用） */
+    plantId?: string;
+    /** 沐里：植物性格（gentle/fierce/curious） */
+    personality?: string;
+    /** 沐里：植物数量（BOTANICAL_BURST 专用） */
+    plantCount?: number;
+    /** 沐里：爆发持续时间（ms） */
+    durationMs?: number;
   }): void {
     // 映射所有坐标参数
     const mapCfg: typeof config & Record<string, any> = { ...config };
@@ -679,6 +687,37 @@ export class CyberFishRenderer {
             mapCfg.x, mapCfg.y,
             config.radius ?? 180,
             themeColor ?? config.factionColor,
+          );
+        }
+        break;
+      case VisualEventType.BOTANICAL_PLANT_SPAWN:
+        // 沐里植物生成
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerPlantSpawn(
+            config.plantId ?? `plant_${Date.now()}`,
+            mapCfg.x, mapCfg.y,
+            (config.personality ?? 'gentle') as 'gentle' | 'fierce' | 'curious',
+            config.radius ?? 40,
+            themeColor,
+          );
+        }
+        break;
+      case VisualEventType.BOTANICAL_PLANT_DECAY:
+        // 沐里植物枯萎
+        this.effectRenderer.triggerPlantDecay(
+          config.plantId ?? `plant_${Date.now()}`,
+        );
+        break;
+      case VisualEventType.BOTANICAL_BURST:
+        // 沐里植物派对爆发
+        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          this.effectRenderer.triggerBotanicalBurst(
+            config.playerId ?? 'unknown',
+            mapCfg.x, mapCfg.y,
+            config.radius ?? 60,
+            config.plantCount ?? 0,
+            themeColor,
+            config.durationMs,
           );
         }
         break;

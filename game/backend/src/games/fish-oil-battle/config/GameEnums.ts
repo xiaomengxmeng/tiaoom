@@ -35,6 +35,7 @@ export enum WeaponId {
   FLUID_MASTERY = 'fluid_mastery',         // KE - 流体操控
   MEMORY_CORRIDOR = 'memory_corridor',     // 梦 - 记忆回廊
   INFINITE_FOLD = 'infinite_fold',         // 陈厌孑 - 无限折叠
+  BOTANICAL_CONTROL = 'botanical_control',  // 沐里 - 植物伙伴派对
 }
 
 // ── 武器名称 ─────────────────────────────────────
@@ -68,6 +69,7 @@ export enum WeaponName {
   FLUID_MASTERY = '流体操控', // KE
   MEMORY_CORRIDOR = '记忆回廊', // 梦
   INFINITE_FOLD = '无限折叠', // 陈厌孑
+  BOTANICAL_CONTROL = '植物伙伴派对', // 沐里
 }
 
 // ── 流派 ─────────────────────────────────────────
@@ -168,6 +170,13 @@ export enum VisualEventType {
   INFINITE_FOLD_REASSEMBLE = 'infinite_fold_reassemble',
   /** 陈厌孑 - 无限折叠·维度坍缩爆发 */
   INFINITE_FOLD_BURST = 'infinite_fold_burst',
+  // 沐里 - 植物伙伴派对
+  /** 沐里 - 植物生成 */
+  BOTANICAL_PLANT_SPAWN = 'botanical_plant_spawn',
+  /** 沐里 - 植物枯萎 */
+  BOTANICAL_PLANT_DECAY = 'botanical_plant_decay',
+  /** 沐里 - 植物派对爆发 */
+  BOTANICAL_BURST = 'botanical_burst',
   /** 形状特效（一次性） */
   SHAPE_EFFECT = 'shape',
   /** 持续形状特效（常驻，需 sustainedKey） */

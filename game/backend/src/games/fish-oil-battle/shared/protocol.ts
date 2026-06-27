@@ -195,6 +195,12 @@ export interface VisualEventData {
   foldCount?: number;
   /** 陈厌孑：位移范围 */
   foldDisplacementRange?: number;
+  /** 沐里：植物ID（BOTANICAL_PLANT_SPAWN/DECAY 事件专用） */
+  botanicalPlantId?: string;
+  /** 沐里：植物性格（gentle 温柔 / fierce 暴躁 / curious 好奇） */
+  botanicalPersonality?: string;
+  /** 沐里：植物数量（BOTANICAL_BURST 事件专用） */
+  botanicalPlantCount?: number;
 }
 
 // ─── 游戏统计（game_end 用）───────────────

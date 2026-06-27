@@ -1,0 +1,235 @@
+<h2>🎯 联动方案 — 让技能与角色"活起来"</h2>
+<p class="subtitle">核心问题：11 把武器各自为战，角色与技能无视觉关联，场景像"贴纸拼贴"</p>
+
+<div style="background:#2a1a1a;border-left:3px solid #ef4444;padding:12px 14px;border-radius:6px;margin:16px 0;font-size:13px">
+  <div style="color:#ef4444;font-weight:bold;margin-bottom:8px">🔴 当前问题的本质</div>
+  <ul style="margin:0;padding-left:18px;line-height:1.8">
+    <li>特效触发时<b>角色本体毫无反应</b>（没有蓄力、没有爆发光环）</li>
+    <li>同流派武器视觉语言不统一（冲击波/光学斩都是 AGGRESSOR 但看不出关联）</li>
+    <li>多技能同屏触发时<b>互相抢戏</b>，颜色/节奏混乱</li>
+    <li>没有"技能→角色→技能"的视觉回环</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>🔄 三层联动设计</h3>
+  <p class="subtitle" style="margin-bottom:16px">从"单点特效"升级为"角色驱动的特效系统"</p>
+
+  <div style="display:grid;grid-template-columns:1fr;gap:16px">
+
+    <!-- Layer 1: 角色状态光环 -->
+    <div style="background:#1a2a3e;border:1px solid #00bfff;border-radius:10px;padding:16px">
+      <div style="color:#00bfff;font-weight:bold;font-size:14px;margin-bottom:12px">Layer 1: 角色状态可视化</div>
+      <p style="font-size:12px;color:#bbb;margin:0 0 12px 0">角色本体始终有"状态光环"显示当前武器状态，让玩家一眼看出谁在用什么技能</p>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        <div style="text-align:center">
+          <svg width="80" height="80" viewBox="-40 -40 80 80" style="background:#000;border-radius:50%">
+            <circle cx="0" cy="0" r="8" fill="#ff00ff"/>
+            <circle cx="0" cy="0" r="20" fill="none" stroke="#ff00ff" stroke-width="0.5" opacity="0.2"/>
+            <text x="0" y="35" text-anchor="middle" fill="#888" font-size="8">待机</text>
+          </svg>
+          <div style="font-size:10px;color:#888;margin-top:4px">待机（微弱光环）</div>
+        </div>
+        <div style="text-align:center">
+          <svg width="80" height="80" viewBox="-40 -40 80 80" style="background:#000;border-radius:50%">
+            <circle cx="0" cy="0" r="8" fill="#ff00ff"/>
+            <circle cx="0" cy="0" r="18" fill="none" stroke="#ff44ff" stroke-width="1.5" opacity="0.6">
+              <animate attributeName="r" values="15;22;15" dur="0.8s" repeatCount="indefinite"/>
+              <animate attributeName="opacity" values="0.3;0.8;0.3" dur="0.8s" repeatCount="indefinite"/>
+            </circle>
+            <text x="0" y="35" text-anchor="middle" fill="#ff44ff" font-size="8">蓄力</text>
+          </svg>
+          <div style="font-size:10px;color:#ff44ff;margin-top:4px">蓄力（脉动光环）</div>
+        </div>
+        <div style="text-align:center">
+          <svg width="80" height="80" viewBox="-40 -40 80 80" style="background:#000;border-radius:50%">
+            <circle cx="0" cy="0" r="8" fill="#ffffff"/>
+            <circle cx="0" cy="0" r="25" fill="#ff00ff" opacity="0.4">
+              <animate attributeName="opacity" values="0.6;0.2;0.6" dur="0.3s" repeatCount="indefinite"/>
+            </circle>
+            <g stroke="#ffaaff" stroke-width="1" opacity="0.8">
+              <line x1="-30" y1="0" x2="-22" y2="0"/>
+              <line x1="22" y1="0" x2="30" y2="0"/>
+              <line x1="0" y1="-30" x2="0" y2="-22"/>
+              <line x1="0" y1="22" x2="0" y2="30"/>
+            </g>
+            <text x="0" y="35" text-anchor="middle" fill="#ffffff" font-size="8">释放</text>
+          </svg>
+          <div style="font-size:10px;color:#fff;margin-top:4px">释放（爆发闪烁）</div>
+        </div>
+        <div style="text-align:center">
+          <svg width="80" height="80" viewBox="-40 -40 80 80" style="background:#000;border-radius:50%">
+            <circle cx="0" cy="0" r="8" fill="#666"/>
+            <circle cx="0" cy="0" r="15" fill="none" stroke="#444" stroke-width="0.5" opacity="0.3" stroke-dasharray="3 2"/>
+            <text x="0" y="35" text-anchor="middle" fill="#666" font-size="8">冷却</text>
+          </svg>
+          <div style="font-size:10px;color:#666;margin-top:4px">冷却（虚线收缩）</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Layer 2: 流派视觉语言统一 -->
+    <div style="background:#1a3e2a;border:1px solid #39ff14;border-radius:10px;padding:16px">
+      <div style="color:#39ff14;font-weight:bold;font-size:14px;margin-bottom:12px">Layer 2: 流派视觉语言统一</div>
+      <p style="font-size:12px;color:#bbb;margin:0 0 12px 0">同流派的武器共享视觉 DNA：颜色基调 + 共享元素 + 运动节奏</p>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+        <!-- AGGRESSOR -->
+        <div style="background:#2a1a2e;padding:10px;border-radius:6px;border-top:2px solid #ff00ff">
+          <div style="color:#ff44ff;font-size:11px;font-weight:bold">AGGRESSOR 侵略者</div>
+          <div style="font-size:10px;color:#888;margin:4px 0">品红 + 尖锐几何</div>
+          <svg width="100%" height="50" viewBox="0 0 100 50">
+            <polygon points="50,5 90,25 50,45 10,25" fill="none" stroke="#ff00ff" stroke-width="1" opacity="0.6"/>
+            <polygon points="50,15 75,25 50,35 25,25" fill="#ff00ff" opacity="0.3"/>
+            <line x1="50" y1="5" x2="50" y2="15" stroke="#ffffff" stroke-width="0.5"/>
+          </svg>
+          <div style="font-size:9px;color:#666;margin-top:4px">冲击波/光学斩/防火墙</div>
+        </div>
+        <!-- CONTROLLER -->
+        <div style="background:#1a2a3e;padding:10px;border-radius:6px;border-top:2px solid #00bfff">
+          <div style="color:#44ddff;font-size:11px;font-weight:bold">CONTROLLER 控制者</div>
+          <div style="font-size:10px;color:#888;margin:4px 0">深天蓝 + 几何网格</div>
+          <svg width="100%" height="50" viewBox="0 0 100 50">
+            <rect x="30" y="10" width="40" height="30" fill="none" stroke="#00bfff" stroke-width="0.8" opacity="0.6"/>
+            <line x1="30" y1="25" x2="70" y2="25" stroke="#00bfff" stroke-width="0.3" opacity="0.4"/>
+            <line x1="50" y1="10" x2="50" y2="40" stroke="#00bfff" stroke-width="0.3" opacity="0.4"/>
+            <circle cx="50" cy="25" r="4" fill="#00bfff" opacity="0.4"/>
+          </svg>
+          <div style="font-size:9px;color:#666;margin-top:4px">熵寂/预知/情绪掌控</div>
+        </div>
+        <!-- ENGINEER -->
+        <div style="background:#1a3e1a;padding:10px;border-radius:6px;border-top:2px solid #39ff14">
+          <div style="color:#66ff66;font-size:11px;font-weight:bold">ENGINEER 工程师</div>
+          <div style="font-size:10px;color:#888;margin:4px 0">霓虹绿 + 蜂巢六边形</div>
+          <svg width="100%" height="50" viewBox="0 0 100 50">
+            <polygon points="50,8 70,20 70,35 50,47 30,35 30,20" fill="none" stroke="#39ff14" stroke-width="0.8" opacity="0.7"/>
+            <polygon points="50,18 62,24 62,32 50,38 38,32 38,24" fill="#39ff14" opacity="0.3"/>
+          </svg>
+          <div style="font-size:9px;color:#666;margin-top:4px">蜂巢母体</div>
+        </div>
+        <!-- WILD -->
+        <div style="background:#3e3a1a;padding:10px;border-radius:6px;border-top:2px solid #ffd700">
+          <div style="color:#ffe44d;font-size:11px;font-weight:bold">WILD 变奏者</div>
+          <div style="font-size:10px;color:#888;margin:4px 0">金色 + 流体曲线</div>
+          <svg width="100%" height="50" viewBox="0 0 100 50">
+            <path d="M 20 25 Q 35 10, 50 25 T 80 25" fill="none" stroke="#ffd700" stroke-width="1" opacity="0.7"/>
+            <path d="M 20 30 Q 35 15, 50 30 T 80 30" fill="none" stroke="#ffe44d" stroke-width="0.6" opacity="0.5"/>
+            <circle cx="50" cy="25" r="2" fill="#ffd700"/>
+          </svg>
+          <div style="font-size:9px;color:#666;margin-top:4px">空气斥力/画作/放电猫</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Layer 3: 技能联动 -->
+    <div style="background:#3e1a2a;border:1px solid #ff66aa;border-radius:10px;padding:16px">
+      <div style="color:#ff66aa;font-weight:bold;font-size:14px;margin-bottom:12px">Layer 3: 技能组合联动</div>
+      <p style="font-size:12px;color:#bbb;margin:0 0 12px 0">多技能同屏时产生视觉联动：颜色协调、节奏同步、组合特效</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:#2a1a2e;padding:10px;border-radius:6px">
+          <div style="color:#ff66aa;font-size:11px;font-weight:bold;margin-bottom:6px">同流派共鸣</div>
+          <svg width="100%" height="70" viewBox="0 0 150 70">
+            <!-- 两个同流派特效叠加产生共鸣环 -->
+            <circle cx="50" cy="35" r="20" fill="none" stroke="#ff00ff" stroke-width="1" opacity="0.6"/>
+            <circle cx="100" cy="35" r="20" fill="none" stroke="#ff00ff" stroke-width="1" opacity="0.6"/>
+            <!-- 共鸣连接线 -->
+            <line x1="50" y1="35" x2="100" y2="35" stroke="#ffaaff" stroke-width="1.5" opacity="0.8" stroke-dasharray="2 2"/>
+            <!-- 共鸣能量点 -->
+            <circle cx="75" cy="35" r="3" fill="#ffffff" opacity="0.9"/>
+            <text x="75" y="60" text-anchor="middle" fill="#ffaaff" font-size="8">共鸣</text>
+          </svg>
+          <div style="font-size:10px;color:#888">同流派技能近距离触发 → 连接能量线 + 共鸣光点</div>
+        </div>
+        <div style="background:#2a1a2e;padding:10px;border-radius:6px">
+          <div style="color:#66ddff;font-size:11px;font-weight:bold;margin-bottom:6px">跨流派冲突</div>
+          <svg width="100%" height="70" viewBox="0 0 150 70">
+            <circle cx="50" cy="35" r="18" fill="none" stroke="#ff00ff" stroke-width="1" opacity="0.6"/>
+            <circle cx="100" cy="35" r="18" fill="none" stroke="#00bfff" stroke-width="1" opacity="0.6"/>
+            <!-- 冲突火花 -->
+            <g stroke="#ffffff" stroke-width="0.5" opacity="0.9">
+              <line x1="68" y1="35" x2="72" y2="30"/>
+              <line x1="68" y1="35" x2="72" y2="40"/>
+              <line x1="82" y1="35" x2="78" y2="30"/>
+              <line x1="82" y1="35" x2="78" y2="40"/>
+            </g>
+            <text x="75" y="60" text-anchor="middle" fill="#ffffff" font-size="8">冲突</text>
+          </svg>
+          <div style="font-size:10px;color:#888">不同流派技能碰撞 → 边界火花 + 颜色混合</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h3>🎬 完整战斗场景对比</h3>
+  <p class="subtitle" style="margin-bottom:12px">同一时刻 3 个玩家释放不同技能</p>
+
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">当前：三个特效各自为战</div>
+      <div class="mockup-body" style="background:#000;height:160px;position:relative">
+        <svg width="100%" height="100%" viewBox="0 0 300 160">
+          <!-- 三个孤立的特效 -->
+          <circle cx="80" cy="80" r="30" fill="none" stroke="#ff00ff" stroke-width="2" opacity="0.7"/>
+          <circle cx="80" cy="80" r="3" fill="#ff00ff"/>
+
+          <circle cx="150" cy="60" r="25" fill="none" stroke="#00bfff" stroke-width="2" opacity="0.7"/>
+          <polygon points="150,55 155,60 150,65 145,60" fill="#00bfff"/>
+
+          <circle cx="220" cy="90" r="28" fill="none" stroke="#39ff14" stroke-width="2" opacity="0.7"/>
+          <circle cx="220" cy="90" r="4" fill="#39ff14"/>
+        </svg>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">联动后：角色 + 技能 + 组合</div>
+      <div class="mockup-body" style="background:#000;height:160px;position:relative">
+        <svg width="100%" height="100%" viewBox="0 0 300 160">
+          <defs>
+            <radialGradient id="auraM"><stop offset="0%" stop-color="#ff00ff" stop-opacity="0.3"/><stop offset="100%" stop-color="#ff00ff" stop-opacity="0"/></radialGradient>
+            <radialGradient id="auraC"><stop offset="0%" stop-color="#00bfff" stop-opacity="0.3"/><stop offset="100%" stop-color="#00bfff" stop-opacity="0"/></radialGradient>
+            <radialGradient id="auraE"><stop offset="0%" stop-color="#39ff14" stop-opacity="0.3"/><stop offset="100%" stop-color="#39ff14" stop-opacity="0"/></radialGradient>
+          </defs>
+          <!-- 角色光环 -->
+          <circle cx="80" cy="80" r="45" fill="url(#auraM)"/>
+          <circle cx="150" cy="60" r="40" fill="url(#auraC)"/>
+          <circle cx="220" cy="90" r="42" fill="url(#auraE)"/>
+          <!-- 角色本体（带状态） -->
+          <circle cx="80" cy="80" r="6" fill="#ffffff"/>
+          <circle cx="80" cy="80" r="12" fill="none" stroke="#ff44ff" stroke-width="0.8" opacity="0.8"/>
+          <circle cx="150" cy="60" r="6" fill="#ffffff"/>
+          <circle cx="150" cy="60" r="12" fill="none" stroke="#44ddff" stroke-width="0.8" opacity="0.8"/>
+          <circle cx="220" cy="90" r="6" fill="#ffffff"/>
+          <circle cx="220" cy="90" r="12" fill="none" stroke="#66ff66" stroke-width="0.8" opacity="0.8"/>
+          <!-- 技能特效（与角色光环协调） -->
+          <circle cx="80" cy="80" r="30" fill="none" stroke="#ff00ff" stroke-width="1.5" opacity="0.9"/>
+          <polygon points="150,55 155,60 150,65 145,60" fill="#00bfff" opacity="0.9"/>
+          <circle cx="150" cy="60" r="25" fill="none" stroke="#00bfff" stroke-width="1.2" opacity="0.7"/>
+          <circle cx="220" cy="90" r="28" fill="none" stroke="#39ff14" stroke-width="1.5" opacity="0.9"/>
+          <!-- 联动：同流派共鸣（品红与品红）-->
+          <!-- 跨流派弱连接（细微能量线） -->
+          <g opacity="0.3" stroke-dasharray="1 3">
+            <line x1="80" y1="80" x2="150" y2="60" stroke="#ffffff" stroke-width="0.5"/>
+            <line x1="150" y1="60" x2="220" y2="90" stroke="#ffffff" stroke-width="0.5"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="background:#1a2a1a;border-left:3px solid #4ade80;padding:12px 14px;border-radius:6px;margin:16px 0;font-size:13px">
+  <div style="color:#4ade80;font-weight:bold;margin-bottom:6px">💡 这个方案的优势</div>
+  <ul style="margin:0;padding-left:18px;line-height:1.8">
+    <li><b>不堆技术栈</b>：仍用现有 Graphics，但增加"角色光环层"和"联动连接层"</li>
+    <li><b>工作量可控</b>：核心是新增 1 个 PlayerAuraRenderer + 改造触发流程</li>
+    <li><b>视觉提升明显</b>：从"贴纸拼贴"变成"有呼吸感的战场"</li>
+    <li><b>为后续特效增强打基础</b>：联动框架建立后，未来加 Bloom/粒子都更有效</li>
+  </ul>
+</div>
+
+<p class="subtitle" style="text-align:center;margin-top:20px">这个方向是你想要的吗？还是你有其他想法？🎯</p>

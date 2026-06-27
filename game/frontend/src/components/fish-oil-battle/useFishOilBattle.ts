@@ -659,6 +659,41 @@ export function useFishOilBattle(
           });
         }
         break;
+      case VisualEventType.BOTANICAL_PLANT_SPAWN:
+        // 沐里 - 植物生成
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 40,
+            playerId: data.playerId,
+            plantId: data.botanicalPlantId,
+            personality: data.botanicalPersonality ?? 'gentle',
+          });
+        }
+        break;
+      case VisualEventType.BOTANICAL_PLANT_DECAY:
+        // 沐里 - 植物枯萎
+        rendererRef.value.triggerSkillEffect({
+          type: data.type,
+          x: data.x, y: data.y,
+          playerId: data.playerId,
+          plantId: data.botanicalPlantId,
+        });
+        break;
+      case VisualEventType.BOTANICAL_BURST:
+        // 沐里 - 植物派对爆发
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 60,
+            playerId: data.playerId,
+            plantCount: data.botanicalPlantCount ?? 0,
+            durationMs: data.durationMs,
+          });
+        }
+        break;
       case VisualEventType.GLOBAL_EFFECT:
         if (rendererRef.value) {
           rendererRef.value.handleGlobalEffect(data);

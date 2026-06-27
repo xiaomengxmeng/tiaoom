@@ -1,87 +1,79 @@
 /**
  * 量子裂隙 (Quantum Rift) - 变奏者流派
- * 前端视觉渲染器
+ * 前端视觉渲染器（重写版）
  *
- * 视觉设计（变奏者青 + 概率金双色调）：
- * - 量子裂隙 Rift：量子核心（10 层径向渐变）+ 多条不规则裂缝线（黑色+青色边缘）+ 概率粒子
- * - 爆发 Burst：量子核心（10 层渐变）+ 裂缝爆发 + 概率云环 + 三阶段动画（撕裂→坍缩→重组）
+ * 视觉主题：7 条锯齿裂缝（伪随机折线）+ 黑色吸光核 + 量子涨落粒子
+ * 爆发：维度撕裂（裂缝扩展 + 虚空涌出 + 量子涟漪）
+ *
+ * 独特视觉符号：
+ * - 锯齿裂缝：7 条由内向外、确定性伪随机折线（黑色 + 青色辉光边缘）
+ * - 黑色吸光核：多层径向渐变 + 黑色实心核，呼吸脉动
+ * - 量子涨落：随机出现/消失的青色闪烁粒子
+ * - 裂缝扩展：爆发阶段裂缝从中心向外撕开
+ * - 量子涟漪：向外扩散的青色圆环
+ *
+ * 三阶段动画：
+ * - 蓄压（0-15%T）：裂缝汇聚显现 + 黑核生长
+ * - 爆发（15%-30%T）：裂缝扩展 + 虚空涌出 + 量子涟漪
+ * - 扩散（30%-100%T）：裂缝消散扩张 + 黑核淡出 + 涟漪继续扩散
  */
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
+import { BaseWeaponEffectRenderer, type ActiveBurstBase, type Palette } from './BaseWeaponEffectRenderer';
 
 // ══════════════════════════════════════════════════════
-//  颜色常量（变奏者青）
+//  颜色常量（量子虚空）
 // ══════════════════════════════════════════════════════
 
-const QUANTUM_DEEP = 0x0a2a3a; // 深青黑（渐变外缘）
-const QUANTUM_MAIN = 0x0088cc; // 主青（量子主色）
-const QUANTUM_LIGHT = 0x33bbdd; // 浅亮青（中层渐变）
-const QUANTUM_HIGHLIGHT = 0x88ddee; // 高亮浅青（内层渐变）
-const QUANTUM_WHITE = 0xffffff; // 白色（核心高亮）
-const QUANTUM_GOLD = 0xffcc00; // 概率金（粒子/概率云色）
-const QUANTUM_BLACK = 0x000000; // 裂缝黑（裂缝核心色）
+const RIFT_VOID = 0x000000; // 黑色吸光核
+const RIFT_DEEP = 0x003344; // 深青黑（渐变外缘）
+const RIFT_DEFAULT_THEME = 0x00ffdd; // 变奏者青（默认主题色）
 
-/** 量子核心径向渐变层数 */
-const QUANTUM_CORE_LAYERS = 10;
-/** 裂缝线数量 */
+/** 裂缝数量（常驻 + 爆发一致） */
 const RIFT_CRACK_COUNT = 7;
-/** 每条裂缝的分段数（锯齿感） */
+/** 常驻裂缝分段 */
 const RIFT_CRACK_SEGMENTS = 4;
+/** 爆发裂缝分段（更细密以表现撕裂感） */
+const RIFT_BURST_SEGMENTS = 6;
 
 // ══════════════════════════════════════════════════════
 //  数据结构
 // ══════════════════════════════════════════════════════
 
 /** 活跃量子裂隙实例（常驻） */
-interface ActiveRift {
+interface ActiveRiftField {
   container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 量子核心（10 层径向渐变）
-  riftGraphics: PIXI.Graphics; // 多条不规则裂缝线（黑色+青色边缘）
+  crackGraphics: PIXI.Graphics; // 7 条锯齿裂缝
+  coreGraphics: PIXI.Graphics; // 黑色吸光核
   particleTimer: number;
-  life: number; // ms 累计
-  maxLife: number;
+  life: number;
   x: number;
   y: number;
   radius: number;
-}
-
-/** 活跃爆发特效（撕裂→坍缩→重组 三阶段） */
-interface ActiveBurst {
-  container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 量子核心（10 层渐变）
-  riftGraphics: PIXI.Graphics; // 裂缝爆发
-  ringGraphics: PIXI.Graphics; // 概率云环
-  life: number;
-  maxLife: number;
   themeColor: number;
-  radius: number;
+  palette: Palette;
 }
 
-export class QuantumRiftRenderer {
-  private fieldContainer: PIXI.Container;
-  private particlePool: ParticlePool;
-  private scale = 1;
+/** 活跃爆发特效（蓄压 → 撕裂 → 扩散 三阶段） */
+interface ActiveRiftBurst extends ActiveBurstBase {
+  bladeGraphics: PIXI.Graphics; // 裂缝扩展
+  coreGraphics: PIXI.Graphics; // 虚空涌出（黑核）
+  haloGraphics: PIXI.Graphics; // 量子涟漪
+  x: number;
+  y: number;
+}
 
-  // 活跃实例池
-  private activeRifts: Map<string, ActiveRift> = new Map();
-  private activeBursts: Map<string, ActiveBurst> = new Map();
+// ══════════════════════════════════════════════════════
+//  渲染器
+// ══════════════════════════════════════════════════════
+
+export class QuantumRiftRenderer extends BaseWeaponEffectRenderer {
+  private activeRifts = new Map<string, ActiveRiftField>();
+  private activeBursts = new Map<string, ActiveRiftBurst>();
 
   constructor(fieldContainer: PIXI.Container, particlePool: ParticlePool) {
-    this.fieldContainer = fieldContainer;
-    this.particlePool = particlePool;
-  }
-
-  setScale(scale: number): void {
-    this.scale = scale;
-    this.activeRifts.forEach((r) => {
-      if (r.container.destroyed) return;
-      r.container.scale.set(scale);
-    });
-    this.activeBursts.forEach((b) => {
-      if (b.container.destroyed) return;
-      b.container.scale.set(scale);
-    });
+    super(fieldContainer, particlePool);
   }
 
   // ══════════════════════════════════════════════════════
@@ -101,7 +93,7 @@ export class QuantumRiftRenderer {
     x: number,
     y: number,
     radius: number,
-    themeColor = QUANTUM_MAIN,
+    themeColor: number = RIFT_DEFAULT_THEME,
   ): void {
     // 已存在则仅更新位置与半径
     const existing = this.activeRifts.get(playerId);
@@ -113,173 +105,145 @@ export class QuantumRiftRenderer {
       return;
     }
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 量子核心（10 层径向渐变 + 主环 + 中心核）
+    const crackGraphics = new PIXI.Graphics();
     const coreGraphics = new PIXI.Graphics();
-    this.drawQuantumCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
+    container.addChild(crackGraphics, coreGraphics);
 
-    // 多条不规则裂缝线（黑色+青色边缘，独立旋转）
-    const riftGraphics = new PIXI.Graphics();
-    this.drawRiftCracks(riftGraphics, radius);
-    container.addChild(riftGraphics);
-
-    this.fieldContainer.addChild(container);
-
-    const rift: ActiveRift = {
+    const field: ActiveRiftField = {
       container,
+      crackGraphics,
       coreGraphics,
-      riftGraphics,
       particleTimer: 0,
       life: 0,
-      maxLife: Number.POSITIVE_INFINITY, // 常驻，直到手动移除
       x,
       y,
       radius,
+      themeColor,
+      palette,
     };
-    this.activeRifts.set(playerId, rift);
-
-    // 触发首帧概率粒子
-    this.spawnProbabilityParticles(x, y, radius, QUANTUM_GOLD);
-    void themeColor;
+    this.activeRifts.set(playerId, field);
   }
 
   /** 移除量子裂隙 */
   removeRift(playerId: string): void {
-    const rift = this.activeRifts.get(playerId);
-    if (rift) {
-      this.fieldContainer.removeChild(rift.container);
-      rift.container.destroy({ children: true });
-      this.activeRifts.delete(playerId);
-    }
+    const f = this.activeRifts.get(playerId);
+    if (!f) return;
+    this.container.removeChild(f.container);
+    f.container.destroy({ children: true });
+    this.activeRifts.delete(playerId);
   }
 
-  /**
-   * 绘制量子核心：10 层同心圆径向渐变（白→高亮→浅青→主青→深青黑）+ 主环 + 中心核
-   * 以 (0,0) 为中心绘制
-   */
-  private drawQuantumCore(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-
-    // 10 层同心圆叠加模拟径向渐变
-    for (let i = 0; i < QUANTUM_CORE_LAYERS; i++) {
-      const t = i / (QUANTUM_CORE_LAYERS - 1); // 0 → 1
-      const r = radius * (0.12 + 0.88 * t);
-      // 颜色分段：白 → 高亮 → 浅青 → 主青 → 深青黑
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(QUANTUM_WHITE, QUANTUM_HIGHLIGHT, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(
-          QUANTUM_HIGHLIGHT,
-          QUANTUM_LIGHT,
-          (t - 0.25) / 0.25,
-        );
-      } else if (t < 0.75) {
-        color = this.interpolateColor(
-          QUANTUM_LIGHT,
-          QUANTUM_MAIN,
-          (t - 0.5) / 0.25,
-        );
-      } else {
-        color = this.interpolateColor(
-          QUANTUM_MAIN,
-          QUANTUM_DEEP,
-          (t - 0.75) / 0.25,
-        );
-      }
-      const alpha = (1 - t) * 0.22;
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
-    }
-
-    // 量子主环：深青黑描边 + 主青主环 + 高亮内环
-    g.circle(0, 0, radius);
-    g.stroke({ color: QUANTUM_DEEP, width: 1.5, alpha: 0.6 });
-    g.circle(0, 0, radius * 0.97);
-    g.stroke({ color: QUANTUM_MAIN, width: 1, alpha: 0.7 });
-    g.circle(0, 0, radius * 0.93);
-    g.stroke({ color: QUANTUM_HIGHLIGHT, width: 0.4, alpha: 0.5 });
-
-    // 中心核：白色实心圆 r=4 + 概率金外环 r=6
-    g.circle(0, 0, 6);
-    g.stroke({ color: QUANTUM_GOLD, width: 1, alpha: 0.8 });
-    g.circle(0, 0, 4);
-    g.fill({ color: QUANTUM_WHITE, alpha: 1 });
-  }
+  // ══════════════════════════════════════════════════════
+  //  独特视觉符号
+  // ══════════════════════════════════════════════════════
 
   /**
-   * 绘制多条不规则裂缝线：每条裂缝为锯齿折线，黑色核心 + 青色边缘
-   * 由 riftGraphics 独立承担旋转动画
+   * 1. 7 条锯齿裂缝（伪随机折线）
+   * 使用确定性伪随机（基于角度 + 段索引），保证裂缝形态稳定。
+   * 旋转通过手动变换顶点实现（避免 set rotation 后续 moveTo/lineTo 仍用旧坐标）。
    */
-  private drawRiftCracks(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    const crackR = radius * 0.95;
-    // 7 条裂缝均匀分布起始角，每条裂缝为锯齿折线
-    for (let i = 0; i < RIFT_CRACK_COUNT; i++) {
-      const baseAngle =
-        (i * Math.PI * 2) / RIFT_CRACK_COUNT + this.crackJitter(i) * 0.3;
-      // 生成锯齿点序列
-      const pts: [number, number][] = [];
-      for (let s = 0; s <= RIFT_CRACK_SEGMENTS; s++) {
-        const f = s / RIFT_CRACK_SEGMENTS; // 0 → 1 由内向外
-        const r = crackR * (0.15 + 0.85 * f);
-        // 锯齿偏移：每段随机角向偏移
-        const jitter = this.crackJitter(i * 10 + s) * 0.25;
-        const a = baseAngle + jitter;
-        pts.push([Math.cos(a) * r, Math.sin(a) * r]);
-      }
-      // 青色边缘（粗）
-      g.moveTo(pts[0][0], pts[0][1]);
-      for (let s = 1; s < pts.length; s++) g.lineTo(pts[s][0], pts[s][1]);
-      g.stroke({ color: QUANTUM_LIGHT, width: 2.5, alpha: 0.8 });
-      // 黑色核心（细）
-      g.moveTo(pts[0][0], pts[0][1]);
-      for (let s = 1; s < pts.length; s++) g.lineTo(pts[s][0], pts[s][1]);
-      g.stroke({ color: QUANTUM_BLACK, width: 1, alpha: 0.9 });
-    }
-  }
-
-  /**
-   * 生成概率粒子（金色概率云，向心汇聚后概率性消散）
-   * 利用 particlePool.emit，每帧由 update 节流调用
-   */
-  private spawnProbabilityParticles(
-    x: number,
-    y: number,
+  private drawJaggedCracks(
+    g: PIXI.Graphics,
     radius: number,
-    color: number,
+    palette: Palette,
+    life: number,
   ): void {
+    g.clear();
+    const rotation = life * 0.0003 * Math.PI; // 缓慢旋转
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    for (let i = 0; i < RIFT_CRACK_COUNT; i++) {
+      const baseAngle = (i * Math.PI * 2) / RIFT_CRACK_COUNT;
+      let prevX = 0;
+      let prevY = 0;
+      for (let seg = 1; seg <= RIFT_CRACK_SEGMENTS; seg++) {
+        const t = seg / RIFT_CRACK_SEGMENTS;
+        const r = radius * t;
+        // 确定性伪随机抖动（基于 i 和 seg，保证可复现）
+        const seed = i * 7.3 + seg * 3.7;
+        const jitter = (Math.sin(seed) + Math.cos(seed * 1.7)) * 0.15;
+        const segAngle = baseAngle + jitter;
+        // 原始顶点
+        const ox = Math.cos(segAngle) * r;
+        const oy = Math.sin(segAngle) * r;
+        // 手动旋转（避免依赖 g.rotation）
+        const x = ox * cos - oy * sin;
+        const y = ox * sin + oy * cos;
+        if (seg > 1) {
+          // 黑色裂缝主体
+          g.moveTo(prevX, prevY);
+          g.lineTo(x, y);
+          g.stroke({ color: RIFT_VOID, width: 3, alpha: 0.9 });
+          // 青色边缘辉光
+          g.moveTo(prevX, prevY);
+          g.lineTo(x, y);
+          g.stroke({ color: palette.glow, width: 1, alpha: 0.8 });
+        }
+        prevX = x;
+        prevY = y;
+      }
+    }
+  }
+
+  /**
+   * 2. 黑色吸光核（多层径向渐变 + 黑色实心核）
+   * 呼吸脉动 scale 0.8↔1.0
+   */
+  private drawVoidCore(
+    g: PIXI.Graphics,
+    radius: number,
+    _palette: Palette,
+    life: number,
+  ): void {
+    void _palette;
+    g.clear();
+    const pulse = 0.8 + 0.2 * Math.sin(life * 0.003 * Math.PI);
+    // 多层渐变：中心黑 → 外圈深青黑
+    this.drawMultilayerCircle(
+      g,
+      radius * 0.15,
+      10,
+      (t) => this.interpolateColor(RIFT_VOID, RIFT_DEEP, t),
+      (t) => (1 - t * 0.3) * pulse,
+    );
+    // 黑色实心核
+    g.circle(0, 0, Math.max(0.5, radius * 0.08));
+    g.fill({ color: RIFT_VOID });
+  }
+
+  /**
+   * 3. 量子涨落粒子（随机出现消失）
+   * 利用 particlePool.emit，由 update 节流调用。
+   */
+  private spawnQuantumFluctuation(f: ActiveRiftField): void {
     const s = this.scale;
     for (let i = 0; i < 2; i++) {
       const angle = Math.random() * Math.PI * 2;
-      // 从裂隙边缘出发
-      const startDist = radius * s * (0.6 + Math.random() * 0.4);
-      const px = x + Math.cos(angle) * startDist;
-      const py = y + Math.sin(angle) * startDist;
-      // 向内汇聚速度（px/s），表现概率坍缩感
-      const speed = (18 + Math.random() * 12) * s;
+      const dist = f.radius * s * Math.random() * 0.8;
       this.particlePool.emit({
-        x: px,
-        y: py,
-        vx: -Math.cos(angle) * speed,
-        vy: -Math.sin(angle) * speed,
-        life: 2000,
-        scaleStart: 1,
+        x: f.x + Math.cos(angle) * dist,
+        y: f.y + Math.sin(angle) * dist,
+        vx: (Math.random() - 0.5) * 20,
+        vy: (Math.random() - 0.5) * 20,
+        life: 300 + Math.random() * 300,
+        scaleStart: 1.5,
         scaleEnd: 0,
-        alphaStart: 0.85,
+        alphaStart: 0.8,
         alphaEnd: 0,
-        tint: color,
-        radius: (1.5 + Math.random() * 1.5) * s,
+        tint: f.palette.glow,
+        radius: 1.5 * s,
       });
     }
   }
 
   // ══════════════════════════════════════════════════════
-  //  爆发特效（撕裂→坍缩→重组 三阶段动画）
+  //  爆发特效（蓄压 → 撕裂 → 扩散 三阶段）
   // ══════════════════════════════════════════════════════
 
   /**
@@ -289,253 +253,324 @@ export class QuantumRiftRenderer {
    * @param y 逻辑坐标 Y
    * @param radius 爆发范围（逻辑 px）
    * @param themeColor 主题色
-   * @param durationMs 持续时间（ms），默认 5000
+   * @param durationMs 持续时间（ms），默认 1500
    */
   triggerBurst(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = QUANTUM_MAIN,
+    themeColor: number = RIFT_DEFAULT_THEME,
     durationMs?: number,
   ): void {
     // 若已存在，先销毁旧实例
-    const old = this.activeBursts.get(playerId);
-    if (old) {
-      this.fieldContainer.removeChild(old.container);
-      old.container.destroy({ children: true });
+    const existing = this.activeBursts.get(playerId);
+    if (existing) {
+      this.removeBurstInstance(existing);
     }
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 1. 量子核心（10 层径向渐变 + 中心核）
+    const bladeGraphics = new PIXI.Graphics();
     const coreGraphics = new PIXI.Graphics();
-    this.drawBurstCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
+    const haloGraphics = new PIXI.Graphics();
+    container.addChild(bladeGraphics, coreGraphics, haloGraphics);
 
-    // 2. 裂缝爆发（多条不规则裂缝线）
-    const riftGraphics = new PIXI.Graphics();
-    this.drawRiftCracks(riftGraphics, radius * 0.85);
-    container.addChild(riftGraphics);
-
-    // 3. 概率云环（双层细高亮环）
-    const ringGraphics = new PIXI.Graphics();
-    this.drawBurstRing(ringGraphics, radius);
-    container.addChild(ringGraphics);
-
-    this.fieldContainer.addChild(container);
-
-    const burst: ActiveBurst = {
+    const burst: ActiveRiftBurst = {
       container,
-      coreGraphics,
-      riftGraphics,
-      ringGraphics,
       life: 0,
-      maxLife: durationMs ?? 5000,
+      maxLife: durationMs ?? 1500,
       themeColor,
       radius,
+      particleTimer: 0,
+      palette,
+      bladeGraphics,
+      coreGraphics,
+      haloGraphics,
+      x,
+      y,
     };
     this.activeBursts.set(playerId, burst);
   }
 
-  /**
-   * 绘制爆发量子核心：10 层同心圆（白→高亮→浅青→主青→深青黑）+ 中心核
-   */
-  private drawBurstCore(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    const coreR = radius * 0.6;
+  // ══════════════════════════════════════════════════════
+  //  三阶段钩子
+  // ══════════════════════════════════════════════════════
 
-    // 10 层同心圆叠加
-    for (let i = 0; i < QUANTUM_CORE_LAYERS; i++) {
-      const t = i / (QUANTUM_CORE_LAYERS - 1);
-      const r = coreR * (0.08 + 0.92 * t);
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(QUANTUM_WHITE, QUANTUM_HIGHLIGHT, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(
-          QUANTUM_HIGHLIGHT,
-          QUANTUM_LIGHT,
-          (t - 0.25) / 0.25,
-        );
-      } else if (t < 0.75) {
-        color = this.interpolateColor(
-          QUANTUM_LIGHT,
-          QUANTUM_MAIN,
-          (t - 0.5) / 0.25,
-        );
-      } else {
-        color = this.interpolateColor(
-          QUANTUM_MAIN,
-          QUANTUM_DEEP,
-          (t - 0.75) / 0.25,
-        );
-      }
-      const alpha = (1 - t) * 0.28;
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
+  /** 阶段1 蓄压：裂缝汇聚显现 + 黑核生长 */
+  protected phase1Charge(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveRiftBurst;
+    const ease = this.easeOutCubic(t);
+    // 裂缝从 0.3 半径生长到 0.8 半径，alpha 0→1
+    b.bladeGraphics.clear();
+    this.drawJaggedCracks(
+      b.bladeGraphics,
+      b.radius * (0.3 + 0.5 * ease),
+      b.palette,
+      b.life,
+    );
+    b.bladeGraphics.alpha = t;
+    // 黑核逐渐显现
+    b.coreGraphics.clear();
+    const voidR = b.radius * 0.08 * ease;
+    if (voidR > 0.5) {
+      this.drawMultilayerCircle(
+        b.coreGraphics,
+        voidR,
+        8,
+        (ti) => this.interpolateColor(RIFT_VOID, RIFT_DEEP, ti),
+        (ti) => (1 - ti * 0.3) * ease,
+      );
+      b.coreGraphics.circle(0, 0, Math.max(0.5, voidR * 0.5));
+      b.coreGraphics.fill({ color: RIFT_VOID });
     }
-
-    // 中心核 r=6（黑色吸光核 + 概率金辉光）
-    g.circle(0, 0, 6);
-    g.fill({ color: QUANTUM_BLACK, alpha: 0.9 });
-    g.circle(0, 0, 8);
-    g.stroke({ color: QUANTUM_GOLD, width: 1.5, alpha: 0.8 });
+    b.coreGraphics.alpha = 1;
+    // 涟漪隐藏
+    b.haloGraphics.clear();
+    b.haloGraphics.alpha = 0;
   }
 
-  /**
-   * 绘制概率云环：双层细高亮环（主青 + 概率金）
-   */
-  private drawBurstRing(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    g.circle(0, 0, radius);
-    g.stroke({ color: QUANTUM_LIGHT, width: 0.6, alpha: 0.7 });
-    g.circle(0, 0, radius * 0.95);
-    g.stroke({ color: QUANTUM_GOLD, width: 0.3, alpha: 0.5 });
+  /** 阶段2 爆发：维度撕裂（裂缝扩展 + 虚空涌出 + 量子涟漪） */
+  protected phase2Burst(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveRiftBurst;
+    const ease = this.easeOutCubic(t);
+    // 裂缝扩展（手动变换顶点支持旋转）
+    b.bladeGraphics.clear();
+    const len = b.radius * 1.5 * ease;
+    const rotation = b.life * 0.001 * Math.PI; // 撕裂旋转
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    for (let i = 0; i < RIFT_CRACK_COUNT; i++) {
+      const angle = (i * Math.PI * 2) / RIFT_CRACK_COUNT;
+      let prevX = 0;
+      let prevY = 0;
+      for (let seg = 1; seg <= RIFT_BURST_SEGMENTS; seg++) {
+        const tSeg = seg / RIFT_BURST_SEGMENTS;
+        const r = len * tSeg;
+        const seed = i * 7.3 + seg * 3.7;
+        const jitter = (Math.sin(seed) + Math.cos(seed * 1.7)) * 0.2;
+        const segAngle = angle + jitter;
+        const ox = Math.cos(segAngle) * r;
+        const oy = Math.sin(segAngle) * r;
+        // 手动旋转
+        const x = ox * cos - oy * sin;
+        const y = ox * sin + oy * cos;
+        if (seg > 1) {
+          // 黑色裂缝主体
+          b.bladeGraphics.moveTo(prevX, prevY);
+          b.bladeGraphics.lineTo(x, y);
+          b.bladeGraphics.stroke({ color: RIFT_VOID, width: 4, alpha: ease });
+          // 青色边缘辉光
+          b.bladeGraphics.moveTo(prevX, prevY);
+          b.bladeGraphics.lineTo(x, y);
+          b.bladeGraphics.stroke({
+            color: b.palette.glow,
+            width: 1.5,
+            alpha: ease,
+          });
+        }
+        prevX = x;
+        prevY = y;
+      }
+    }
+    b.bladeGraphics.alpha = 1;
+    // 虚空涌出（中心黑色核扩大）
+    b.coreGraphics.clear();
+    this.drawMultilayerCircle(
+      b.coreGraphics,
+      b.radius * 0.2 * ease,
+      10,
+      (ti) => this.interpolateColor(RIFT_VOID, RIFT_DEEP, ti),
+      (ti) => (1 - ti * 0.3) * ease,
+    );
+    b.coreGraphics.circle(0, 0, Math.max(0.5, b.radius * 0.12 * ease));
+    b.coreGraphics.fill({ color: RIFT_VOID });
+    b.coreGraphics.alpha = 1;
+    // 量子涟漪（向外扩散）
+    b.haloGraphics.clear();
+    for (let i = 0; i < 3; i++) {
+      const phase = (b.life * 0.001 + i * 0.33) % 1;
+      b.haloGraphics.circle(0, 0, Math.max(0.5, b.radius * phase));
+      b.haloGraphics.stroke({
+        color: b.palette.glow,
+        width: 1,
+        alpha: (1 - phase) * 0.4,
+      });
+    }
+    b.haloGraphics.alpha = 1;
+    // 量子涨落粒子（向外飞散）
+    b.particleTimer += 16;
+    if (b.particleTimer > 80) {
+      b.particleTimer = 0;
+      this.spawnBurstParticles(b, 2);
+    }
+  }
+
+  /** 阶段3 扩散：裂缝消散扩张 + 黑核淡出 + 涟漪继续扩散 */
+  protected phase3Diffuse(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveRiftBurst;
+    const ease = this.easeOutCubic(t);
+    // 裂缝消散 + 扩张
+    b.bladeGraphics.clear();
+    const len = b.radius * 1.5 * (1 + ease * 0.3);
+    const rotation = b.life * 0.001 * Math.PI;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const fadeAlpha = (1 - ease) * 0.8;
+    for (let i = 0; i < RIFT_CRACK_COUNT; i++) {
+      const angle = (i * Math.PI * 2) / RIFT_CRACK_COUNT;
+      let prevX = 0;
+      let prevY = 0;
+      for (let seg = 1; seg <= RIFT_BURST_SEGMENTS; seg++) {
+        const tSeg = seg / RIFT_BURST_SEGMENTS;
+        const r = len * tSeg;
+        const seed = i * 7.3 + seg * 3.7;
+        const jitter = (Math.sin(seed) + Math.cos(seed * 1.7)) * 0.2;
+        const segAngle = angle + jitter;
+        const ox = Math.cos(segAngle) * r;
+        const oy = Math.sin(segAngle) * r;
+        const x = ox * cos - oy * sin;
+        const y = ox * sin + oy * cos;
+        if (seg > 1) {
+          b.bladeGraphics.moveTo(prevX, prevY);
+          b.bladeGraphics.lineTo(x, y);
+          b.bladeGraphics.stroke({
+            color: RIFT_VOID,
+            width: 4,
+            alpha: fadeAlpha,
+          });
+          b.bladeGraphics.moveTo(prevX, prevY);
+          b.bladeGraphics.lineTo(x, y);
+          b.bladeGraphics.stroke({
+            color: b.palette.glow,
+            width: 1.5,
+            alpha: fadeAlpha,
+          });
+        }
+        prevX = x;
+        prevY = y;
+      }
+    }
+    b.bladeGraphics.alpha = 1;
+    // 黑核淡出 + 扩张
+    b.coreGraphics.clear();
+    const voidR = b.radius * 0.2 * (1 + ease * 0.5);
+    this.drawMultilayerCircle(
+      b.coreGraphics,
+      voidR,
+      10,
+      (ti) => this.interpolateColor(RIFT_VOID, RIFT_DEEP, ti),
+      (ti) => (1 - ti * 0.3) * (1 - ease),
+    );
+    b.coreGraphics.circle(0, 0, Math.max(0.5, b.radius * 0.12 * (1 + ease * 0.5)));
+    b.coreGraphics.fill({ color: RIFT_VOID, alpha: 1 - ease });
+    b.coreGraphics.alpha = 1;
+    // 量子涟漪继续扩散（更多环 + 更大范围）
+    b.haloGraphics.clear();
+    for (let i = 0; i < 4; i++) {
+      const phase = (b.life * 0.001 + i * 0.25) % 1;
+      b.haloGraphics.circle(0, 0, Math.max(0.5, b.radius * (0.2 + phase * 1.2)));
+      b.haloGraphics.stroke({
+        color: b.palette.glow,
+        width: 1,
+        alpha: (1 - phase) * 0.4 * (1 - ease * 0.5),
+      });
+    }
+    b.haloGraphics.alpha = 1;
+    // 残余粒子
+    b.particleTimer += 16;
+    if (b.particleTimer > 120) {
+      b.particleTimer = 0;
+      this.spawnBurstParticles(b, 1);
+    }
+  }
+
+  /** 爆发阶段喷射粒子（向外飞散的青色量子涨落） */
+  private spawnBurstParticles(burst: ActiveRiftBurst, count: number): void {
+    const s = this.scale;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const startDist = burst.radius * s * 0.1;
+      const px = burst.x + Math.cos(angle) * startDist;
+      const py = burst.y + Math.sin(angle) * startDist;
+      const speed = (50 + Math.random() * 40) * s;
+      this.particlePool.emit({
+        x: px,
+        y: py,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 700,
+        scaleStart: 1.2,
+        scaleEnd: 0,
+        alphaStart: 1,
+        alphaEnd: 0,
+        tint: Math.random() < 0.5 ? burst.palette.glow : burst.palette.primary,
+        radius: (1.5 + Math.random() * 1.5) * s,
+      });
+    }
   }
 
   // ══════════════════════════════════════════════════════
-  //  更新循环
+  //  生命周期
   // ══════════════════════════════════════════════════════
 
   /** 每帧更新（由 EffectRenderer 调用，dt 单位 ms） */
   update(dt: number): void {
-    // ── 量子裂隙：核心呼吸 + 裂缝旋转 + 概率粒子 ──
-    this.activeRifts.forEach((rift) => {
-      rift.life += dt;
-      // 核心呼吸 scale 1.0↔1.05（2s 周期）
-      const breath = 1 + 0.05 * Math.sin(rift.life * 0.001 * Math.PI);
-      rift.coreGraphics.scale.set(breath);
-      // 核心脉动 alpha 0.7↔0.95
-      const pulse = 0.8 + 0.15 * Math.sin(rift.life * 0.001 * Math.PI);
-      rift.coreGraphics.alpha = pulse;
-      // 裂缝缓慢旋转 0.4 转/秒（撕裂感）
-      rift.riftGraphics.rotation += dt * 0.0008 * Math.PI;
-      // 裂缝脉动 alpha 0.6↔1.0（概率波动感）
-      rift.riftGraphics.alpha =
-        0.8 + 0.2 * Math.sin(rift.life * 0.002 * Math.PI * 2);
-      // 概率粒子：每 1.4s 生成 2 个
-      rift.particleTimer += dt;
-      if (rift.particleTimer > 1400) {
-        rift.particleTimer = 0;
-        this.spawnProbabilityParticles(
-          rift.x,
-          rift.y,
-          rift.radius,
-          QUANTUM_GOLD,
-        );
+    // ── 量子裂隙：裂缝旋转 + 黑核呼吸 + 量子涨落粒子 ──
+    this.activeRifts.forEach((field) => {
+      field.life += dt;
+      // 重绘裂缝（缓慢旋转，手动变换顶点）
+      this.drawJaggedCracks(field.crackGraphics, field.radius, field.palette, field.life);
+      // 重绘黑核（呼吸脉动）
+      this.drawVoidCore(field.coreGraphics, field.radius, field.palette, field.life);
+      // 量子涨落粒子（每 ~600ms 生成 2 个）
+      field.particleTimer += dt;
+      if (field.particleTimer > 600) {
+        field.particleTimer = 0;
+        this.spawnQuantumFluctuation(field);
       }
     });
 
-    // ── 爆发：三阶段动画（撕裂→坍缩→重组） ──
-    this.activeBursts.forEach((burst, playerId) => {
-      burst.life += dt;
-      const T = burst.maxLife;
-      if (burst.life >= T) {
-        this.removeBurst(playerId);
-        return;
-      }
-      const phase1End = T * 0.15; // 撕裂阶段
-      const phase2End = T * 0.3; // 坍缩阶段
-
-      if (burst.life < phase1End) {
-        // 阶段1 撕裂：裂缝从 0.3 扩张到 1.2（撕裂外扩），核心显现，环未展开
-        const t = burst.life / phase1End;
-        burst.riftGraphics.scale.set(0.3 + 0.9 * t);
-        burst.riftGraphics.alpha = t; // 0 → 1 显现
-        burst.riftGraphics.rotation += dt * 0.004 * Math.PI; // 快速撕裂旋转
-        burst.coreGraphics.alpha = t;
-        burst.coreGraphics.scale.set(0.5 + 0.5 * t);
-        burst.ringGraphics.alpha = 0;
-        burst.ringGraphics.scale.set(0.3);
-      } else if (burst.life < phase2End) {
-        // 阶段2 坍缩：裂缝收缩到中心 scale 1.2→0.4(easeInCubic)，核心变黑，环展开
-        const t = (burst.life - phase1End) / (phase2End - phase1End);
-        const eased = this.easeInCubic(t);
-        burst.riftGraphics.scale.set(1.2 - 0.8 * eased); // 收缩坍缩
-        burst.riftGraphics.alpha = 1.0 - 0.3 * t;
-        burst.riftGraphics.rotation += dt * 0.006 * Math.PI;
-        // 环展开 scale 0.3→1.0
-        burst.ringGraphics.scale.set(0.3 + 0.7 * this.easeOutCubic(t));
-        burst.ringGraphics.alpha = t;
-        burst.coreGraphics.alpha = 1.0;
-        burst.coreGraphics.scale.set(1.0 - 0.3 * eased); // 核心收缩
-      } else {
-        // 阶段3 重组：环扩散 scale 1.0→2.0 alpha 1.0→0，裂缝重组消散，核心重组渐隐
-        const t = (burst.life - phase2End) / (T - phase2End);
-        burst.ringGraphics.scale.set(1.0 + 1.0 * t);
-        burst.ringGraphics.alpha = 1.0 - t;
-        // 裂缝重组：反向旋转 + 渐隐
-        burst.riftGraphics.alpha = 0.7 * (1.0 - t);
-        burst.riftGraphics.rotation -= dt * 0.002 * Math.PI;
-        burst.riftGraphics.scale.set(0.4 + 0.6 * t); // 重组扩张
-        burst.coreGraphics.alpha = 1.0 - 0.7 * t;
-        burst.coreGraphics.scale.set(0.7 + 0.3 * t);
+    // ── 爆发：三阶段动画调度 ──
+    const expired: string[] = [];
+    this.activeBursts.forEach((b, key) => {
+      const isExpired = this.runBurstAnimation(b, dt);
+      if (isExpired) {
+        expired.push(key);
       }
     });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  移除与清理
-  // ══════════════════════════════════════════════════════
-
-  /** 移除爆发特效 */
-  removeBurst(playerId: string): void {
-    const burst = this.activeBursts.get(playerId);
-    if (burst) {
-      this.fieldContainer.removeChild(burst.container);
-      burst.container.destroy({ children: true });
-      this.activeBursts.delete(playerId);
+    for (const key of expired) {
+      const b = this.activeBursts.get(key);
+      if (b) this.removeBurstInstance(b);
+      this.activeBursts.delete(key);
     }
   }
 
-  /** 清除所有特效（不销毁渲染器） */
+  private removeBurstInstance(b: ActiveRiftBurst): void {
+    this.container.removeChild(b.container);
+    b.container.destroy({ children: true });
+  }
+
+  protected onScaleChange(scale: number): void {
+    this.activeRifts.forEach((f) => {
+      if (!f.container.destroyed) f.container.scale.set(scale);
+    });
+    this.activeBursts.forEach((b) => {
+      if (!b.container.destroyed) b.container.scale.set(scale);
+    });
+  }
+
   clear(): void {
-    this.activeRifts.forEach((_, playerId) => this.removeRift(playerId));
-    this.activeBursts.forEach((_, playerId) => this.removeBurst(playerId));
-  }
-
-  destroy(): void {
-    this.clear();
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  工具方法
-  // ══════════════════════════════════════════════════════
-
-  /**
-   * 确定性伪随机抖动（基于种子，保证裂缝形态稳定）
-   * 返回 [-1, 1] 范围
-   */
-  private crackJitter(seed: number): number {
-    // 简单哈希：sin 折叠，避免使用 Math.random（保证可复现）
-    const v = Math.sin(seed * 12.9898) * 43758.5453;
-    return (v - Math.floor(v)) * 2 - 1;
-  }
-
-  /** 颜色插值（from → to，t ∈ [0,1]） */
-  private interpolateColor(from: number, to: number, t: number): number {
-    const fr = (from >> 16) & 0xff;
-    const fg = (from >> 8) & 0xff;
-    const fb = from & 0xff;
-    const tr = (to >> 16) & 0xff;
-    const tg = (to >> 8) & 0xff;
-    const tb = to & 0xff;
-    const r = Math.round(fr + (tr - fr) * t);
-    const g = Math.round(fg + (tg - fg) * t);
-    const b = Math.round(fb + (tb - fb) * t);
-    return (r << 16) | (g << 8) | b;
-  }
-
-  /** easeOutCubic 缓动 */
-  private easeOutCubic(t: number): number {
-    return 1 - Math.pow(1 - t, 3);
-  }
-
-  /** easeInCubic 缓动 */
-  private easeInCubic(t: number): number {
-    return t * t * t;
+    this.activeRifts.forEach((f) => {
+      this.container.removeChild(f.container);
+      f.container.destroy({ children: true });
+    });
+    this.activeRifts.clear();
+    this.activeBursts.forEach((b) => this.removeBurstInstance(b));
+    this.activeBursts.clear();
   }
 }

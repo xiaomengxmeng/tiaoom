@@ -2,24 +2,35 @@
  * 电路编织者 (Circuit Weaver) - 工程师流派
  * 前端视觉渲染器
  *
- * 视觉设计（工程师绿 + 电流青双色调）：
- * - 电路网络 Circuit：电路核心（8 层径向渐变）+ 6 个发光节点 + 节点间电流流动连接线（带闪烁）
- * - 爆发 Burst：电路核心（8 层渐变）+ 节点爆发 + 电流脉冲线 + 三阶段动画（编织→激活→消散）
+ * 视觉主题（Spec §6.1 —— 电路网络）：
+ * - 电路网络（常驻）：
+ *   · 6 节点六边形网络（开放连线，非闭合护盾）
+ *   · 六边形边 + 对角线（跳 2）连接
+ *   · 切向电流粒子（沿六边形边流动）
+ *   · 网络闪烁（节点脉动 + 连接线呼吸）
+ * - 爆发：电路过载
+ *   · 蓄压（0-15%T）：网络从中心展开
+ *   · 过载（15-30%T）：网络闪烁 + 节点爆炸 + 电流风暴
+ *   · 消散（30-100%T）：网络扩散淡出
+ *
+ * 与 BastionBuilder 的区别：Bastion 用闭合六边形护盾，CircuitWeaver 用开放节点连线 + 电流粒子
+ *
+ * 独特符号：6 节点六边形网络、对角线连接、切向电流粒子、网络闪烁、电流风暴
+ *
+ * API：triggerCircuit / removeCircuit / triggerBurst / update / setScale / clear / destroy
+ * 所有动画由 update(dt) 驱动。
  */
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
+import { BaseWeaponEffectRenderer, type ActiveBurstBase, type Palette } from './BaseWeaponEffectRenderer';
 
 // ══════════════════════════════════════════════════════
-//  颜色常量（工程师绿）
+//  颜色常量（伏特绿）
 // ══════════════════════════════════════════════════════
 
-const CIRCUIT_DEEP = 0x0a3a0a; // 深绿黑（渐变外缘）
-const CIRCUIT_MAIN = 0x22aa44; // 主绿（电路主色）
-const CIRCUIT_LIGHT = 0x66dd22; // 浅亮绿（中层渐变）
-const CIRCUIT_HIGHLIGHT = 0xbbff88; // 高亮浅绿（内层渐变）
-const CIRCUIT_WHITE = 0xffffff; // 白色（核心高亮）
-const CIRCUIT_CYAN = 0x00ffcc; // 电流青（连接线/电流流动色）
+const CIRCUIT_DEFAULT = 0x00ffaa; // 默认主题色（伏特绿）
+const CIRCUIT_SPARK = 0xaaff00;  // 电流火花色（粒子 tint）
 
 /** 电路节点数量（六边形分布） */
 const CIRCUIT_NODE_COUNT = 6;
@@ -29,60 +40,38 @@ const CIRCUIT_NODE_COUNT = 6;
 // ══════════════════════════════════════════════════════
 
 /** 活跃电路网络实例（常驻） */
-interface ActiveCircuit {
+interface ActiveCircuitField {
   container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 电路核心（8 层径向渐变）
-  nodeGraphics: PIXI.Graphics; // 6 个发光节点（独立脉动）
-  lineGraphics: PIXI.Graphics; // 节点间连接线（电流流动闪烁）
+  networkGraphics: PIXI.Graphics; // 6 节点网络 + 对角线 + 中心
   particleTimer: number;
   life: number; // ms 累计
-  maxLife: number;
   x: number;
   y: number;
   radius: number;
-}
-
-/** 活跃爆发特效（编织→激活→消散 三阶段） */
-interface ActiveBurst {
-  container: PIXI.Container;
-  coreGraphics: PIXI.Graphics; // 电路核心（8 层渐变）
-  nodeGraphics: PIXI.Graphics; // 节点爆发
-  lineGraphics: PIXI.Graphics; // 电流脉冲线
-  life: number;
-  maxLife: number;
   themeColor: number;
-  radius: number;
+  palette: Palette;
 }
 
-export class CircuitWeaverRenderer {
-  private fieldContainer: PIXI.Container;
-  private particlePool: ParticlePool;
-  private scale = 1;
+/** 活跃爆发特效（电路过载） */
+interface ActiveCircuitBurst extends ActiveBurstBase {
+  coreGraphics: PIXI.Graphics; // 过载网络
+  x: number;
+  y: number;
+}
 
-  // 活跃实例池
-  private activeCircuits: Map<string, ActiveCircuit> = new Map();
-  private activeBursts: Map<string, ActiveBurst> = new Map();
+// ══════════════════════════════════════════════════════
+//  渲染器
+// ══════════════════════════════════════════════════════
+
+export class CircuitWeaverRenderer extends BaseWeaponEffectRenderer {
+  private activeCircuits = new Map<string, ActiveCircuitField>();
+  private activeBursts = new Map<string, ActiveCircuitBurst>();
 
   constructor(fieldContainer: PIXI.Container, particlePool: ParticlePool) {
-    this.fieldContainer = fieldContainer;
-    this.particlePool = particlePool;
+    super(fieldContainer, particlePool);
   }
 
-  setScale(scale: number): void {
-    this.scale = scale;
-    this.activeCircuits.forEach((c) => {
-      if (c.container.destroyed) return;
-      c.container.scale.set(scale);
-    });
-    this.activeBursts.forEach((b) => {
-      if (b.container.destroyed) return;
-      b.container.scale.set(scale);
-    });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  电路网络 Circuit（常驻）
-  // ══════════════════════════════════════════════════════
+  // ═══ 电路网络（常驻） ═══
 
   /**
    * 触发电路网络视觉效果
@@ -90,14 +79,14 @@ export class CircuitWeaverRenderer {
    * @param x 逻辑坐标 X
    * @param y 逻辑坐标 Y
    * @param radius 电路网络半径（逻辑 px）
-   * @param themeColor 主题色（默认工程师绿）
+   * @param themeColor 主题色（默认伏特绿）
    */
   triggerCircuit(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = CIRCUIT_MAIN,
+    themeColor: number = CIRCUIT_DEFAULT,
   ): void {
     // 已存在则仅更新位置与半径
     const existing = this.activeCircuits.get(playerId);
@@ -109,199 +98,124 @@ export class CircuitWeaverRenderer {
       return;
     }
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 电路核心（8 层径向渐变 + 主环 + 中心核）
-    const coreGraphics = new PIXI.Graphics();
-    this.drawCircuitCore(coreGraphics, radius);
-    container.addChild(coreGraphics);
+    const networkGraphics = new PIXI.Graphics();
+    container.addChild(networkGraphics);
 
-    // 节点间连接线（六边形闭合 + 对角线，电流青色）
-    const lineGraphics = new PIXI.Graphics();
-    this.drawCircuitLines(lineGraphics, radius * 0.7);
-    container.addChild(lineGraphics);
-
-    // 6 个发光节点（叠加在连接线上层）
-    const nodeGraphics = new PIXI.Graphics();
-    this.drawCircuitNodes(nodeGraphics, radius * 0.7);
-    container.addChild(nodeGraphics);
-
-    this.fieldContainer.addChild(container);
-
-    const circuit: ActiveCircuit = {
+    const field: ActiveCircuitField = {
       container,
-      coreGraphics,
-      nodeGraphics,
-      lineGraphics,
+      networkGraphics,
       particleTimer: 0,
       life: 0,
-      maxLife: Number.POSITIVE_INFINITY, // 常驻，直到手动移除
       x,
       y,
       radius,
+      themeColor,
+      palette,
     };
-    this.activeCircuits.set(playerId, circuit);
-
-    // 触发首帧电流粒子
-    this.spawnCurrentParticles(x, y, radius, CIRCUIT_CYAN);
-    void themeColor;
+    this.activeCircuits.set(playerId, field);
   }
 
   /** 移除电路网络 */
   removeCircuit(playerId: string): void {
-    const circuit = this.activeCircuits.get(playerId);
-    if (circuit) {
-      this.fieldContainer.removeChild(circuit.container);
-      circuit.container.destroy({ children: true });
-      this.activeCircuits.delete(playerId);
-    }
+    const field = this.activeCircuits.get(playerId);
+    if (!field) return;
+    this.container.removeChild(field.container);
+    field.container.destroy({ children: true });
+    this.activeCircuits.delete(playerId);
   }
 
-  /**
-   * 绘制电路核心：8 层同心圆径向渐变（白→高亮→浅绿→主绿→深绿黑）+ 主环 + 中心核
-   * 以 (0,0) 为中心绘制
-   */
-  private drawCircuitCore(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-
-    // 8 层同心圆叠加模拟径向渐变
-    for (let i = 0; i < 8; i++) {
-      const t = i / 7; // 0 → 1
-      const r = radius * (0.15 + 0.85 * t);
-      // 颜色分段：白 → 高亮 → 浅绿 → 主绿 → 深绿黑
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(CIRCUIT_WHITE, CIRCUIT_HIGHLIGHT, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(
-          CIRCUIT_HIGHLIGHT,
-          CIRCUIT_LIGHT,
-          (t - 0.25) / 0.25,
-        );
-      } else if (t < 0.75) {
-        color = this.interpolateColor(
-          CIRCUIT_LIGHT,
-          CIRCUIT_MAIN,
-          (t - 0.5) / 0.25,
-        );
-      } else {
-        color = this.interpolateColor(
-          CIRCUIT_MAIN,
-          CIRCUIT_DEEP,
-          (t - 0.75) / 0.25,
-        );
-      }
-      const alpha = (1 - t) * 0.22;
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
-    }
-
-    // 电路主环：深绿黑描边 + 主绿主环 + 高亮内环
-    g.circle(0, 0, radius);
-    g.stroke({ color: CIRCUIT_DEEP, width: 1.5, alpha: 0.6 });
-    g.circle(0, 0, radius * 0.97);
-    g.stroke({ color: CIRCUIT_MAIN, width: 1, alpha: 0.7 });
-    g.circle(0, 0, radius * 0.93);
-    g.stroke({ color: CIRCUIT_HIGHLIGHT, width: 0.4, alpha: 0.5 });
-
-    // 中心核：白色实心圆 r=4 + 电流青外环 r=6
-    g.circle(0, 0, 6);
-    g.stroke({ color: CIRCUIT_CYAN, width: 1, alpha: 0.8 });
-    g.circle(0, 0, 4);
-    g.fill({ color: CIRCUIT_WHITE, alpha: 1 });
-  }
+  // ═══ 独特视觉：6 节点六边形网络 + 对角线 ═══
 
   /**
-   * 绘制 6 个发光节点（六边形分布，每个节点 3 层叠加发光）
-   * 节点位于半径 nodeRadius 的圆周上，60° 均分
+   * 绘制 6 节点六边形网络：
+   * - 6 个节点位于半径 radius*0.7 的圆周上，60° 均分
+   * - 六边形边连接（相邻节点）
+   * - 对角线连接（跳 2，形成星形网络）
+   * - 节点闪烁脉动
+   * - 中心节点
    */
-  private drawCircuitNodes(g: PIXI.Graphics, nodeRadius: number): void {
-    g.clear();
-    for (let i = 0; i < CIRCUIT_NODE_COUNT; i++) {
-      const a = (i * Math.PI * 2) / CIRCUIT_NODE_COUNT - Math.PI / 2; // 顶点朝上
-      const nx = Math.cos(a) * nodeRadius;
-      const ny = Math.sin(a) * nodeRadius;
-      // 3 层叠加发光：外晕（电流青）→ 中层（高亮）→ 白核
-      g.circle(nx, ny, 6);
-      g.fill({ color: CIRCUIT_CYAN, alpha: 0.3 });
-      g.circle(nx, ny, 4);
-      g.fill({ color: CIRCUIT_HIGHLIGHT, alpha: 0.7 });
-      g.circle(nx, ny, 2);
-      g.fill({ color: CIRCUIT_WHITE, alpha: 1 });
-    }
-  }
-
-  /**
-   * 绘制节点间连接线：六边形闭合边 + 3 条对角线，电流青色
-   * 由 lineGraphics 承担电流流动闪烁动画
-   */
-  private drawCircuitLines(g: PIXI.Graphics, nodeRadius: number): void {
-    g.clear();
-    // 计算节点坐标
-    const pts: [number, number][] = [];
-    for (let i = 0; i < CIRCUIT_NODE_COUNT; i++) {
-      const a = (i * Math.PI * 2) / CIRCUIT_NODE_COUNT - Math.PI / 2;
-      pts.push([Math.cos(a) * nodeRadius, Math.sin(a) * nodeRadius]);
-    }
-    // 六边形闭合边
-    for (let i = 0; i < CIRCUIT_NODE_COUNT; i++) {
-      const [x1, y1] = pts[i];
-      const [x2, y2] = pts[(i + 1) % CIRCUIT_NODE_COUNT];
-      g.moveTo(x1, y1);
-      g.lineTo(x2, y2);
-      g.stroke({ color: CIRCUIT_CYAN, width: 1, alpha: 0.5 });
-    }
-    // 3 条对角线（连接对面节点）
-    for (let i = 0; i < 3; i++) {
-      const [x1, y1] = pts[i];
-      const [x2, y2] = pts[i + 3];
-      g.moveTo(x1, y1);
-      g.lineTo(x2, y2);
-      g.stroke({ color: CIRCUIT_MAIN, width: 0.6, alpha: 0.4 });
-    }
-  }
-
-  /**
-   * 生成电流粒子（沿连接线方向流动）
-   * 利用 particlePool.emit，每帧由 update 节流调用
-   */
-  private spawnCurrentParticles(
-    x: number,
-    y: number,
+  private drawCircuitNetwork(
+    g: PIXI.Graphics,
     radius: number,
-    color: number,
+    palette: Palette,
+    life: number,
   ): void {
+    g.clear();
+    // 6 个节点
+    const nodes: [number, number][] = [];
+    for (let i = 0; i < CIRCUIT_NODE_COUNT; i++) {
+      const angle = (i * Math.PI) / 3;
+      nodes.push([Math.cos(angle) * radius * 0.7, Math.sin(angle) * radius * 0.7]);
+    }
+    // 节点间连线：六边形边 + 对角线（跳 2）
+    for (let i = 0; i < CIRCUIT_NODE_COUNT; i++) {
+      // 六边形边
+      const next = (i + 1) % CIRCUIT_NODE_COUNT;
+      g.moveTo(nodes[i][0], nodes[i][1]);
+      g.lineTo(nodes[next][0], nodes[next][1]);
+      g.stroke({ color: palette.glow, width: 1, alpha: 0.5 });
+      // 对角线（跳 2）
+      const diag = (i + 2) % CIRCUIT_NODE_COUNT;
+      g.moveTo(nodes[i][0], nodes[i][1]);
+      g.lineTo(nodes[diag][0], nodes[diag][1]);
+      g.stroke({ color: palette.dim, width: 0.5, alpha: 0.3 });
+    }
+    // 节点（闪烁脉动）
+    const pulse = 0.5 + 0.5 * Math.sin(life * 0.005 * Math.PI);
+    for (const [nx, ny] of nodes) {
+      g.circle(nx, ny, 3 + pulse);
+      g.fill({ color: palette.highlight, alpha: 0.8 });
+      g.circle(nx, ny, 6);
+      g.stroke({ color: palette.glow, width: 1, alpha: 0.4 });
+    }
+    // 中心节点
+    g.circle(0, 0, 4);
+    g.fill({ color: palette.highlight });
+  }
+
+  // ═══ 独特视觉：切向电流粒子（沿六边形边流动） ═══
+
+  /**
+   * 生成切向电流粒子：沿六边形边方向流动
+   * 每次生成 3 个粒子，随机选择一条边，沿边方向运动
+   */
+  private spawnCurrentParticles(f: ActiveCircuitField): void {
     const s = this.scale;
-    for (let i = 0; i < 2; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      // 从核心附近出发
-      const startDist = radius * s * (0.2 + Math.random() * 0.2);
-      const px = x + Math.cos(angle) * startDist;
-      const py = y + Math.sin(angle) * startDist;
-      // 沿切线方向流动（px/s），表现电流环流感
-      const tangent = angle + Math.PI / 2;
-      const speed = (25 + Math.random() * 15) * s;
+    for (let i = 0; i < 3; i++) {
+      const edgeIdx = Math.floor(Math.random() * CIRCUIT_NODE_COUNT);
+      const angle1 = (edgeIdx * Math.PI) / 3;
+      const angle2 = ((edgeIdx + 1) * Math.PI) / 3;
+      const t = Math.random();
+      const startX = Math.cos(angle1) * f.radius * 0.7 * s;
+      const startY = Math.sin(angle1) * f.radius * 0.7 * s;
+      const endX = Math.cos(angle2) * f.radius * 0.7 * s;
+      const endY = Math.sin(angle2) * f.radius * 0.7 * s;
+      const px = startX + (endX - startX) * t;
+      const py = startY + (endY - startY) * t;
       this.particlePool.emit({
-        x: px,
-        y: py,
-        vx: Math.cos(tangent) * speed,
-        vy: Math.sin(tangent) * speed,
-        life: 1800,
-        scaleStart: 1,
+        x: f.x + px,
+        y: f.y + py,
+        vx: (endX - startX) * 0.5,
+        vy: (endY - startY) * 0.5,
+        drag: 0.9,
+        life: 300,
+        scaleStart: 1.5,
         scaleEnd: 0,
-        alphaStart: 0.8,
+        alphaStart: 1,
         alphaEnd: 0,
-        tint: color,
-        radius: (1.2 + Math.random() * 1.2) * s,
+        tint: CIRCUIT_SPARK,
+        radius: 1.5 * s,
       });
     }
   }
 
-  // ══════════════════════════════════════════════════════
-  //  爆发特效（编织→激活→消散 三阶段动画）
-  // ══════════════════════════════════════════════════════
+  // ═══ 爆发：电路过载 ═══
 
   /**
    * 触发爆发视觉效果
@@ -310,233 +224,237 @@ export class CircuitWeaverRenderer {
    * @param y 逻辑坐标 Y
    * @param radius 爆发范围（逻辑 px）
    * @param themeColor 主题色
-   * @param durationMs 持续时间（ms），默认 5000
+   * @param durationMs 持续时间（ms），默认 1500
    */
   triggerBurst(
     playerId: string,
     x: number,
     y: number,
     radius: number,
-    themeColor = CIRCUIT_MAIN,
+    themeColor: number = CIRCUIT_DEFAULT,
     durationMs?: number,
   ): void {
     // 若已存在，先销毁旧实例
-    const old = this.activeBursts.get(playerId);
-    if (old) {
-      this.fieldContainer.removeChild(old.container);
-      old.container.destroy({ children: true });
+    const existing = this.activeBursts.get(playerId);
+    if (existing) {
+      this.removeBurstInstance(existing);
     }
 
+    const palette = this.buildPalette(themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
+    this.container.addChild(container);
 
-    // 1. 电路核心（8 层径向渐变 + 中心核）
     const coreGraphics = new PIXI.Graphics();
-    this.drawBurstCore(coreGraphics, radius);
     container.addChild(coreGraphics);
 
-    // 2. 电流脉冲线（六边形闭合 + 对角线）
-    const lineGraphics = new PIXI.Graphics();
-    this.drawCircuitLines(lineGraphics, radius * 0.8);
-    container.addChild(lineGraphics);
-
-    // 3. 节点爆发（6 个发光节点叠加在脉冲线上层）
-    const nodeGraphics = new PIXI.Graphics();
-    this.drawCircuitNodes(nodeGraphics, radius * 0.8);
-    container.addChild(nodeGraphics);
-
-    this.fieldContainer.addChild(container);
-
-    const burst: ActiveBurst = {
+    const burst: ActiveCircuitBurst = {
       container,
-      coreGraphics,
-      nodeGraphics,
-      lineGraphics,
       life: 0,
-      maxLife: durationMs ?? 5000,
+      maxLife: durationMs ?? 1500,
       themeColor,
       radius,
+      particleTimer: 0,
+      palette,
+      coreGraphics,
+      x,
+      y,
     };
     this.activeBursts.set(playerId, burst);
   }
 
-  /**
-   * 绘制爆发电路核心：8 层同心圆（白→高亮→浅绿→主绿→深绿黑）+ 中心核
-   */
-  private drawBurstCore(g: PIXI.Graphics, radius: number): void {
-    g.clear();
-    const coreR = radius * 0.6;
+  // ═══ 三阶段钩子 ═══
 
-    // 8 层同心圆叠加
+  /** 阶段1 蓄压（0-15%T）：网络从中心展开，节点逐一显现 */
+  protected phase1Charge(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveCircuitBurst;
+    const ease = this.easeOutCubic(t);
+    b.coreGraphics.clear();
+    // 网络节点从中心向外展开
+    const nodes: [number, number][] = [];
+    for (let i = 0; i < CIRCUIT_NODE_COUNT; i++) {
+      const angle = (i * Math.PI) / 3;
+      nodes.push([
+        Math.cos(angle) * b.radius * 0.7 * ease,
+        Math.sin(angle) * b.radius * 0.7 * ease,
+      ]);
+    }
+    // 连接线渐显（六边形边 + 对角线）
+    for (let i = 0; i < CIRCUIT_NODE_COUNT; i++) {
+      const next = (i + 1) % CIRCUIT_NODE_COUNT;
+      b.coreGraphics.moveTo(nodes[i][0], nodes[i][1]);
+      b.coreGraphics.lineTo(nodes[next][0], nodes[next][1]);
+      b.coreGraphics.stroke({ color: b.palette.glow, width: 1, alpha: 0.5 * ease });
+      const diag = (i + 2) % CIRCUIT_NODE_COUNT;
+      b.coreGraphics.moveTo(nodes[i][0], nodes[i][1]);
+      b.coreGraphics.lineTo(nodes[diag][0], nodes[diag][1]);
+      b.coreGraphics.stroke({ color: b.palette.dim, width: 0.5, alpha: 0.3 * ease });
+    }
+    // 节点渐显
+    for (const [nx, ny] of nodes) {
+      b.coreGraphics.circle(nx, ny, 3 * ease);
+      b.coreGraphics.fill({ color: b.palette.highlight, alpha: 0.8 * ease });
+    }
+    // 中心节点
+    b.coreGraphics.circle(0, 0, 4 * ease);
+    b.coreGraphics.fill({ color: b.palette.highlight, alpha: ease });
+    b.coreGraphics.alpha = ease;
+  }
+
+  /** 阶段2 过载（15-30%T）：网络闪烁 + 节点爆炸 + 电流风暴 */
+  protected phase2Burst(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveCircuitBurst;
+    const ease = this.easeOutCubic(t);
+    // 网络过载闪烁（高频明暗交替）
+    const flash = Math.sin(b.life * 0.02) > 0 ? 1 : 0.3;
+    b.coreGraphics.clear();
+    // 网络节点（过载展开）
+    const nodes: [number, number][] = [];
+    for (let i = 0; i < CIRCUIT_NODE_COUNT; i++) {
+      const angle = (i * Math.PI) / 3;
+      nodes.push([
+        Math.cos(angle) * b.radius * 0.7 * ease,
+        Math.sin(angle) * b.radius * 0.7 * ease,
+      ]);
+    }
+    // 六边形边（过载高亮闪烁）
+    for (let i = 0; i < CIRCUIT_NODE_COUNT; i++) {
+      const next = (i + 1) % CIRCUIT_NODE_COUNT;
+      b.coreGraphics.moveTo(nodes[i][0], nodes[i][1]);
+      b.coreGraphics.lineTo(nodes[next][0], nodes[next][1]);
+      b.coreGraphics.stroke({ color: b.palette.highlight, width: 3, alpha: flash });
+    }
+    // 节点爆炸（闪烁填充）
+    for (const [nx, ny] of nodes) {
+      b.coreGraphics.circle(nx, ny, 5 * ease);
+      b.coreGraphics.fill({ color: b.palette.highlight, alpha: flash });
+    }
+    // 中心过载核
+    b.coreGraphics.circle(0, 0, 6 * ease);
+    b.coreGraphics.fill({ color: b.palette.primary, alpha: flash });
+    // 电流风暴：节流生成爆发粒子（particleTimer += 16 修复 dt 累积 bug）
+    b.particleTimer += 16;
+    if (b.particleTimer > 20) {
+      b.particleTimer = 0;
+      this.spawnCurrentStorm(b);
+    }
+  }
+
+  /** 阶段3 消散（30-100%T）：网络扩散淡出 */
+  protected phase3Diffuse(burst: ActiveBurstBase, t: number): void {
+    const b = burst as ActiveCircuitBurst;
+    const ease = this.easeOutCubic(t);
+    b.coreGraphics.clear();
+    // 网络扩散（半径增大 + 透明度降低）
+    const expand = 1 + ease * 0.3;
+    const fade = 1 - ease;
+    const nodes: [number, number][] = [];
+    for (let i = 0; i < CIRCUIT_NODE_COUNT; i++) {
+      const angle = (i * Math.PI) / 3;
+      nodes.push([
+        Math.cos(angle) * b.radius * 0.7 * expand,
+        Math.sin(angle) * b.radius * 0.7 * expand,
+      ]);
+    }
+    // 连接线淡出
+    for (let i = 0; i < CIRCUIT_NODE_COUNT; i++) {
+      const next = (i + 1) % CIRCUIT_NODE_COUNT;
+      b.coreGraphics.moveTo(nodes[i][0], nodes[i][1]);
+      b.coreGraphics.lineTo(nodes[next][0], nodes[next][1]);
+      b.coreGraphics.stroke({ color: b.palette.glow, width: 1, alpha: 0.5 * fade });
+      const diag = (i + 2) % CIRCUIT_NODE_COUNT;
+      b.coreGraphics.moveTo(nodes[i][0], nodes[i][1]);
+      b.coreGraphics.lineTo(nodes[diag][0], nodes[diag][1]);
+      b.coreGraphics.stroke({ color: b.palette.dim, width: 0.5, alpha: 0.3 * fade });
+    }
+    // 节点淡出
+    for (const [nx, ny] of nodes) {
+      b.coreGraphics.circle(nx, ny, 3);
+      b.coreGraphics.fill({ color: b.palette.highlight, alpha: 0.8 * fade });
+    }
+    // 中心节点淡出
+    b.coreGraphics.circle(0, 0, 4);
+    b.coreGraphics.fill({ color: b.palette.highlight, alpha: fade });
+    b.coreGraphics.alpha = fade;
+  }
+
+  // ═══ 独特视觉：电流风暴（爆发期向外辐射） ═══
+
+  private spawnCurrentStorm(b: ActiveCircuitBurst): void {
+    const s = this.scale;
     for (let i = 0; i < 8; i++) {
-      const t = i / 7;
-      const r = coreR * (0.1 + 0.9 * t);
-      let color: number;
-      if (t < 0.25) {
-        color = this.interpolateColor(CIRCUIT_WHITE, CIRCUIT_HIGHLIGHT, t / 0.25);
-      } else if (t < 0.5) {
-        color = this.interpolateColor(
-          CIRCUIT_HIGHLIGHT,
-          CIRCUIT_LIGHT,
-          (t - 0.25) / 0.25,
-        );
-      } else if (t < 0.75) {
-        color = this.interpolateColor(
-          CIRCUIT_LIGHT,
-          CIRCUIT_MAIN,
-          (t - 0.5) / 0.25,
-        );
-      } else {
-        color = this.interpolateColor(
-          CIRCUIT_MAIN,
-          CIRCUIT_DEEP,
-          (t - 0.75) / 0.25,
-        );
-      }
-      const alpha = (1 - t) * 0.28;
-      g.circle(0, 0, r);
-      g.fill({ color, alpha });
+      const angle = Math.random() * Math.PI * 2;
+      const speed = (100 + Math.random() * 200) * s;
+      this.particlePool.emit({
+        x: b.x,
+        y: b.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        drag: 0.7,
+        life: 500,
+        scaleStart: 1.5,
+        scaleEnd: 0,
+        alphaStart: 1,
+        alphaEnd: 0,
+        tint: CIRCUIT_SPARK,
+        radius: 2 * s,
+      });
     }
-
-    // 中心核 r=6
-    g.circle(0, 0, 6);
-    g.fill({ color: CIRCUIT_WHITE, alpha: 1 });
-
-    // 电流青边缘辉光
-    g.circle(0, 0, 8);
-    g.stroke({ color: CIRCUIT_CYAN, width: 1.5, alpha: 0.8 });
   }
 
-  // ══════════════════════════════════════════════════════
-  //  更新循环
-  // ══════════════════════════════════════════════════════
+  // ═══ 生命周期 ═══
 
-  /** 每帧更新（由 EffectRenderer 调用，dt 单位 ms） */
   update(dt: number): void {
-    // ── 电路网络：核心呼吸 + 节点脉动 + 连接线闪烁 + 电流粒子 ──
-    this.activeCircuits.forEach((circuit) => {
-      circuit.life += dt;
-      // 核心呼吸 scale 1.0↔1.05（2s 周期）
-      const breath = 1 + 0.05 * Math.sin(circuit.life * 0.001 * Math.PI);
-      circuit.coreGraphics.scale.set(breath);
-      // 核心脉动 alpha 0.7↔0.95
-      const pulse = 0.8 + 0.15 * Math.sin(circuit.life * 0.001 * Math.PI);
-      circuit.coreGraphics.alpha = pulse;
-      // 节点高频脉动（电流脉冲感）alpha 0.6↔1.0，3 转/秒
-      const nodePulse =
-        0.8 + 0.2 * Math.sin(circuit.life * 0.003 * Math.PI * 2);
-      circuit.nodeGraphics.alpha = nodePulse;
-      // 节点缓慢旋转 0.2 转/秒
-      circuit.nodeGraphics.rotation += dt * 0.0004 * Math.PI;
-      // 连接线电流流动闪烁（高频随机感）
-      circuit.lineGraphics.alpha =
-        0.6 + 0.4 * Math.sin(circuit.life * 0.005 * Math.PI * 2);
-      circuit.lineGraphics.rotation -= dt * 0.0004 * Math.PI; // 反向旋转，形成错峰
-      // 电流粒子：每 1.2s 生成 2 个
-      circuit.particleTimer += dt;
-      if (circuit.particleTimer > 1200) {
-        circuit.particleTimer = 0;
-        this.spawnCurrentParticles(
-          circuit.x,
-          circuit.y,
-          circuit.radius,
-          CIRCUIT_CYAN,
-        );
+    // ── 电路网络：6 节点网络闪烁 + 切向电流粒子 ──
+    this.activeCircuits.forEach((field) => {
+      field.life += dt;
+      // 每帧重绘网络（节点脉动 + 连接线呼吸）
+      this.drawCircuitNetwork(field.networkGraphics, field.radius, field.palette, field.life);
+      // 切向电流粒子（节流：每 400ms 生成）
+      field.particleTimer += dt;
+      if (field.particleTimer > 400) {
+        field.particleTimer = 0;
+        this.spawnCurrentParticles(field);
       }
     });
 
-    // ── 爆发：三阶段动画（编织→激活→消散） ──
-    this.activeBursts.forEach((burst, playerId) => {
-      burst.life += dt;
-      const T = burst.maxLife;
-      if (burst.life >= T) {
-        this.removeBurst(playerId);
-        return;
-      }
-      const phase1End = T * 0.2; // 编织阶段
-      const phase2End = T * 0.4; // 激活阶段
-
-      if (burst.life < phase1End) {
-        // 阶段1 编织：连接线从 0.3 展开到 1.0，节点逐一显现，核心显现
-        const t = burst.life / phase1End;
-        burst.lineGraphics.scale.set(0.3 + 0.7 * this.easeOutCubic(t));
-        burst.lineGraphics.alpha = t;
-        burst.nodeGraphics.alpha = t; // 0 → 1
-        burst.nodeGraphics.scale.set(0.3 + 0.7 * t);
-        burst.coreGraphics.alpha = t;
-        burst.coreGraphics.scale.set(0.5 + 0.5 * t);
-      } else if (burst.life < phase2End) {
-        // 阶段2 激活：节点高频闪烁，连接线电流流动，核心全亮
-        const t = (burst.life - phase1End) / (phase2End - phase1End);
-        // 节点高频闪烁 alpha 0.7↔1.0
-        burst.nodeGraphics.alpha =
-          0.7 + 0.3 * Math.sin(t * Math.PI * 8);
-        burst.nodeGraphics.scale.set(
-          1.0 + 0.15 * Math.sin(t * Math.PI * 8),
-        );
-        // 连接线电流流动闪烁 alpha 0.5↔1.0
-        burst.lineGraphics.alpha =
-          0.5 + 0.5 * Math.sin(t * Math.PI * 10);
-        burst.lineGraphics.rotation += dt * 0.001 * Math.PI;
-        burst.coreGraphics.alpha = 1.0;
-        burst.coreGraphics.scale.set(1.0 + 0.05 * Math.sin(t * Math.PI * 8));
-      } else {
-        // 阶段3 消散：整体渐隐，连接线扩散旋转，节点消散
-        const t = (burst.life - phase2End) / (T - phase2End);
-        burst.lineGraphics.alpha = 1.0 - t;
-        burst.lineGraphics.scale.set(1.0 + 0.3 * t);
-        burst.lineGraphics.rotation += dt * 0.002 * Math.PI;
-        burst.nodeGraphics.alpha = 1.0 - t;
-        burst.coreGraphics.alpha = 1.0 - 0.7 * t;
+    // ── 爆发：三阶段动画（蓄压→过载→消散） ──
+    const expired: string[] = [];
+    this.activeBursts.forEach((b, key) => {
+      const isExpired = this.runBurstAnimation(b, dt);
+      if (isExpired) {
+        expired.push(key);
       }
     });
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  移除与清理
-  // ══════════════════════════════════════════════════════
-
-  /** 移除爆发特效 */
-  removeBurst(playerId: string): void {
-    const burst = this.activeBursts.get(playerId);
-    if (burst) {
-      this.fieldContainer.removeChild(burst.container);
-      burst.container.destroy({ children: true });
-      this.activeBursts.delete(playerId);
+    for (const key of expired) {
+      const b = this.activeBursts.get(key);
+      if (b) this.removeBurstInstance(b);
+      this.activeBursts.delete(key);
     }
   }
 
-  /** 清除所有特效（不销毁渲染器） */
+  private removeBurstInstance(b: ActiveCircuitBurst): void {
+    this.container.removeChild(b.container);
+    b.container.destroy({ children: true });
+  }
+
+  protected onScaleChange(scale: number): void {
+    this.activeCircuits.forEach((f) => {
+      if (!f.container.destroyed) f.container.scale.set(scale);
+    });
+    this.activeBursts.forEach((b) => {
+      if (!b.container.destroyed) b.container.scale.set(scale);
+    });
+  }
+
   clear(): void {
-    this.activeCircuits.forEach((_, playerId) => this.removeCircuit(playerId));
-    this.activeBursts.forEach((_, playerId) => this.removeBurst(playerId));
-  }
-
-  destroy(): void {
-    this.clear();
-  }
-
-  // ══════════════════════════════════════════════════════
-  //  工具方法
-  // ══════════════════════════════════════════════════════
-
-  /** 颜色插值（from → to，t ∈ [0,1]） */
-  private interpolateColor(from: number, to: number, t: number): number {
-    const fr = (from >> 16) & 0xff;
-    const fg = (from >> 8) & 0xff;
-    const fb = from & 0xff;
-    const tr = (to >> 16) & 0xff;
-    const tg = (to >> 8) & 0xff;
-    const tb = to & 0xff;
-    const r = Math.round(fr + (tr - fr) * t);
-    const g = Math.round(fg + (tg - fg) * t);
-    const b = Math.round(fb + (tb - fb) * t);
-    return (r << 16) | (g << 8) | b;
-  }
-
-  /** easeOutCubic 缓动 */
-  private easeOutCubic(t: number): number {
-    return 1 - Math.pow(1 - t, 3);
+    this.activeCircuits.forEach((f) => {
+      this.container.removeChild(f.container);
+      f.container.destroy({ children: true });
+    });
+    this.activeCircuits.clear();
+    this.activeBursts.forEach((b) => this.removeBurstInstance(b));
+    this.activeBursts.clear();
   }
 }

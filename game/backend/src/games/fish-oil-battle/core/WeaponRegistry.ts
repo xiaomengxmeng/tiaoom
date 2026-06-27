@@ -24,6 +24,16 @@ import { FluidMasteryWeapon } from '../skills/weapons/FluidMasteryWeapon';
 import { MemoryCorridorWeapon } from '../skills/weapons/MemoryCorridorWeapon';
 import { InfiniteFoldWeapon } from '../skills/weapons/InfiniteFoldWeapon';
 import { BotanicalControlWeapon } from '../skills/weapons/BotanicalControlWeapon';
+// ── 基础流派武器（P3 实现）───────────────────────
+import { NanoRipperWeapon } from '../skills/weapons/NanoRipperWeapon';
+import { PursuitProtocolWeapon } from '../skills/weapons/PursuitProtocolWeapon';
+import { GravityWellWeapon } from '../skills/weapons/GravityWellWeapon';
+import { EntropyDiffuserWeapon } from '../skills/weapons/EntropyDiffuserWeapon';
+import { BastionBuilderWeapon } from '../skills/weapons/BastionBuilderWeapon';
+import { CircuitWeaverWeapon } from '../skills/weapons/CircuitWeaverWeapon';
+import { QuantumRiftWeapon } from '../skills/weapons/QuantumRiftWeapon';
+import { SizeWarpWeapon } from '../skills/weapons/SizeWarpWeapon';
+import { RicochetCoreWeapon } from '../skills/weapons/RicochetCoreWeapon';
 
 // ── 武器元信息（工厂模式） ──────────────────────────────────
 export interface WeaponEntry {
@@ -73,19 +83,19 @@ export const REGISTRY: Record<string, WeaponEntry> = {
   [WeaponId.NANO_RIPPER]: {
     id: WeaponId.NANO_RIPPER, name: WeaponName.NANO_RIPPER,
     school: School.AGGRESSOR, difficulty: 1, iconId: 'game-icons:nano-ripper',
-    factory: () => new StubWeapon(WeaponId.NANO_RIPPER, WeaponName.NANO_RIPPER, School.AGGRESSOR, 1, 'game-icons:nano-ripper'),
+    factory: () => new NanoRipperWeapon(),
   },
   [WeaponId.PURSUIT_PROTOCOL]: {
     id: WeaponId.PURSUIT_PROTOCOL, name: WeaponName.PURSUIT_PROTOCOL,
     school: School.AGGRESSOR, difficulty: 2, iconId: 'game-icons:pursuit',
-    factory: () => new StubWeapon(WeaponId.PURSUIT_PROTOCOL, WeaponName.PURSUIT_PROTOCOL, School.AGGRESSOR, 2, 'game-icons:pursuit'),
+    factory: () => new PursuitProtocolWeapon(),
   },
 
   // ── 控制者 Controller (#00BFFF) ─────────────────
   [WeaponId.GRAVITY_WELL]: {
     id: WeaponId.GRAVITY_WELL, name: WeaponName.GRAVITY_WELL,
     school: School.CONTROLLER, difficulty: 2, iconId: 'game-icons:gravity-well',
-    factory: () => new StubWeapon(WeaponId.GRAVITY_WELL, WeaponName.GRAVITY_WELL, School.CONTROLLER, 2, 'game-icons:gravity-well'),
+    factory: () => new GravityWellWeapon(),
   },
   [WeaponId.FIREWALL_PROTOCOL]: {
     id: WeaponId.FIREWALL_PROTOCOL, name: WeaponName.FIREWALL_PROTOCOL,
@@ -95,7 +105,7 @@ export const REGISTRY: Record<string, WeaponEntry> = {
   [WeaponId.ENTROPY_DIFFUSER]: {
     id: WeaponId.ENTROPY_DIFFUSER, name: WeaponName.ENTROPY_DIFFUSER,
     school: School.CONTROLLER, difficulty: 3, iconId: 'game-icons:entropy',
-    factory: () => new StubWeapon(WeaponId.ENTROPY_DIFFUSER, WeaponName.ENTROPY_DIFFUSER, School.CONTROLLER, 3, 'game-icons:entropy'),
+    factory: () => new EntropyDiffuserWeapon(),
   },
 
   // ── 工程师 Engineer (#39FF14) ───────────────────
@@ -107,29 +117,29 @@ export const REGISTRY: Record<string, WeaponEntry> = {
   [WeaponId.BASTION_BUILDER]: {
     id: WeaponId.BASTION_BUILDER, name: WeaponName.BASTION_BUILDER,
     school: School.ENGINEER, difficulty: 3, iconId: 'game-icons:bastion',
-    factory: () => new StubWeapon(WeaponId.BASTION_BUILDER, WeaponName.BASTION_BUILDER, School.ENGINEER, 3, 'game-icons:bastion'),
+    factory: () => new BastionBuilderWeapon(),
   },
   [WeaponId.CIRCUIT_WEAVER]: {
     id: WeaponId.CIRCUIT_WEAVER, name: WeaponName.CIRCUIT_WEAVER,
     school: School.ENGINEER, difficulty: 3, iconId: 'game-icons:circuit',
-    factory: () => new StubWeapon(WeaponId.CIRCUIT_WEAVER, WeaponName.CIRCUIT_WEAVER, School.ENGINEER, 3, 'game-icons:circuit'),
+    factory: () => new CircuitWeaverWeapon(),
   },
 
   // ── 变奏者 Wildcard (#FFD700) ───────────────────
   [WeaponId.QUANTUM_RIFT]: {
     id: WeaponId.QUANTUM_RIFT, name: WeaponName.QUANTUM_RIFT,
     school: School.WILD, difficulty: 3, iconId: 'game-icons:quantum-rift',
-    factory: () => new StubWeapon(WeaponId.QUANTUM_RIFT, WeaponName.QUANTUM_RIFT, School.WILD, 3, 'game-icons:quantum-rift'),
+    factory: () => new QuantumRiftWeapon(),
   },
   [WeaponId.SIZE_WARP]: {
     id: WeaponId.SIZE_WARP, name: WeaponName.SIZE_WARP,
     school: School.WILD, difficulty: 1, iconId: 'game-icons:size-warp',
-    factory: () => new StubWeapon(WeaponId.SIZE_WARP, WeaponName.SIZE_WARP, School.WILD, 1, 'game-icons:size-warp'),
+    factory: () => new SizeWarpWeapon(),
   },
   [WeaponId.RICOCHET_CORE]: {
     id: WeaponId.RICOCHET_CORE, name: WeaponName.RICOCHET_CORE,
     school: School.WILD, difficulty: 2, iconId: 'game-icons:ricochet',
-    factory: () => new StubWeapon(WeaponId.RICOCHET_CORE, WeaponName.RICOCHET_CORE, School.WILD, 2, 'game-icons:ricochet'),
+    factory: () => new RicochetCoreWeapon(),
   },
 
   // ── 角色武器 ──────────────────────────────────────

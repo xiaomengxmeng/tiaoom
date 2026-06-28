@@ -271,6 +271,7 @@
 import { ref, shallowRef, computed, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useGameStore } from '@/stores/game';
+import Icon from '@/components/common/Icon.vue';
 import FishOilBattleCanvas from '../FishOilBattleCanvas.vue';
 import BattleHudPanel from './BattleHudPanel.vue';
 import WeaponSelectOverlay from './WeaponSelectOverlay.vue';

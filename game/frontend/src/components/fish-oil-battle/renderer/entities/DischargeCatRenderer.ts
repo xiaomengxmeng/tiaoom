@@ -13,7 +13,8 @@
  */
 
 import * as PIXI from 'pixi.js';
-import { easeOutCubic, type ActiveEffect } from './VisualEffectUtils';
+import { easeOutCubic, lighten, dimColor, type ActiveEffect } from './VisualEffectUtils';
+import type { Palette } from './BaseWeaponEffectRenderer';
 
 // ══════════════════════════════════════════════════════
 //  颜色常（电系金 - 小金喵配色）
@@ -96,7 +97,16 @@ export class DischargeCatRenderer {
     y: number,
     isBurst: boolean,
     themeColor = DEFAULT_THEME,
+    palette?: Palette,
   ): void {
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFFCC00,
+    };
     let cat = this.cats.get(playerId);
     if (!cat) {
       cat = new PIXI.Graphics();
@@ -105,7 +115,7 @@ export class DischargeCatRenderer {
     }
 
     cat.position.set(x, y);
-    this.drawCatPhantom(cat, isBurst ? 18 : 12, isBurst, themeColor);
+    this.drawCatPhantom(cat, isBurst ? 18 : 12, isBurst, pal.primary);
   }
 
   /**
@@ -216,8 +226,18 @@ export class DischargeCatRenderer {
     arcNodes: Array<{ x: number; y: number }>,
     isBurst: boolean,
     themeColor = DEFAULT_THEME,
+    palette?: Palette,
   ): { effect: ActiveEffect | null } {
     if (arcNodes.length < 2) return { effect: null };
+
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFFCC00,
+    };
 
     const s = this.scale;
     const g = new PIXI.Graphics();
@@ -261,7 +281,7 @@ export class DischargeCatRenderer {
         for (let i = 0; i < arcNodes.length - 1; i++) {
           const from = arcNodes[i];
           const to = arcNodes[i + 1];
-          this.drawLightningSegment(g, from.x, from.y, to.x, to.y, baseWidth, alpha, themeColor);
+          this.drawLightningSegment(g, from.x, from.y, to.x, to.y, baseWidth, alpha, pal.primary);
         }
 
         // ── 命中点闪光（多层径向渐变） ──
@@ -273,7 +293,7 @@ export class DischargeCatRenderer {
           g.fill({ color: ELECTRIC_MAIN, alpha: alpha * 0.25 });
           // 中层（金色）
           g.circle(node.x, node.y, flashR);
-          g.fill({ color: themeColor, alpha: alpha * 0.5 });
+          g.fill({ color: pal.primary, alpha: alpha * 0.5 });
           // 核心（白色）
           g.circle(node.x, node.y, flashR * 0.4);
           g.fill({ color: ELECTRIC_WHITE, alpha: alpha * 0.9 });
@@ -345,7 +365,17 @@ export class DischargeCatRenderer {
     radius: number,
     durationMs: number,
     themeColor = DEFAULT_THEME,
+    palette?: Palette,
   ): { effect: ActiveEffect | null } {
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFFCC00,
+    };
+
     const s = this.scale;
     const r = radius * s;
     const g = new PIXI.Graphics();
@@ -367,7 +397,7 @@ export class DischargeCatRenderer {
         life: 0,
         maxLife: 600 + Math.random() * 400,
         size: (1.2 + Math.random() * 1.8) * s,
-        color: isGold ? themeColor : Math.random() < 0.5 ? ELECTRIC_MAIN : ELECTRIC_LIGHT,
+        color: isGold ? pal.primary : Math.random() < 0.5 ? ELECTRIC_MAIN : ELECTRIC_LIGHT,
       });
     }
 
@@ -391,7 +421,7 @@ export class DischargeCatRenderer {
         // 用绝对时间 300ms，与 durationMs 解耦
         if (life < 300) {
           const maneAlpha = 1 - life / 300;
-          this.drawLionManeBurst(g, r, maneAlpha, life, themeColor);
+          this.drawLionManeBurst(g, r, maneAlpha, life, pal.primary);
         }
 
         if (life < phase1End) {
@@ -402,11 +432,11 @@ export class DischargeCatRenderer {
           // 雷霆核心：从中心显现并放大（0.3 → 1.0）
           const coreScale = 0.3 + 0.7 * eased;
           const coreAlpha = p1;
-          this.drawThunderCore(g, r * 0.6 * coreScale, coreAlpha, themeColor);
+          this.drawThunderCore(g, r * 0.6 * coreScale, coreAlpha, pal.primary);
 
           // 汇聚电弧：8 条从外向内的锯齿闪电（外半径随 p1 收缩）
           const outerR = r * (1.0 - 0.6 * eased);
-          this.drawConvergingRays(g, outerR, r * 0.15, p1 * 0.8, themeColor);
+          this.drawConvergingRays(g, outerR, r * 0.15, p1 * 0.8, pal.primary);
 
           // 中心猫瞳未显现
           // 电弧环未显现
@@ -416,11 +446,11 @@ export class DischargeCatRenderer {
           const eased = easeOutCubic(p2);
 
           // 雷霆核心：完整显现
-          this.drawThunderCore(g, r * 0.6, 1.0, themeColor);
+          this.drawThunderCore(g, r * 0.6, 1.0, pal.primary);
 
           // 放射闪电：8 条从中心向外的锯齿闪电（多层叠加发光）
           const rayLen = r * (0.5 + 0.5 * eased);
-          this.drawRadialLightning(g, rayLen, 8, 1.0, themeColor);
+          this.drawRadialLightning(g, rayLen, 8, 1.0, pal.primary);
 
           // 电弧环：3 层扩散圆环（电青色，带闪烁感）
           this.drawArcRings(g, r, p2, 1.0);
@@ -434,11 +464,11 @@ export class DischargeCatRenderer {
           // 雷霆核心：转向金色并淡出
           const coreScale = 1.0 + 0.3 * p3;
           const coreAlpha = 1.0 - 0.7 * p3;
-          this.drawThunderCore(g, r * 0.6 * coreScale, coreAlpha, themeColor, true);
+          this.drawThunderCore(g, r * 0.6 * coreScale, coreAlpha, pal.primary, true);
 
           // 放射闪电：消散（alpha 衰减 + 长度收缩）
           const rayLen = r * (1.0 - 0.4 * p3);
-          this.drawRadialLightning(g, rayLen, 8, 1.0 - p3, themeColor);
+          this.drawRadialLightning(g, rayLen, 8, 1.0 - p3, pal.primary);
 
           // 电弧环：继续扩散并消散
           this.drawArcRings(g, r, 1.0 + p3, 1.0 - p3);
@@ -446,7 +476,7 @@ export class DischargeCatRenderer {
           // 金色能量扩散环（余电特征）
           const goldR = r * (0.5 + 1.0 * p3);
           g.circle(0, 0, goldR);
-          g.stroke({ color: themeColor, width: 2 * s, alpha: 0.4 * (1 - p3) });
+          g.stroke({ color: pal.primary, width: 2 * s, alpha: 0.4 * (1 - p3) });
           g.circle(0, 0, goldR * 0.92);
           g.stroke({ color: ELECTRIC_YELLOW, width: 0.6 * s, alpha: 0.5 * (1 - p3) });
 

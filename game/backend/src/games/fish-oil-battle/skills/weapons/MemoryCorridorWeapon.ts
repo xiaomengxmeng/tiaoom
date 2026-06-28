@@ -21,6 +21,7 @@ import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
 import {
   WeaponId, WeaponName, WeaponEffectType, VisualEventType, School,
 } from '../../config/GameEnums';
+import type { HitReaction } from '../../shared/protocol';
 
 /** 记忆碎片（回响条目） */
 interface MemoryShard {
@@ -126,6 +127,10 @@ export class MemoryCorridorWeapon implements IWeapon {
     // 命中获得能量
     this.gainEnergy(CFG.energyPerHit ?? 10);
     return effects;
+  }
+
+  getHitReaction(): HitReaction {
+    return 'pull';
   }
 
   onHitByAttacker(attackerId: string, state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {

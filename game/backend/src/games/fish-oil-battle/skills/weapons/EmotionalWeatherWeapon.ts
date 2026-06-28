@@ -24,6 +24,7 @@ import type {
 import { TICKS_PER_SEC } from '../../core/IWeapon';
 import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
 import { WeaponId, WeaponName, WeaponEffectType, VisualEventType, School } from '../../config/GameEnums';
+import type { HitReaction } from '../../shared/protocol';
 
 /** 待执行的延迟落雷 */
 interface PendingLightning {
@@ -140,6 +141,10 @@ export class EmotionalWeatherWeapon implements IWeapon {
       triggerTick: this.tickCounter + 2 * TICKS_PER_SEC,
     });
     return [];
+  }
+
+  getHitReaction(): HitReaction {
+    return 'burn';
   }
 
   onHitByAttacker(_attackerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {

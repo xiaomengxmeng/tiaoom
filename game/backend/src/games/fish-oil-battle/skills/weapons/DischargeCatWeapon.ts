@@ -24,6 +24,7 @@ import type {
 import { TICKS_PER_SEC } from '../../core/IWeapon';
 import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
 import { WeaponId, WeaponName, WeaponEffectType, VisualEventType, School } from '../../config/GameEnums';
+import type { HitReaction } from '../../shared/protocol';
 
 /** 电弧弹射节点（用于前端绘制链式电弧） */
 interface ArcNode {
@@ -112,6 +113,10 @@ export class DischargeCatWeapon implements IWeapon {
 
   onHitTarget(state: IBattleState, physics: IPhysicsQuery): WeaponEffect[] {
     return this.fireArc(state, physics);
+  }
+
+  getHitReaction(): HitReaction {
+    return 'shock';
   }
 
   onHitByAttacker(_attackerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {

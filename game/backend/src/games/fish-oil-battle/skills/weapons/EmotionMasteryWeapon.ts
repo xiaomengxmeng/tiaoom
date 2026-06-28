@@ -24,6 +24,7 @@ import type {
 import { TICKS_PER_SEC } from '../../core/IWeapon';
 import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
 import { WeaponId, WeaponName, WeaponEffectType, VisualEventType, School } from '../../config/GameEnums';
+import type { HitReaction } from '../../shared/protocol';
 
 /** 心境类型 */
 type Mood = 'anger' | 'bliss' | 'happy';
@@ -198,6 +199,10 @@ export class EmotionMasteryWeapon implements IWeapon {
   }
 
   // ── 被碰撞（愤怒时多受 20% 伤害）────────────────
+  getHitReaction(): HitReaction {
+    return 'flash';
+  }
+
   onHitByAttacker(_attackerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
     // 愤怒时额外受伤通过 burst 标记影响物理引擎
     return [];

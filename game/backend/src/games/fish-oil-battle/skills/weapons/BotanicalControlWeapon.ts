@@ -26,6 +26,7 @@ import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
 import {
   WeaponId, WeaponName, WeaponEffectType, VisualEventType, School,
 } from '../../config/GameEnums';
+import type { HitReaction } from '../../shared/protocol';
 
 /** 植物性格类型：gentle 温柔 / fierce 暴躁 / curious 好奇 */
 type PlantPersonality = 'gentle' | 'fierce' | 'curious';
@@ -156,6 +157,10 @@ export class BotanicalControlWeapon implements IWeapon {
     // 主动碰撞时获得能量（无论是否生成植物）
     this.gainEnergy(WEAPON_RANGE_CONFIG[this.id].energyPerHit ?? 25);
     return [];
+  }
+
+  getHitReaction(): HitReaction {
+    return 'burn';
   }
 
   onHitByAttacker(_attackerId: string, state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {

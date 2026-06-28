@@ -20,6 +20,7 @@ import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
 import {
   WeaponId, WeaponName, WeaponEffectType, VisualEventType, School,
 } from '../../config/GameEnums';
+import type { HitReaction } from '../../shared/protocol';
 
 export class FluidMasteryWeapon implements IWeapon {
   static readonly ID = WeaponId.FLUID_MASTERY;
@@ -176,6 +177,10 @@ export class FluidMasteryWeapon implements IWeapon {
     // 命中获得能量
     this.gainEnergy(CFG.energyPerHit ?? 12);
     return effects;
+  }
+
+  getHitReaction(): HitReaction {
+    return 'pull';
   }
 
   onHitByAttacker(attackerId: string, state: IBattleState, physics: IPhysicsQuery): WeaponEffect[] {

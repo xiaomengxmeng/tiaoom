@@ -26,6 +26,7 @@ import type {
 import { TICKS_PER_SEC } from '../../core/IWeapon';
 import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
 import { WeaponId, WeaponName, WeaponEffectType, VisualEventType, School } from '../../config/GameEnums';
+import type { HitReaction } from '../../shared/protocol';
 
 /** 猫灵回响投射物 */
 interface EchoProjectile {
@@ -233,6 +234,10 @@ export class PrecognitiveLensWeapon implements IWeapon {
     });
 
     return effects;
+  }
+
+  getHitReaction(): HitReaction {
+    return 'flash';
   }
 
   onHitByAttacker(_attackerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {

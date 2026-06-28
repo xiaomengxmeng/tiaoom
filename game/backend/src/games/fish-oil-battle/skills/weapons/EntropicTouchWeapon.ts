@@ -25,6 +25,7 @@ import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
 import {
   WeaponId, WeaponName, WeaponEffectType, VisualEventType, School,
 } from '../../config/GameEnums';
+import type { HitReaction } from '../../shared/protocol';
 
 interface FrostbiteStack {
   playerId: string;
@@ -268,6 +269,10 @@ export class EntropicTouchWeapon implements IWeapon {
 
   onHitTarget(_state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
     return []; // 熵寂之触不通过碰撞触发
+  }
+
+  getHitReaction(): HitReaction {
+    return 'freeze';
   }
 
   onHitByAttacker(attackerId: string, state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {

@@ -23,6 +23,7 @@ import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
 import {
   WeaponId, WeaponName, WeaponEffectType, VisualEventType, School,
 } from '../../config/GameEnums';
+import type { HitReaction } from '../../shared/protocol';
 
 interface Anchor {
   id: string;
@@ -293,6 +294,10 @@ export class AirRepulsionFieldWeapon implements IWeapon {
     }
 
     return effects;
+  }
+
+  getHitReaction(): HitReaction {
+    return 'pull';
   }
 
   onHitByAttacker(_attackerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {

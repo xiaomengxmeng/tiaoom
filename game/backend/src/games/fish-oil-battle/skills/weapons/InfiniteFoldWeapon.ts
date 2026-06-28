@@ -21,6 +21,7 @@ import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
 import {
   WeaponId, WeaponName, WeaponEffectType, VisualEventType, School,
 } from '../../config/GameEnums';
+import type { HitReaction } from '../../shared/protocol';
 
 export class InfiniteFoldWeapon implements IWeapon {
   static readonly ID = WeaponId.INFINITE_FOLD;
@@ -128,6 +129,10 @@ export class InfiniteFoldWeapon implements IWeapon {
     // 命中获得能量
     this.gainEnergy(CFG.energyPerHit ?? 14);
     return effects;
+  }
+
+  getHitReaction(): HitReaction {
+    return 'pull';
   }
 
   onHitByAttacker(attackerId: string, state: IBattleState, physics: IPhysicsQuery): WeaponEffect[] {

@@ -772,6 +772,10 @@ export default class FishOilRoom extends GameRoom {
         botanicalPlantId: evt.metadata?.plantId,
         botanicalPersonality: evt.metadata?.personality,
         botanicalPlantCount: evt.metadata?.plantCount,
+        // HIT_FEEDBACK 命中反馈
+        hitReaction: evt.metadata?.hitReaction,
+        hitDamage: evt.metadata?.damage,
+        hitSourceWeaponId: evt.metadata?.weaponId,
       });
     }
     return result;

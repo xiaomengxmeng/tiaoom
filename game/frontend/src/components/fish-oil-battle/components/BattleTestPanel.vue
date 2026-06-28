@@ -748,6 +748,283 @@ function handleVisualEvent(data: any): void {
           });
         }
         break;
+      // ── 画作实体化（白猫） ─────────────────────────
+      case VisualEventType.DRAWING_MANIFEST_INK:
+        rendererRef.value.triggerSkillEffect({
+          type: data.type,
+          x: data.x, y: data.y,
+          playerId: data.playerId,
+          inkStacks: data.inkStacks ?? 0,
+          isMuscleRabbit: data.isMuscleRabbit ?? false,
+          rabbitX: data.rabbitX,
+          rabbitY: data.rabbitY,
+        });
+        break;
+      case VisualEventType.DRAWING_MANIFEST_BURST:
+        rendererRef.value.triggerSkillEffect({
+          type: data.type,
+          x: data.x, y: data.y,
+          radius: data.radius ?? 50,
+          playerId: data.playerId,
+          rabbitX: data.rabbitX,
+          rabbitY: data.rabbitY,
+        });
+        break;
+      case VisualEventType.DRAWING_MANIFEST_DASH:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            toX: data.tx,
+            toY: data.ty,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      // ── 放电猫猫（小金喵） ─────────────────────────
+      case VisualEventType.DISCHARGE_CAT_ARC:
+        rendererRef.value.triggerSkillEffect({
+          type: data.type,
+          x: data.x, y: data.y,
+          playerId: data.playerId,
+          isBurst: data.isBurst ?? false,
+          catX: data.catX,
+          catY: data.catY,
+          arcNodes: data.arcNodes,
+        });
+        break;
+      case VisualEventType.DISCHARGE_CAT_BURST:
+        rendererRef.value.triggerSkillEffect({
+          type: data.type,
+          x: data.x, y: data.y,
+          radius: data.radius ?? 120,
+          playerId: data.playerId,
+          catX: data.catX,
+          catY: data.catY,
+        });
+        break;
+      // ── 预知透镜（风随） ───────────────────────────
+      case VisualEventType.PRECOGNITIVE_LENS_FORESIGHT:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            playerId: data.playerId,
+            foresightStacks: data.foresightStacks ?? 0,
+            isBurst: data.isBurst ?? false,
+          });
+        }
+        break;
+      case VisualEventType.PRECOGNITIVE_LENS_ECHO:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            toX: data.tx,
+            toY: data.ty,
+            playerId: data.playerId,
+            isBurst: data.isBurst ?? false,
+          });
+        }
+        break;
+      case VisualEventType.PRECOGNITIVE_LENS_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      // ── 情绪天气（Carzeye） ────────────────────────
+      case VisualEventType.EMOTIONAL_WEATHER_LIGHTNING:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 40,
+            weatherColor: data.weatherColor,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.EMOTIONAL_WEATHER_HAIL:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 30,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      case VisualEventType.EMOTIONAL_WEATHER_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            playerId: data.playerId,
+          });
+        }
+        break;
+      // ── 情绪掌控（林澈） ───────────────────────────
+      case VisualEventType.EMOTION_MASTERY_MOOD:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            playerId: data.playerId,
+            currentMood: data.currentMood ?? 'anger',
+          });
+        }
+        break;
+      case VisualEventType.EMOTION_MASTERY_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            playerId: data.playerId,
+            radius: data.radius ?? 80,
+          });
+        }
+        break;
+      // ── 流体操控（KE） ─────────────────────────────
+      case VisualEventType.FLUID_MASTERY_TRAIL:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 45,
+            flowDir: data.fluidFlowDir ?? 0,
+            isAngry: data.isAngry,
+          });
+        }
+        break;
+      case VisualEventType.FLUID_MASTERY_VORTEX:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            targetId: data.targetId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 45,
+            pullForce: data.fluidPullForce ?? 0.5,
+            isAngry: data.isAngry,
+          });
+        }
+        break;
+      case VisualEventType.FLUID_MASTERY_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 220,
+            isAngry: data.isAngry,
+          });
+        }
+        break;
+      // ── 记忆回廊（梦） ─────────────────────────────
+      case VisualEventType.MEMORY_CORRIDOR_ECHO:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 50,
+            echoCount: data.memoryEchoCount ?? 0,
+            shardId: data.memoryShardId,
+          });
+        }
+        break;
+      case VisualEventType.MEMORY_CORRIDOR_RESONANCE:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            targetId: data.targetId,
+            x: data.x, y: data.y,
+            resonanceStacks: data.memoryResonanceStacks ?? 1,
+          });
+        }
+        break;
+      case VisualEventType.MEMORY_CORRIDOR_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 200,
+            echoCount: data.memoryEchoCount ?? 0,
+          });
+        }
+        break;
+      // ── 无限折叠（陈厌孑） ─────────────────────────
+      case VisualEventType.INFINITE_FOLD_DODGE:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 40,
+            foldLayer: data.foldLayer ?? 1,
+            dodgeSuccess: data.foldDodgeSuccess ?? false,
+          });
+        }
+        break;
+      case VisualEventType.INFINITE_FOLD_REASSEMBLE:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            targetId: data.targetId,
+            x: data.x, y: data.y,
+            foldCount: data.foldCount ?? 1,
+          });
+        }
+        break;
+      case VisualEventType.INFINITE_FOLD_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            playerId: data.playerId,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 180,
+          });
+        }
+        break;
+      // ── 植物伙伴派对（沐里） ───────────────────────
+      case VisualEventType.BOTANICAL_PLANT_SPAWN:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 40,
+            playerId: data.playerId,
+            plantId: data.botanicalPlantId,
+            personality: data.botanicalPersonality ?? 'gentle',
+          });
+        }
+        break;
+      case VisualEventType.BOTANICAL_PLANT_DECAY:
+        rendererRef.value.triggerSkillEffect({
+          type: data.type,
+          x: data.x, y: data.y,
+          playerId: data.playerId,
+          plantId: data.botanicalPlantId,
+        });
+        break;
+      case VisualEventType.BOTANICAL_BURST:
+        if (data.x !== undefined && data.y !== undefined) {
+          rendererRef.value.triggerSkillEffect({
+            type: data.type,
+            x: data.x, y: data.y,
+            radius: data.radius ?? 60,
+            playerId: data.playerId,
+            plantCount: data.botanicalPlantCount ?? 0,
+            durationMs: data.durationMs,
+          });
+        }
+        break;
     }
   }
 

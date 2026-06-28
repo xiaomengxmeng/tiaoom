@@ -13,7 +13,7 @@
 
 import type { IBattleState } from '../../core/types';
 import type {
-  IWeapon, IPhysicsQuery, WeaponEffect, WeaponRuntimeState,
+  IWeapon, IPhysicsQuery, WeaponEffect, WeaponRuntimeState, PhysicsObstacle,
 } from '../../core/IWeapon';
 import { TICKS_PER_SEC } from '../../core/IWeapon';
 import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
@@ -51,6 +51,10 @@ export class FluidMasteryWeapon implements IWeapon {
   private tickCounter = 0;
   /** 书生愤怒态（hp<30% 时触发，色系切换为深红） */
   private isAngry = false;
+  /** 漩涡物理障碍（被攻击时在自己位置形成，牵引攻击者） */
+  private vortex: { x: number; y: number; active: boolean } = { x: 0, y: 0, active: false };
+  /** 障碍物碰撞 CD 时间戳（1s CD） */
+  private lastObstacleHitAt = 0;
 
   // ── 生命周期 ──────────────────────────────────────
 
@@ -199,6 +203,11 @@ export class FluidMasteryWeapon implements IWeapon {
     const vortexRadius = CFG.damageRadius ?? 45;
     const pullForce = 40;
 
+    // 更新漩涡物理障碍位置（在自己位置形成漩涡，牵引攻击者向自己）
+    if (self) {
+      this.vortex = { x: self.position.x, y: self.position.y, active: true };
+    }
+
     // 派发漩涡视觉事件
     effects.push({
       type: WeaponEffectType.VISUAL_ONLY,
@@ -239,6 +248,34 @@ export class FluidMasteryWeapon implements IWeapon {
     this.gainEnergy(CFG.energyPerBurstHit ?? 25);
     void physics;
     return effects;
+  }
+
+  // ── 物理障碍 ──────────────────────────────────────
+
+  getObstacles(): PhysicsObstacle[] {
+    if (!this.vortex.active) return [];
+    return [{
+      id: `vortex_${this.playerId}`,
+      x: this.vortex.x,
+      y: this.vortex.y,
+      radius: 40,
+      sourceId: this.playerId,
+      type: 'vortex',
+    }];
+  }
+
+  onObstacleHit(hittingPlayerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
+    if (hittingPlayerId === this.playerId) return [];
+    const now = Date.now();
+    if (now - this.lastObstacleHitAt < 1000) return [];  // 1s CD
+    this.lastObstacleHitAt = now;
+    return [{
+      type: WeaponEffectType.DAMAGE,
+      targetId: hittingPlayerId,
+      sourceId: this.playerId,
+      value: 8,
+      metadata: { hitReaction: 'pull' },
+    }];
   }
 
   // ── 能量爆发 ──────────────────────────────────────
@@ -328,6 +365,8 @@ export class FluidMasteryWeapon implements IWeapon {
     this.burstCooldownTicksLeft = 0;
     this.tickCounter = 0;
     this.isAngry = false;
+    this.vortex = { x: 0, y: 0, active: false };
+    this.lastObstacleHitAt = 0;
     this.cooldowns = {};
     this.stacks = {};
     this.flags = {};

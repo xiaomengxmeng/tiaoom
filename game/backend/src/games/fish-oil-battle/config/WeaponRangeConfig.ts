@@ -529,18 +529,18 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
   [WeaponId.NANO_RIPPER]: {
     damage: 4,                    // 触手额外撕裂伤害
     burstDamage: 6,               // 每层撕裂爆发伤害
-    maxEnergy: 4,                 // 撕裂层数上限（爆发阈值）
+    maxEnergy: 3,                 // 撕裂层数上限（爆发阈值）
     energyPerHit: 1,              // 每次扫荡 +1 层
-    burstEnergyCost: 4,           // 4 层满触发
-    damageRadius: 40,             // 触手覆盖半径
+    burstEnergyCost: 3,           // 3 层满触发
+    damageRadius: 80,             // 触手覆盖半径
     aoeMaxRadius: 60,             // 爆发影响范围
-    visualRadius: 40,
+    visualRadius: 80,
     visualDurationMs: 2000,       // 扫荡特效持续 2s
     burstDurationSec: 2,          // 减速持续 2s
-    cooldownMs: 6000,             // 扫荡 CD 6s
+    cooldownMs: 3000,             // 扫荡 CD 3s
     field: {
       maxCount: 1,                // 单一撕裂场
-      radius: 40,
+      radius: 80,
       durationSec: 2,
       contactDamage: 4,           // 触手触碰伤害
       slowPercent: 30,            // 爆发减速 30%
@@ -593,9 +593,9 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
   [WeaponId.ENTROPY_DIFFUSER]: {
     damage: 0,                    // 常驻无直接伤害
     burstDamage: 5,                // 凝固每秒伤害
-    maxEnergy: 20,                  // 油膜段数阈值（爆发）
+    maxEnergy: 10,                  // 油膜段数阈值（爆发）
     energyPerHit: 1,
-    burstEnergyCost: 20,
+    burstEnergyCost: 10,
     damageRadius: 40,               // 油膜宽度
     aoeMaxRadius: 200,              // 凝固影响范围
     visualRadius: 40,
@@ -603,7 +603,7 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
     burstDurationSec: 3,            // 凝固持续 3s
     cooldownMs: 12000,              // 检测 CD
     field: {
-      maxCount: 20,                 // 油膜段上限
+      maxCount: 10,                 // 油膜段上限
       radius: 40,
       durationSec: 4,
     },
@@ -614,9 +614,9 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
   [WeaponId.BASTION_BUILDER]: {
     damage: 4,                      // 方块碰撞伤害
     burstDamage: 12,                // 墙壁碰撞伤害
-    maxEnergy: 6,                   // 方块上限 = 爆发阈值
+    maxEnergy: 4,                   // 方块上限 = 爆发阈值
     energyPerHit: 1,
-    burstEnergyCost: 6,
+    burstEnergyCost: 4,
     damageRadius: 50,               // 方块边长
     aoeMaxRadius: 200,               // 墙壁长度
     visualRadius: 50,
@@ -624,7 +624,7 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
     burstDurationSec: 5,             // 墙壁持续 5s
     cooldownMs: 5000,               // 尖刺 CD
     field: {
-      maxCount: 6,                   // 最多 6 个方块
+      maxCount: 4,                   // 最多 4 个方块
       radius: 50,
       durationSec: 12,
       contactDamage: 4,
@@ -636,9 +636,9 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
   [WeaponId.CIRCUIT_WEAVER]: {
     damage: 8,                      // 通电每秒伤害
     burstDamage: 12,                // 过载每秒伤害
-    maxEnergy: 600,                  // 回路长度阈值
-    energyPerHit: 30,                // 每段回路 ~30px
-    burstEnergyCost: 600,
+    maxEnergy: 300,                  // 回路长度阈值
+    energyPerHit: 60,                // 每段回路 ~60px
+    burstEnergyCost: 300,
     damageRadius: 20,                // 回路宽度
     aoeMaxRadius: 200,
     visualRadius: 20,
@@ -700,7 +700,7 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
   [WeaponId.RICOCHET_CORE]: {
     damage: 0,                        // 常驻无直接伤害（靠速度加成）
     burstDamage: 8,                   // 弹射碎片伤害
-    maxEnergy: 200,                   // 速度阈值 200%
+    maxEnergy: 100,                   // 速度阈值 100%
     damageRadius: 40,                 // 弹射轨迹半径
     aoeMaxRadius: 200,
     visualRadius: 40,

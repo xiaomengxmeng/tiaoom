@@ -10,6 +10,8 @@
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
+import type { Palette } from './BaseWeaponEffectRenderer';
+import { lighten, dimColor } from './VisualEffectUtils';
 
 // ══════════════════════════════════════════════════════
 //  颜色常量（空间折叠系）
@@ -124,7 +126,17 @@ export class InfiniteFoldRenderer {
     foldLayer: number,
     dodgeSuccess: boolean,
     themeColor = FOLD_PURPLE,
+    palette?: Palette,
   ): void {
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFFD700,
+    };
+
     // 若已存在，先销毁旧实例（避免泄漏）
     const old = this.activeDodges.get(playerId);
     if (old) {
@@ -138,7 +150,7 @@ export class InfiniteFoldRenderer {
 
     // 1. 空间扭曲场（8 层径向渐变）
     const auraGraphics = new PIXI.Graphics();
-    this.drawDodgeAura(auraGraphics, radius, themeColor);
+    this.drawDodgeAura(auraGraphics, radius, pal.primary);
     container.addChild(auraGraphics);
 
     // 2. 折叠几何（3-4 个旋转三角形）
@@ -355,7 +367,17 @@ export class InfiniteFoldRenderer {
     y: number,
     foldCount: number,
     themeColor = FOLD_GOLD,
+    palette?: Palette,
   ): void {
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0x6633CC,
+    };
+
     // 若已存在，先销毁旧实例
     const old = this.activeReassembles.get(targetId);
     if (old) {
@@ -369,17 +391,17 @@ export class InfiniteFoldRenderer {
 
     // 1. 重组核心（6 层金白渐变）
     const coreGraphics = new PIXI.Graphics();
-    this.drawReassembleCore(coreGraphics, themeColor);
+    this.drawReassembleCore(coreGraphics, pal.primary);
     container.addChild(coreGraphics);
 
     // 2. 重组波纹（3 层扩散圆环，带虚线感）
     const rippleGraphics = new PIXI.Graphics();
-    this.drawReassembleRipple(rippleGraphics, 25 + foldCount * 4, themeColor);
+    this.drawReassembleRipple(rippleGraphics, 25 + foldCount * 4, pal.primary);
     container.addChild(rippleGraphics);
 
     // 3. 位置交换线（连接原始位置和目标位置的曲线）
     const swapLineGraphics = new PIXI.Graphics();
-    this.drawReassembleSwapLine(swapLineGraphics, 40, foldCount, themeColor);
+    this.drawReassembleSwapLine(swapLineGraphics, 40, foldCount, pal.primary);
     container.addChild(swapLineGraphics);
 
     this.fieldContainer.addChild(container);
@@ -563,7 +585,17 @@ export class InfiniteFoldRenderer {
     radius: number,
     themeColor = FOLD_GOLD,
     durationMs?: number,
+    palette?: Palette,
   ): void {
+    const pal: Palette = palette ?? {
+      primary: 0x6633CC,
+      glow: 0x9966FF,
+      highlight: 0xCC99FF,
+      dim: 0x1A1A2E,
+      shadow: 0x000000,
+      accent: themeColor,
+    };
+
     // 若已存在，先销毁旧实例
     const old = this.activeBursts.get(playerId);
     if (old) {
@@ -597,7 +629,7 @@ export class InfiniteFoldRenderer {
 
     // 5. 中心奇点核（黑色实心 + 金色边缘辉光）
     const centerGraphics = new PIXI.Graphics();
-    this.drawBurstCenter(centerGraphics, themeColor);
+    this.drawBurstCenter(centerGraphics, pal.accent);
     container.addChild(centerGraphics);
 
     this.fieldContainer.addChild(container);

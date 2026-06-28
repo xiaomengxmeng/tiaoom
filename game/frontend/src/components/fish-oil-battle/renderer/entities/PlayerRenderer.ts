@@ -2,6 +2,8 @@ import * as PIXI from 'pixi.js';
 import { BLEND_MODES, getPlayerBaseRadius } from '../constants';
 import type { InterpolatedState } from '../systems/PhysicsSystem';
 import { ParticlePool } from '../systems/ParticlePool';
+import type { WeaponDecorator } from './decorators/WeaponDecorator';
+import type { HitReaction } from '$/backend/src/games/fish-oil-battle/shared/protocol';
 
 /** 流派色彩配置 */
 export const FACTION_COLORS: Record<string, { primary: number; glow: number; dim: number }> = {
@@ -74,6 +76,12 @@ export class PlayerRenderer {
   // ─── 减速特效 ─────────────────────────────────────────
   private isSlowed = false;
   private slowEffectTimer = 0;
+
+  // ─── 武器装饰器 ─────────────────────────────────────────
+  private weaponDecorator?: WeaponDecorator;
+
+  // ─── 受击反馈状态 ─────────────────────────────────────
+  private shakeOffset = { x: 0, y: 0, magnitude: 0, duration: 0, elapsed: 0 };
 
   // ─── 尺寸 ─────────────────────────────────────────────
   private radiusScale = 1.0;
@@ -188,6 +196,9 @@ export class PlayerRenderer {
       this.avatar.alpha = 1;
     }
 
+    this.updateShake(dt);
+    this.weaponDecorator?.update(dt);
+
     // 减速特效：蓝色粒子拖尾
     if (this.slowEffectTimer > 0) {
       this.slowEffectTimer -= dt;
@@ -233,7 +244,32 @@ export class PlayerRenderer {
     this.createAvatarPlaceholder(faction);
   }
 
-  playHitEffect(): void { this.hitFlashTimer = 150; }
+  playHitEffect(reaction: HitReaction = 'flash'): void {
+    this.hitFlashTimer = 200;
+    switch (reaction) {
+      case 'freeze':
+        this.avatar.tint = 0x88CCFF;
+        this.shakeOffset = { x: 0, y: 0, magnitude: 1, duration: 200, elapsed: 0 };
+        break;
+      case 'shock':
+        this.avatar.tint = 0xFFEE88;
+        this.shakeOffset = { x: 0, y: 0, magnitude: 3, duration: 250, elapsed: 0 };
+        break;
+      case 'burn':
+        this.avatar.tint = 0xFF8800;
+        this.hitFlashTimer = 300;
+        break;
+      case 'slash':
+        this.avatar.tint = 0xDDDDDD;
+        break;
+      case 'pull':
+        this.avatar.tint = 0xCC99FF;
+        this.shakeOffset = { x: 0, y: 0, magnitude: 2, duration: 200, elapsed: 0 };
+        break;
+      default:
+        this.avatar.alpha = 0.3;
+    }
+  }
 
   /**
    * 显示掉血数字（浮起渐隐）
@@ -273,6 +309,50 @@ export class PlayerRenderer {
 
   playBurstEffect(): void { this.burstScaleTimer = 400; }
 
+  setWeaponDecorator(decorator?: WeaponDecorator): void {
+    if (this.weaponDecorator) {
+      this.weaponDecorator.destroy();
+      this.weaponDecorator = undefined;
+    }
+    this.weaponDecorator = decorator;
+    if (decorator) {
+      decorator.setScale(this.radiusScale);
+      decorator.setPosition(this.container.x, this.container.y);
+    }
+  }
+
+  setBurstMode(active: boolean): void {
+    this.weaponDecorator?.setBurstMode(active);
+  }
+
+  setStatusEffect(type: 'slow' | 'freeze' | 'burn' | 'pull' | 'shock', duration: number): void {
+    // 复用 slowEffectTimer 字段，按 type 设置不同 tint
+    this.isSlowed = true;
+    this.slowEffectTimer = duration;
+    switch (type) {
+      case 'slow': this.avatar.tint = 0x88CCFF; break;
+      case 'freeze': this.avatar.tint = 0x88CCFF; break;
+      case 'burn': this.avatar.tint = 0xFF8800; break;
+      case 'pull': this.avatar.tint = 0xCC99FF; break;
+      case 'shock': this.avatar.tint = 0xFFEE88; break;
+    }
+  }
+
+  private updateShake(dt: number): void {
+    if (this.shakeOffset.duration === 0) return;
+    this.shakeOffset.elapsed += dt;
+    if (this.shakeOffset.elapsed >= this.shakeOffset.duration) {
+      this.shakeOffset.x = 0;
+      this.shakeOffset.y = 0;
+      this.shakeOffset.duration = 0;
+      this.avatar.tint = 0xFFFFFF;
+    } else {
+      this.shakeOffset.x = (Math.random() - 0.5) * this.shakeOffset.magnitude * 2;
+      this.shakeOffset.y = (Math.random() - 0.5) * this.shakeOffset.magnitude * 2;
+    }
+    this.avatar.position.set(this.shakeOffset.x, this.shakeOffset.y);
+  }
+
   setScale(scale: number): void {
     if (this.radiusScale === scale) return;
     this.radiusScale = scale;
@@ -295,6 +375,7 @@ export class PlayerRenderer {
     }
 
     this.idText.y = -this.r - 18;
+    this.weaponDecorator?.setScale(scale);
   }
 
   setDisplayName(name: string): void { this.idText.text = name; }
@@ -349,6 +430,7 @@ export class PlayerRenderer {
     if (!this.avatar.destroyed) this.avatar.destroy(true);
     if (!this.idText.destroyed) this.idText.destroy(true);
     if (!this.container.destroyed) this.container.destroy({ children: true });
+    this.weaponDecorator?.destroy();
   }
 
   getContainer(): PIXI.Container { return this.container; }

@@ -10,6 +10,7 @@
 
 import type { IBattleState } from './types';
 import { School, WeaponEffectType, WeaponId, VisualEventType } from '../config/GameEnums';
+import type { HitReaction } from '../shared/protocol';
 export { School, WeaponEffectType };
 
 // ─── 帧率常量 ─────────────────────────────────────────────
@@ -166,4 +167,7 @@ export interface IWeapon {
   getRuntimeState(): WeaponRuntimeState;
   /** 重置（新对局开始时调用） */
   reset(): void;
+
+  /** 返回该武器的受击反应类型（用于前端差异化受击视觉） */
+  getHitReaction?(): HitReaction;
 }

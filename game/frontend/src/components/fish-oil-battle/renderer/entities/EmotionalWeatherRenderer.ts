@@ -9,7 +9,8 @@
  */
 
 import * as PIXI from 'pixi.js';
-import { easeOutCubic, type ActiveEffect } from './VisualEffectUtils';
+import { easeOutCubic, lighten, dimColor, type ActiveEffect } from './VisualEffectUtils';
+import type { Palette } from './BaseWeaponEffectRenderer';
 
 /**
  * 情绪天气视觉配置（数据驱动，从 WeaponRangeConfig 构建）
@@ -69,10 +70,20 @@ export class EmotionalWeatherRenderer {
     y: number,
     radius: number,
     color: number,
+    palette?: Palette,
   ): { effect: ActiveEffect | null } {
     const s = this.scale;
     const g = new PIXI.Graphics();
     this.fieldContainer.addChild(g);
+
+    const pal: Palette = palette ?? {
+      primary: color,
+      glow: lighten(color, 50),
+      highlight: lighten(color, 100),
+      dim: dimColor(color, 0.6),
+      shadow: dimColor(color, 0.3),
+      accent: 0xFF8800,
+    };
 
     const durationMs = 600;
     const ef: ActiveEffect = {
@@ -103,28 +114,28 @@ export class EmotionalWeatherRenderer {
           }
           pts.push({ px: x, py: y }); // 落地到命中点
 
-          // 外层发光描边（粗，白色，低 alpha）
+          // 外层发光描边（粗，高亮色，低 alpha）
           g.moveTo(pts[0].px, pts[0].py);
           for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].px, pts[i].py);
-          g.stroke({ color: 0xFFFFFF, width: 6 * s, alpha: flashAlpha * 0.3 });
+          g.stroke({ color: pal.highlight, width: 6 * s, alpha: flashAlpha * 0.3 });
 
           // 主色描边（细，高 alpha）
           g.moveTo(pts[0].px, pts[0].py);
           for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].px, pts[i].py);
-          g.stroke({ color, width: 2 * s, alpha: flashAlpha });
+          g.stroke({ color: pal.primary, width: 2 * s, alpha: flashAlpha });
         }
 
         // 命中点扩散圆环
         const ringR = radius * s * easeOutCubic(Math.min(1, t * 1.5));
         g.circle(x, y, ringR);
-        g.stroke({ color, width: 3 * s, alpha: 0.7 * (1 - t * 0.5) });
+        g.stroke({ color: pal.primary, width: 3 * s, alpha: 0.7 * (1 - t * 0.5) });
         g.circle(x, y, ringR * 0.6);
-        g.fill({ color, alpha: 0.2 * (1 - t * 0.7) });
+        g.fill({ color: pal.dim, alpha: 0.2 * (1 - t * 0.7) });
 
         // 中心闪光
         if (t < 0.2) {
           g.circle(x, y, 10 * s * (1 - t / 0.2));
-          g.fill({ color: 0xFFFFFF, alpha: 0.9 * (1 - t / 0.2) });
+          g.fill({ color: pal.highlight, alpha: 0.9 * (1 - t / 0.2) });
         }
       },
       onDecay: () => {
@@ -143,10 +154,21 @@ export class EmotionalWeatherRenderer {
     x: number,
     y: number,
     radius: number,
+    palette?: Palette,
   ): { effect: ActiveEffect | null } {
     const s = this.scale;
     const g = new PIXI.Graphics();
     this.fieldContainer.addChild(g);
+
+    const baseColor = 0xAAEEFF;
+    const pal: Palette = palette ?? {
+      primary: baseColor,
+      glow: lighten(baseColor, 50),
+      highlight: lighten(baseColor, 100),
+      dim: dimColor(baseColor, 0.6),
+      shadow: dimColor(baseColor, 0.3),
+      accent: 0xFF8800,
+    };
 
     const durationMs = 500;
     const ef: ActiveEffect = {
@@ -163,19 +185,19 @@ export class EmotionalWeatherRenderer {
           const fallT = t / 0.6;
           const cy = y - 60 * s * (1 - fallT);
           g.circle(x, cy, 6 * s);
-          g.fill({ color: 0xAAEEFF, alpha: 0.9 });
-          g.stroke({ color: 0xFFFFFF, width: 1 * s, alpha: 0.6 });
+          g.fill({ color: pal.primary, alpha: 0.9 });
+          g.stroke({ color: pal.highlight, width: 1 * s, alpha: 0.6 });
         } else {
           // 碎裂
           const breakT = (t - 0.6) / 0.4;
           g.circle(x, y, radius * s * breakT);
-          g.stroke({ color: 0xAAEEFF, width: 2 * s, alpha: 0.6 * (1 - breakT) });
+          g.stroke({ color: pal.primary, width: 2 * s, alpha: 0.6 * (1 - breakT) });
           // 碎片
           for (let i = 0; i < 4; i++) {
             const a = (i / 4) * Math.PI * 2;
             const r = radius * s * breakT * 0.8;
             g.circle(x + Math.cos(a) * r, y + Math.sin(a) * r, 2 * s);
-            g.fill({ color: 0xFFFFFF, alpha: 0.7 * (1 - breakT) });
+            g.fill({ color: pal.highlight, alpha: 0.7 * (1 - breakT) });
           }
         }
       },
@@ -196,11 +218,22 @@ export class EmotionalWeatherRenderer {
     y: number,
     radius: number,
     durationMs: number,
+    palette?: Palette,
   ): { effect: ActiveEffect | null } {
     const s = this.scale;
     const g = new PIXI.Graphics();
     g.position.set(x, y);
     this.fieldContainer.addChild(g);
+
+    const baseColor = 0xAAEEFF;
+    const pal: Palette = palette ?? {
+      primary: baseColor,
+      glow: lighten(baseColor, 50),
+      highlight: lighten(baseColor, 100),
+      dim: dimColor(baseColor, 0.6),
+      shadow: dimColor(baseColor, 0.3),
+      accent: 0xFF8800,
+    };
 
     // 创建"气象局特供"文字（仅创建一次），生命周期由 update(dt) 驱动过期
     const bureauText = new PIXI.Text('气象局特供', {
@@ -234,14 +267,14 @@ export class EmotionalWeatherRenderer {
         // 暴风雪范围圈
         const r = radius * s;
         g.circle(0, 0, r);
-        g.stroke({ color: 0xAAEEFF, width: 2 * s, alpha: 0.3 * (1 - t * 0.3) });
+        g.stroke({ color: pal.primary, width: 2 * s, alpha: 0.3 * (1 - t * 0.3) });
         g.circle(0, 0, r);
-        g.fill({ color: 0x4DA6FF, alpha: 0.05 * (1 - t * 0.5) });
+        g.fill({ color: pal.dim, alpha: 0.05 * (1 - t * 0.5) });
 
         // 脉冲
         const pulseR = r * (0.3 + 0.7 * Math.abs(Math.sin(phase)));
         g.circle(0, 0, pulseR);
-        g.stroke({ color: 0xFFFFFF, width: 1.5 * s, alpha: 0.2 * (1 - t * 0.3) });
+        g.stroke({ color: pal.highlight, width: 1.5 * s, alpha: 0.2 * (1 - t * 0.3) });
         phase += _dt / 400;
 
         // 气象局水印渐隐：textLife 在 [0, textMaxLife] 内 alpha 由 0.8 线性衰减到 0

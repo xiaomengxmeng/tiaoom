@@ -164,6 +164,29 @@ export class WeaponScheduler {
   }
 
   /**
+   * 调试用：设置某玩家武器能量（百分比 0-100）
+   * - 仅用于测试模式
+   * - percent 范围 0-100
+   */
+  setEnergy(playerId: string, percent: number): void {
+    const weapon = this.bindings.get(playerId);
+    if (weapon) weapon.setEnergy(percent);
+  }
+
+  /**
+   * 调试用：强制爆发（绕过 isBurstReady 检查）
+   * - 直接调用 weapon.burst()，不检查能量是否满
+   * - 仍会触发 applyWeaponEffects 应用效果
+   */
+  debugForceBurst(playerId: string, state: IBattleState): WeaponEffect[] {
+    const weapon = this.bindings.get(playerId);
+    if (!weapon) return [];
+    const effects = weapon.burst(state, this.physicsQuery);
+    this.applyWeaponEffects(state, effects);
+    return effects;
+  }
+
+  /**
    * 收集所有武器的物理障碍物（供物理引擎碰撞检测）
    */
   getObstacles(): PhysicsObstacle[] {

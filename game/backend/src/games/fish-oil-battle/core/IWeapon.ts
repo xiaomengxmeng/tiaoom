@@ -136,8 +136,27 @@ export interface IWeapon {
   getObstacles?(): PhysicsObstacle[];
 
   // ── 能量/爆发 ──
+  /**
+   * 获取当前能量百分比（0-100）
+   * - 内部原单位动态计算为百分比返回
+   * - 所有武器统一返回 0-100
+   */
   getEnergy(): number;
+
+  /**
+   * 获取最大能量值（固定返回 100）
+   * - 所有武器统一返回 100
+   */
   getMaxEnergy(): number;
+
+  /**
+   * 调试用：设置能量值（百分比 0-100）
+   * - 接收 0-100 的百分比值
+   * - 内部转换为武器原始单位存储
+   * - 不触发爆发，需另行调用 burst()
+   */
+  setEnergy(percent: number): void;
+
   /** 是否满足爆发条件 */
   isBurstReady(): boolean;
   /** 执行爆发，返回爆发产生的所有效果 */

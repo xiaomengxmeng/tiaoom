@@ -64,6 +64,7 @@ export class StubWeapon implements IWeapon {
   onHitByAttacker(_attackerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] { return []; }
   getEnergy(): number { return 0; }
   getMaxEnergy(): number { return 100; }
+  setEnergy(_percent: number): void {}
   isBurstReady(): boolean { return false; }
   burst(_state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] { return []; }
   getRuntimeState(): WeaponRuntimeState {

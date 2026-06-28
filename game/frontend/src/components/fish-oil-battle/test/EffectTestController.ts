@@ -109,6 +109,8 @@ export interface EffectTestContext {
   mapY: (logicalY: number) => number;
   /** 更新竞技场配置（逻辑尺寸 + 形状 + 半径），触发 resize */
   setArenaConfig: (config: { width: number; height: number; arenaRadius: number; shape?: string; arenaHalfW?: number; arenaHalfH?: number }) => void;
+  /** 仅修改画布像素尺寸（保留逻辑坐标 1280×720），用于对齐实战缩放比例 */
+  setCanvasSize: (canvasW: number, canvasH: number) => void;
   /** 设置墙壁风格 */
   setWallStyle: (style: WallStyle) => void;
   /** 销毁控制器 */
@@ -307,6 +309,15 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
     applyScale();
   }
 
+  function setCanvasSize(newCanvasW: number, newCanvasH: number): void {
+    // 仅修改画布像素尺寸，保留逻辑坐标（1280×720），用于对齐实战缩放比例
+    canvasW = newCanvasW;
+    canvasH = newCanvasH;
+    app.renderer.resize(canvasW, canvasH);
+    arenaRenderer.resize(canvasW, canvasH, true);
+    applyScale();
+  }
+
   // 初始缩放
   arenaRenderer.resize(canvasW, canvasH, true);
   applyScale();
@@ -385,6 +396,7 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
     mapX,
     mapY,
     setArenaConfig,
+    setCanvasSize,
     setWallStyle: (style: WallStyle) => arenaRenderer.setWallStyle(style),
     destroy: () => {
       app.ticker.stop();

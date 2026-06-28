@@ -48,6 +48,22 @@
         </span>
       </template>
 
+      <!-- 缩放比例切换（仅特效 tab 显示） -->
+      <template v-if="currentTab === 'effect'">
+        <div class="join">
+          <button
+            class="btn btn-xs join-item"
+            :class="{ 'btn-primary': scale === PREVIEW_SCALE }"
+            @click="setScale(PREVIEW_SCALE)"
+          >实战 0.625x</button>
+          <button
+            class="btn btn-xs join-item"
+            :class="{ 'btn-primary': scale === 1.0 }"
+            @click="setScale(1.0)"
+          >原比例 1.0x</button>
+        </div>
+      </template>
+
       <div class="flex-1" />
 
       <!-- 操作按钮组（仅特效 tab） -->
@@ -458,6 +474,13 @@ const sidebarOpen = ref(true);
 const paramsOpen = ref(true);
 const currentTab = ref<'effect' | 'battle'>('effect');
 
+// ── 实战比例常量 ────────────────────────────────────
+// 实战画布 800×450 / 逻辑坐标 1280×720 = 0.625
+const PREVIEW_SCALE = 0.625;
+const LOGICAL_W = 1280;
+const LOGICAL_H = 720;
+const scale = ref(PREVIEW_SCALE);
+
 const paramValues = ref<Record<string, any>>({});
 
 // ── 搜索与分组 ────────────────────────────────────────
@@ -598,11 +621,23 @@ const scaleDisplay = computed(() => {
 
 // ── 生命周期 ────────────────────────────────────────
 
+/** 切换画布缩放比例（实战 0.625x / 原比例 1.0x） */
+function setScale(s: number): void {
+  scale.value = s;
+  if (ctx) {
+    ctx.setCanvasSize(Math.round(LOGICAL_W * s), Math.round(LOGICAL_H * s));
+    // 重新预览当前特效
+    setTimeout(() => playOnce(), 50);
+  }
+}
+
 onMounted(async () => {
   if (!canvasRef.value) return;
   ctx = await createEffectTestController(canvasRef.value);
   // 初始化时同步地图参数到渲染器（不自动播放，等 selectEffect 后播放）
   onArenaChange(true);
+  // 应用实战缩放比例 0.625（画布 800×450，逻辑坐标保持 1280×720）
+  ctx.setCanvasSize(Math.round(LOGICAL_W * PREVIEW_SCALE), Math.round(LOGICAL_H * PREVIEW_SCALE));
   selectEffect(selectedId.value);
   // 自动预览
   playOnce();

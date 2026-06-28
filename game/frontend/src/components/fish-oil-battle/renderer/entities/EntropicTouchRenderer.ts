@@ -10,6 +10,8 @@
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
+import type { Palette } from './BaseWeaponEffectRenderer';
+import { lighten, dimColor } from './VisualEffectUtils';
 
 // ══════════════════════════════════════════════════════
 //  颜色常量
@@ -112,6 +114,7 @@ export class EntropicTouchRenderer {
     y: number,
     radius: number,
     themeColor = MOON_COLOR,
+    palette?: Palette,
   ): void {
     // 已存在则仅更新位置与半径
     const existing = this.activeAuras.get(playerId);
@@ -122,6 +125,15 @@ export class EntropicTouchRenderer {
       existing.container.position.set(x, y);
       return;
     }
+
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFF3333,
+    };
 
     const container = new PIXI.Container();
     container.position.set(x, y);
@@ -153,9 +165,7 @@ export class EntropicTouchRenderer {
     this.activeAuras.set(playerId, aura);
 
     // 触发首帧冰晶粒子
-    this.spawnIceParticles(x, y, radius, MOON_COLOR);
-    // 避免未使用警告
-    void themeColor;
+    this.spawnIceParticles(x, y, radius, pal.primary);
   }
 
   /** 移除低温场 */
@@ -277,6 +287,7 @@ export class EntropicTouchRenderer {
     x: number,
     y: number,
     themeColor = MOON_COLOR,
+    palette?: Palette,
   ): void {
     // 若已存在，先销毁旧实例（避免泄漏）
     const old = this.activeFrostbites.get(targetId);
@@ -285,12 +296,21 @@ export class EntropicTouchRenderer {
       old.container.destroy({ children: true });
     }
 
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFF3333,
+    };
+
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
 
     const frostGraphics = new PIXI.Graphics();
-    this.drawFrostbite(frostGraphics, stacks, themeColor);
+    this.drawFrostbite(frostGraphics, stacks, pal.primary);
     container.addChild(frostGraphics);
 
     this.fieldContainer.addChild(container);
@@ -301,7 +321,7 @@ export class EntropicTouchRenderer {
       life: 0,
       maxLife: 5000, // 5 秒
       stacks,
-      themeColor,
+      themeColor: pal.primary,
     };
     this.activeFrostbites.set(targetId, frostbite);
   }
@@ -392,6 +412,7 @@ export class EntropicTouchRenderer {
     radius: number,
     themeColor = MOON_COLOR,
     durationMs?: number,
+    palette?: Palette,
   ): void {
     // 若已存在，先销毁旧实例
     const old = this.activeBursts.get(playerId);
@@ -399,6 +420,15 @@ export class EntropicTouchRenderer {
       this.fieldContainer.removeChild(old.container);
       old.container.destroy({ children: true });
     }
+
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFF3333,
+    };
 
     const container = new PIXI.Container();
     container.position.set(x, y);
@@ -421,7 +451,7 @@ export class EntropicTouchRenderer {
 
     // 4. 月华长发（4 条非平行 bezier，向心被吸）
     const hairGraphics = new PIXI.Graphics();
-    this.drawBurstHair(hairGraphics, radius, themeColor);
+    this.drawBurstHair(hairGraphics, radius, pal.primary);
     container.addChild(hairGraphics);
 
     this.fieldContainer.addChild(container);
@@ -434,7 +464,7 @@ export class EntropicTouchRenderer {
       hairGraphics,
       life: 0,
       maxLife: durationMs ?? 5000,
-      themeColor,
+      themeColor: pal.primary,
       radius,
     };
     this.activeBursts.set(playerId, burst);

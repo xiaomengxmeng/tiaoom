@@ -32,6 +32,8 @@ export interface PendingVisualEvent {
   radius?: number;
   isBurst?: boolean;
   metadata?: WeaponEffectMetadata;
+  /** 命中反馈目标 ID（HIT_FEEDBACK 事件专用） */
+  targetId?: string;
 }
 
 export class WeaponScheduler {
@@ -248,6 +250,25 @@ export class WeaponScheduler {
           ? this.damageModifier(applyValue, effect.sourceId, effect.targetId)
           : applyValue;
         state.applyDamage(effect.targetId, actualDamage, effect.sourceId);
+        // 收集命中反馈视觉事件（仅对直接伤害类）
+        if (effect.sourceId) {
+          const weapon = this.bindings.get(effect.sourceId);
+          const reaction = weapon?.getHitReaction?.() ?? 'flash';
+          this.pendingVisuals.push({
+            playerId: effect.targetId,
+            weaponId: weapon?.id,
+            visualType: VisualEventType.HIT_FEEDBACK,
+            x: effect.position?.x ?? effect.aoe?.x,
+            y: effect.position?.y ?? effect.aoe?.y,
+            targetId: effect.targetId,
+            metadata: {
+              sourceId: effect.sourceId,
+              weaponId: weapon?.id,
+              damage: actualDamage,
+              hitReaction: reaction,
+            },
+          });
+        }
       }
 
       // dot 效果：用缩放后的 applyValue，通过 damageModifier 修正
@@ -256,6 +277,25 @@ export class WeaponScheduler {
           ? this.damageModifier(applyValue, effect.sourceId, effect.targetId)
           : applyValue;
         state.applyDamage(effect.targetId, actualDamage, effect.sourceId);
+        // 收集 DOT 命中反馈视觉事件
+        if (effect.sourceId) {
+          const weapon = this.bindings.get(effect.sourceId);
+          const reaction = weapon?.getHitReaction?.() ?? 'burn';
+          this.pendingVisuals.push({
+            playerId: effect.targetId,
+            weaponId: weapon?.id,
+            visualType: VisualEventType.HIT_FEEDBACK,
+            x: effect.position?.x ?? effect.aoe?.x,
+            y: effect.position?.y ?? effect.aoe?.y,
+            targetId: effect.targetId,
+            metadata: {
+              sourceId: effect.sourceId,
+              weaponId: weapon?.id,
+              damage: actualDamage,
+              hitReaction: reaction,
+            },
+          });
+        }
       }
 
       // 持续类效果（添加到 activeEffects），duration 以秒为单位

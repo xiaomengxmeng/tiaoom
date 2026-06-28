@@ -191,8 +191,17 @@ export class EmotionalWeatherWeapon implements IWeapon {
     return effects;
   }
 
-  getEnergy(): number { return this.energy; }
-  getMaxEnergy(): number { return WEAPON_RANGE_CONFIG[this.id]?.maxEnergy ?? 5; }
+  getEnergy(): number {
+    const max = WEAPON_RANGE_CONFIG[this.id]?.maxEnergy ?? 5;
+    return Math.round(this.energy / max * 100);
+  }
+  getMaxEnergy(): number {
+    return 100;
+  }
+  setEnergy(percent: number): void {
+    const max = WEAPON_RANGE_CONFIG[this.id]?.maxEnergy ?? 5;
+    this.energy = Math.max(0, Math.min(max, percent / 100 * max));
+  }
 
   isBurstReady(): boolean {
     const CFG = WEAPON_RANGE_CONFIG[this.id];

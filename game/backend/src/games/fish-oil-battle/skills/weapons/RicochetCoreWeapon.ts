@@ -130,11 +130,18 @@ export class RicochetCoreWeapon implements IWeapon {
     return this.energy;
   }
 
-  getEnergy(): number { return this.energy; }
-  getMaxEnergy(): number { return CFG.maxEnergy!; }
+  getEnergy(): number {
+    return Math.round(this.energy / CFG.maxEnergy! * 100);
+  }
+  getMaxEnergy(): number {
+    return 100;
+  }
+  setEnergy(percent: number): void {
+    this.energy = Math.max(0, Math.min(CFG.maxEnergy!, percent / 100 * CFG.maxEnergy!));
+  }
 
   isBurstReady(): boolean {
-    return this.energy >= SPEED_THRESHOLD && !this.burstActive;
+    return this.energy >= CFG.maxEnergy! && !this.burstActive;
   }
 
   burst(state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {

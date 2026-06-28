@@ -338,10 +338,16 @@ export class PrecognitiveLensWeapon implements IWeapon {
 
   // ── 能量爆发 ──────────────────────────────────────
 
-  getEnergy(): number { return this.foresightStacks; }
+  getEnergy(): number {
+    const max = WEAPON_RANGE_CONFIG[this.id]?.maxEnergy ?? 6;
+    return Math.round(this.foresightStacks / max * 100);
+  }
   getMaxEnergy(): number {
-    const CFG = WEAPON_RANGE_CONFIG[this.id];
-    return CFG?.maxEnergy ?? 6;
+    return 100;
+  }
+  setEnergy(percent: number): void {
+    const max = WEAPON_RANGE_CONFIG[this.id]?.maxEnergy ?? 6;
+    this.foresightStacks = Math.max(0, Math.min(max, percent / 100 * max));
   }
 
   isBurstReady(): boolean {

@@ -352,8 +352,17 @@ export class HiveMotherWeapon implements IWeapon {
 
   // ── 能量爆发 ──────────────────────────────────────
 
-  getEnergy(): number { return this.energy; }
-  getMaxEnergy(): number { return CFG.hiveMother!.maxEnergy; }
+  getEnergy(): number {
+    return Math.round(this.energy / CFG.hiveMother!.maxEnergy * 100);
+  }
+  getMaxEnergy(): number {
+    return 100;
+  }
+
+  setEnergy(percent: number): void {
+    const max = CFG.hiveMother!.maxEnergy;
+    this.energy = Math.max(0, Math.min(max, percent / 100 * max));
+  }
 
   isBurstReady(): boolean {
     const HM = CFG.hiveMother!;

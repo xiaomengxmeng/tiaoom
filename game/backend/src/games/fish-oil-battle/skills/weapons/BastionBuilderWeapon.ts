@@ -184,8 +184,15 @@ export class BastionBuilderWeapon implements IWeapon {
     return effects;
   }
 
-  getEnergy(): number { return this.energy; }
-  getMaxEnergy(): number { return CFG.maxEnergy!; }
+  getEnergy(): number {
+    return Math.round(this.energy / CFG.maxEnergy! * 100);
+  }
+  getMaxEnergy(): number {
+    return 100;
+  }
+  setEnergy(percent: number): void {
+    this.energy = Math.max(0, Math.min(CFG.maxEnergy!, percent / 100 * CFG.maxEnergy!));
+  }
 
   isBurstReady(): boolean {
     return this.energy >= CFG.maxEnergy! && !this.burstActive;

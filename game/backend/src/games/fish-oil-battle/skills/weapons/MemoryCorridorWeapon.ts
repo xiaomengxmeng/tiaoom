@@ -190,8 +190,17 @@ export class MemoryCorridorWeapon implements IWeapon {
 
   // ── 能量爆发 ──────────────────────────────────────
 
-  getEnergy(): number { return this.energy; }
-  getMaxEnergy(): number { return WEAPON_RANGE_CONFIG[this.id].burstEnergyCost ?? WEAPON_RANGE_CONFIG[this.id].maxEnergy!; }
+  getEnergy(): number {
+    const max = WEAPON_RANGE_CONFIG[this.id].burstEnergyCost ?? WEAPON_RANGE_CONFIG[this.id].maxEnergy!;
+    return Math.round(this.energy / max * 100);
+  }
+  getMaxEnergy(): number {
+    return 100;
+  }
+  setEnergy(percent: number): void {
+    const max = WEAPON_RANGE_CONFIG[this.id].burstEnergyCost ?? WEAPON_RANGE_CONFIG[this.id].maxEnergy!;
+    this.energy = Math.max(0, Math.min(max, percent / 100 * max));
+  }
 
   isBurstReady(): boolean {
     return this.energy >= this.getMaxEnergy()

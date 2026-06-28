@@ -193,6 +193,7 @@ export class FluidMasteryRenderer extends BaseWeaponEffectRenderer {
     flowDir: number,
     themeColor: number = FLUID_MAIN,
     isAngry: boolean = false,
+    palette?: Palette,
   ): void {
     const existing = this.activeTrails.get(playerId);
     if (existing) {
@@ -205,21 +206,21 @@ export class FluidMasteryRenderer extends BaseWeaponEffectRenderer {
       return;
     }
 
-    const palette = this.buildPalette(isAngry ? ANGER_MAIN : themeColor);
+    const pal: Palette = palette ?? this.buildPalette(isAngry ? ANGER_MAIN : themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
     this.container.addChild(container);
 
     const auraGraphics = new PIXI.Graphics();
-    this.drawTrailAura(auraGraphics, radius, palette, isAngry);
+    this.drawTrailAura(auraGraphics, radius, pal, isAngry);
     container.addChild(auraGraphics);
 
     const rippleGraphics = new PIXI.Graphics();
     container.addChild(rippleGraphics);
 
     const arrowGraphics = new PIXI.Graphics();
-    this.drawTrailArrow(arrowGraphics, radius, flowDir, palette);
+    this.drawTrailArrow(arrowGraphics, radius, flowDir, pal);
     container.addChild(arrowGraphics);
 
     const bookPages = this.createFloatingPages(radius, isAngry);
@@ -242,11 +243,11 @@ export class FluidMasteryRenderer extends BaseWeaponEffectRenderer {
       y,
       radius,
       flowDir,
-      palette,
+      palette: pal,
       isAngry,
     });
 
-    this.spawnTrailParticles(x, y, radius, palette);
+    this.spawnTrailParticles(x, y, radius, pal);
   }
 
   updateTrail(playerId: string, x: number, y: number, flowDir: number): void {
@@ -397,6 +398,7 @@ export class FluidMasteryRenderer extends BaseWeaponEffectRenderer {
     pullForce: number,
     themeColor: number = FLUID_MAIN,
     isAngry: boolean = false,
+    palette?: Palette,
   ): void {
     const old = this.activeVortices.get(targetId);
     if (old) {
@@ -404,22 +406,22 @@ export class FluidMasteryRenderer extends BaseWeaponEffectRenderer {
       old.container.destroy({ children: true });
     }
 
-    const palette = this.buildPalette(isAngry ? ANGER_MAIN : themeColor);
+    const pal: Palette = palette ?? this.buildPalette(isAngry ? ANGER_MAIN : themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
     this.container.addChild(container);
 
     const coreGraphics = new PIXI.Graphics();
-    this.drawVortexCore(coreGraphics, radius, palette, isAngry);
+    this.drawVortexCore(coreGraphics, radius, pal, isAngry);
     container.addChild(coreGraphics);
 
     const armGraphics = new PIXI.Graphics();
-    this.drawVortexArms(armGraphics, radius, palette, isAngry);
+    this.drawVortexArms(armGraphics, radius, pal, isAngry);
     container.addChild(armGraphics);
 
     const pullGraphics = new PIXI.Graphics();
-    this.drawVortexPull(pullGraphics, radius, pullForce, palette);
+    this.drawVortexPull(pullGraphics, radius, pullForce, pal);
     container.addChild(pullGraphics);
 
     const soundWaveGraphics = new PIXI.Graphics();
@@ -439,7 +441,7 @@ export class FluidMasteryRenderer extends BaseWeaponEffectRenderer {
       y,
       radius,
       pullForce,
-      palette,
+      palette: pal,
       isAngry,
     });
   }
@@ -566,13 +568,14 @@ export class FluidMasteryRenderer extends BaseWeaponEffectRenderer {
     themeColor: number = FLUID_MAIN,
     durationMs?: number,
     isAngry: boolean = false,
+    palette?: Palette,
   ): void {
     const existing = this.activeBursts.get(playerId);
     if (existing) {
       this.removeBurstInstance(existing);
     }
 
-    const palette = this.buildPalette(isAngry ? ANGER_MAIN : themeColor);
+    const pal: Palette = palette ?? this.buildPalette(isAngry ? ANGER_MAIN : themeColor);
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
@@ -597,7 +600,7 @@ export class FluidMasteryRenderer extends BaseWeaponEffectRenderer {
       themeColor,
       radius,
       particleTimer: 0,
-      palette,
+      palette: pal,
       columnGraphics,
       armGraphics,
       coreGraphics,

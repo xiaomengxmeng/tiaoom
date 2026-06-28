@@ -9,6 +9,7 @@ import { ShapeEffectPool } from '../systems/ShapeEffectPool';
 import type { ShapeDescriptor } from '../systems/ShapeRenderer';
 import type { ShapeEffectConfig } from './ShapeEffect';
 import type { ActiveEffect } from './VisualEffectUtils';
+import type { Palette } from './BaseWeaponEffectRenderer';
 import {
   ShockwaveEffectRenderer,
 } from './ShockwaveEffectRenderer';
@@ -279,10 +280,11 @@ export class EffectRenderer {
     anchorId: string,
     themeColor?: number,
     durationMs?: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildAirRepulsionVisualCfg();
     const ef = this.airRepulsionFieldRenderer.triggerAnchor(
-      x, y, anchorId, themeColor, durationMs ?? cfg.anchorDurationMs,
+      x, y, anchorId, themeColor, durationMs ?? cfg.anchorDurationMs, palette,
     );
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
@@ -292,10 +294,11 @@ export class EffectRenderer {
     radius?: number,
     themeColor?: number,
     durationMs?: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildAirRepulsionVisualCfg();
     const ef = this.airRepulsionFieldRenderer.triggerBurst(
-      x, y, radius ?? cfg.burstRadius, themeColor, durationMs ?? cfg.burstDurationMs,
+      x, y, radius ?? cfg.burstRadius, themeColor, durationMs ?? cfg.burstDurationMs, palette,
     );
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
@@ -416,10 +419,11 @@ export class EffectRenderer {
     themeColor: number,
     isBurst = false,
     visualCfg?: OpticalSlashVisualConfig,
+    palette?: Palette,
   ): void {
     const dataCfg = this.buildOpticalSlashVisualCfg();
     const cfg: OpticalSlashVisualConfig = { ...dataCfg, ...visualCfg };
-    const ef = this.opticalSlashRenderer.triggerSlash(x, y, angle, length, themeColor, isBurst, cfg);
+    const ef = this.opticalSlashRenderer.triggerSlash(x, y, angle, length, themeColor, isBurst, cfg, palette);
     if (ef) this.activeEffects.push(ef);
   }
 
@@ -428,11 +432,12 @@ export class EffectRenderer {
     themeColor: number,
     radius?: number,
     visualCfg?: OpticalSlashVisualConfig,
+    palette?: Palette,
   ): void {
     const dataCfg = this.buildOpticalSlashVisualCfg();
     const cfg: OpticalSlashVisualConfig = { ...dataCfg, ...visualCfg };
     if (radius !== undefined) cfg.maxRadius = radius;
-    const effects = this.opticalSlashRenderer.triggerBurst(x, y, themeColor, cfg);
+    const effects = this.opticalSlashRenderer.triggerBurst(x, y, themeColor, cfg, palette);
     for (const ef of effects) this.activeEffects.push(ef);
   }
 
@@ -598,8 +603,9 @@ export class EffectRenderer {
     y: number,
     radius: number,
     themeColor?: number,
+    palette?: Palette,
   ): void {
-    this.entropicTouchRenderer.triggerAura(playerId, x, y, radius, themeColor);
+    this.entropicTouchRenderer.triggerAura(playerId, x, y, radius, themeColor, palette);
   }
 
   /**
@@ -611,8 +617,9 @@ export class EffectRenderer {
     x: number,
     y: number,
     themeColor?: number,
+    palette?: Palette,
   ): void {
-    this.entropicTouchRenderer.triggerFrostbite(targetId, stacks, x, y, themeColor);
+    this.entropicTouchRenderer.triggerFrostbite(targetId, stacks, x, y, themeColor, palette);
   }
 
   /**
@@ -625,10 +632,11 @@ export class EffectRenderer {
     radius: number,
     themeColor?: number,
     durationMs?: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildEntropicTouchVisualCfg();
     this.entropicTouchRenderer.triggerBurst(
-      playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs,
+      playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs, palette,
     );
   }
 
@@ -653,9 +661,10 @@ export class EffectRenderer {
     inkStacks: number,
     isMuscle: boolean,
     themeColor?: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildDrawingManifestVisualCfg();
-    this.drawingManifestRenderer.updateRabbit(playerId, x, y, inkStacks, isMuscle, themeColor, cfg);
+    this.drawingManifestRenderer.updateRabbit(playerId, x, y, inkStacks, isMuscle, themeColor, cfg, palette);
   }
 
   /**
@@ -667,10 +676,11 @@ export class EffectRenderer {
     y: number,
     radius: number,
     themeColor?: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildDrawingManifestVisualCfg();
     const ef = this.drawingManifestRenderer.triggerBurst(
-      playerId, x, y, radius, cfg.burstDurationMs ?? 5000, themeColor,
+      playerId, x, y, radius, cfg.burstDurationMs ?? 5000, themeColor, palette,
     );
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
@@ -685,9 +695,10 @@ export class EffectRenderer {
     toY: number,
     isHit: boolean,
     themeColor?: number,
+    palette?: Palette,
   ): void {
     const ef = this.drawingManifestRenderer.triggerDash(
-      fromX, fromY, toX, toY, isHit, themeColor,
+      fromX, fromY, toX, toY, isHit, themeColor, palette,
     );
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
@@ -725,8 +736,9 @@ export class EffectRenderer {
     y: number,
     isBurst: boolean,
     themeColor?: number,
+    palette?: Palette,
   ): void {
-    this.dischargeCatRenderer.updateCat(playerId, x, y, isBurst, themeColor);
+    this.dischargeCatRenderer.updateCat(playerId, x, y, isBurst, themeColor, palette);
   }
 
   /**
@@ -736,8 +748,9 @@ export class EffectRenderer {
     arcNodes: Array<{ x: number; y: number }>,
     isBurst: boolean,
     themeColor?: number,
+    palette?: Palette,
   ): void {
-    const ef = this.dischargeCatRenderer.triggerArc(arcNodes, isBurst, themeColor);
+    const ef = this.dischargeCatRenderer.triggerArc(arcNodes, isBurst, themeColor, palette);
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
 
@@ -750,10 +763,11 @@ export class EffectRenderer {
     y: number,
     radius: number,
     themeColor?: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildDischargeCatVisualCfg();
     const ef = this.dischargeCatRenderer.triggerBurst(
-      playerId, x, y, radius, cfg.burstDurationMs ?? 4000, themeColor,
+      playerId, x, y, radius, cfg.burstDurationMs ?? 4000, themeColor, palette,
     );
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
@@ -791,8 +805,9 @@ export class EffectRenderer {
     stacks: number,
     isBurst: boolean,
     themeColor?: number,
+    palette?: Palette,
   ): void {
-    this.precognitiveLensRenderer.updateForesight(playerId, x, y, stacks, isBurst, themeColor);
+    this.precognitiveLensRenderer.updateForesight(playerId, x, y, stacks, isBurst, themeColor, palette);
   }
 
   /**
@@ -805,9 +820,10 @@ export class EffectRenderer {
     toY: number,
     isBurst: boolean,
     themeColor?: number,
+    palette?: Palette,
   ): void {
     const ef = this.precognitiveLensRenderer.triggerEcho(
-      fromX, fromY, toX, toY, isBurst, themeColor,
+      fromX, fromY, toX, toY, isBurst, themeColor, palette,
     );
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
@@ -820,10 +836,11 @@ export class EffectRenderer {
     x: number,
     y: number,
     themeColor?: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildPrecognitiveLensVisualCfg();
     const ef = this.precognitiveLensRenderer.triggerBurst(
-      playerId, x, y, cfg.burstDurationMs ?? 4000, themeColor,
+      playerId, x, y, cfg.burstDurationMs ?? 4000, themeColor, palette,
     );
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
@@ -855,26 +872,29 @@ export class EffectRenderer {
     x: number, y: number,
     radius: number,
     color: number,
+    palette?: Palette,
   ): void {
-    const ef = this.emotionalWeatherRenderer.triggerLightning(x, y, radius, color);
+    const ef = this.emotionalWeatherRenderer.triggerLightning(x, y, radius, color, palette);
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
 
   triggerWeatherHail(
     x: number, y: number,
     radius: number,
+    palette?: Palette,
   ): void {
-    const ef = this.emotionalWeatherRenderer.triggerHail(x, y, radius);
+    const ef = this.emotionalWeatherRenderer.triggerHail(x, y, radius, palette);
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
 
   triggerWeatherBurst(
     x: number, y: number,
     radius: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildEmotionalWeatherVisualCfg();
     const ef = this.emotionalWeatherRenderer.triggerBurst(
-      x, y, radius, cfg.burstDurationMs ?? 4000,
+      x, y, radius, cfg.burstDurationMs ?? 4000, palette,
     );
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
@@ -906,8 +926,9 @@ export class EffectRenderer {
     y: number,
     mood: string,
     themeColor?: number,
+    palette?: Palette,
   ): void {
-    this.emotionMasteryRenderer.updateMood(playerId, x, y, mood, themeColor);
+    this.emotionMasteryRenderer.updateMood(playerId, x, y, mood, themeColor, palette);
   }
 
   /**
@@ -925,10 +946,11 @@ export class EffectRenderer {
     x: number,
     y: number,
     themeColor?: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildEmotionMasteryVisualCfg();
     const ef = this.emotionMasteryRenderer.triggerBurst(
-      playerId, x, y, cfg.burstDurationMs ?? 4000, themeColor, cfg.orbitRadius ?? 80,
+      playerId, x, y, cfg.burstDurationMs ?? 4000, themeColor, cfg.orbitRadius ?? 80, palette,
     );
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
@@ -969,8 +991,9 @@ export class EffectRenderer {
     flowDir: number,
     themeColor?: number,
     isAngry?: boolean,
+    palette?: Palette,
   ): void {
-    this.fluidMasteryRenderer.triggerTrail(playerId, x, y, radius, flowDir, themeColor, isAngry);
+    this.fluidMasteryRenderer.triggerTrail(playerId, x, y, radius, flowDir, themeColor, isAngry, palette);
   }
 
   /** 更新水流尾迹位置与流向 */
@@ -992,8 +1015,9 @@ export class EffectRenderer {
     pullForce: number,
     themeColor?: number,
     isAngry?: boolean,
+    palette?: Palette,
   ): void {
-    this.fluidMasteryRenderer.triggerVortex(targetId, x, y, radius, pullForce, themeColor, isAngry);
+    this.fluidMasteryRenderer.triggerVortex(targetId, x, y, radius, pullForce, themeColor, isAngry, palette);
   }
 
   /** 移除漩涡牵引 */
@@ -1010,10 +1034,11 @@ export class EffectRenderer {
     themeColor?: number,
     durationMs?: number,
     isAngry?: boolean,
+    palette?: Palette,
   ): void {
     const cfg = this.buildFluidMasteryVisualCfg();
     this.fluidMasteryRenderer.triggerBurst(
-      playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs, isAngry,
+      playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs, isAngry, palette,
     );
   }
 
@@ -1042,11 +1067,12 @@ export class EffectRenderer {
     echoCount: number,
     shardId: string,
     themeColor?: number,
+    palette?: Palette,
   ): void {
     // 渲染器 triggerEcho 的 shardId 参数为 number 占位（当前未深度使用），传 0 即可
     void shardId;
     this.memoryCorridorRenderer.triggerEcho(
-      playerId, x, y, radius, echoCount, 0, themeColor,
+      playerId, x, y, radius, echoCount, 0, themeColor, palette,
     );
   }
 
@@ -1067,8 +1093,9 @@ export class EffectRenderer {
     y: number,
     resonanceStacks: number,
     themeColor?: number,
+    palette?: Palette,
   ): void {
-    this.memoryCorridorRenderer.triggerResonance(targetId, x, y, resonanceStacks, themeColor);
+    this.memoryCorridorRenderer.triggerResonance(targetId, x, y, resonanceStacks, themeColor, palette);
   }
 
   /** 移除历史共振 */
@@ -1085,10 +1112,11 @@ export class EffectRenderer {
     echoCount: number,
     themeColor?: number,
     durationMs?: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildMemoryCorridorVisualCfg();
     this.memoryCorridorRenderer.triggerBurst(
-      playerId, x, y, radius, echoCount, themeColor, durationMs ?? cfg.burstDurationMs,
+      playerId, x, y, radius, echoCount, themeColor, durationMs ?? cfg.burstDurationMs, palette,
     );
   }
 
@@ -1117,8 +1145,9 @@ export class EffectRenderer {
     foldLayer: number,
     dodgeSuccess: boolean,
     themeColor?: number,
+    palette?: Palette,
   ): void {
-    this.infiniteFoldRenderer.triggerDodge(playerId, x, y, radius, foldLayer, dodgeSuccess, themeColor);
+    this.infiniteFoldRenderer.triggerDodge(playerId, x, y, radius, foldLayer, dodgeSuccess, themeColor, palette);
   }
 
   /** 移除闪避特效 */
@@ -1133,8 +1162,9 @@ export class EffectRenderer {
     y: number,
     foldCount: number,
     themeColor?: number,
+    palette?: Palette,
   ): void {
-    this.infiniteFoldRenderer.triggerReassemble(targetId, x, y, foldCount, themeColor);
+    this.infiniteFoldRenderer.triggerReassemble(targetId, x, y, foldCount, themeColor, palette);
   }
 
   /** 移除空间重组特效 */
@@ -1150,10 +1180,11 @@ export class EffectRenderer {
     radius: number,
     themeColor?: number,
     durationMs?: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildInfiniteFoldVisualCfg();
     this.infiniteFoldRenderer.triggerBurst(
-      playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs,
+      playerId, x, y, radius, themeColor, durationMs ?? cfg.burstDurationMs, palette,
     );
   }
 
@@ -1189,10 +1220,11 @@ export class EffectRenderer {
     personality: 'gentle' | 'fierce' | 'curious',
     radius: number,
     themeColor?: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildBotanicalPartyVisualCfg();
     this.botanicalPartyRenderer.triggerPlantSpawn(
-      plantId, x, y, personality, radius ?? cfg.plantRadius, themeColor,
+      plantId, x, y, personality, radius ?? cfg.plantRadius, themeColor, palette,
     );
   }
 
@@ -1228,10 +1260,11 @@ export class EffectRenderer {
     plantCount: number,
     themeColor?: number,
     durationMs?: number,
+    palette?: Palette,
   ): void {
     const cfg = this.buildBotanicalPartyVisualCfg();
     this.botanicalPartyRenderer.triggerBurst(
-      playerId, x, y, radius, plantCount, themeColor, durationMs ?? cfg.burstDurationMs,
+      playerId, x, y, radius, plantCount, themeColor, durationMs ?? cfg.burstDurationMs, palette,
     );
   }
 

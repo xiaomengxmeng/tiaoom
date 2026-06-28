@@ -16,7 +16,7 @@
 
 import type { IBattleState } from '../../core/types';
 import type {
-  IWeapon, IPhysicsQuery, WeaponEffect, WeaponRuntimeState,
+  IWeapon, IPhysicsQuery, WeaponEffect, WeaponRuntimeState, PhysicsObstacle,
 } from '../../core/IWeapon';
 import { TICKS_PER_SEC } from '../../core/IWeapon';
 import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
@@ -59,6 +59,8 @@ export class AirRepulsionFieldWeapon implements IWeapon {
   private stacks: Record<string, number> = {};
   private flags: Record<string, boolean> = {};
   private tickCounter = 0;
+  /** 障碍物碰撞 CD 时间戳（1s CD） */
+  private lastObstacleHitAt = 0;
 
   // ── 生命周期 ──────────────────────────────────────
 
@@ -304,6 +306,33 @@ export class AirRepulsionFieldWeapon implements IWeapon {
     return [];
   }
 
+  // ── 物理障碍 ──────────────────────────────────────
+
+  getObstacles(): PhysicsObstacle[] {
+    return this.anchors.map(a => ({
+      id: a.id,
+      x: a.x,
+      y: a.y,
+      radius: 30,
+      sourceId: this.playerId,
+      type: 'air_anchor',
+    }));
+  }
+
+  onObstacleHit(hittingPlayerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
+    if (hittingPlayerId === this.playerId) return [];
+    const now = Date.now();
+    if (now - this.lastObstacleHitAt < 1000) return [];  // 1s CD
+    this.lastObstacleHitAt = now;
+    return [{
+      type: WeaponEffectType.DAMAGE,
+      targetId: hittingPlayerId,
+      sourceId: this.playerId,
+      value: 4,
+      metadata: { hitReaction: 'pull' },
+    }];
+  }
+
   // ── 能量爆发 ──────────────────────────────────────
 
   getEnergy(): number {
@@ -362,6 +391,7 @@ export class AirRepulsionFieldWeapon implements IWeapon {
     this.burstTicksLeft = 0;
     this.shieldHits.clear();
     this.tickCounter = 0;
+    this.lastObstacleHitAt = 0;
     this.cooldowns = {};
     this.stacks = {};
     this.flags = {};

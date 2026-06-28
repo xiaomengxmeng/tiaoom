@@ -103,6 +103,10 @@ export default class FishOilRoom extends GameRoom {
 
   // 测试模式
   private isTestMode = false;
+  /** 测试模式：Bot 武器配置（按顺序，空数组=随机） */
+  private testBotWeapons: string[] = [];
+  /** 测试模式：禁用的武器 ID 列表 */
+  private testDisabledWeapons: string[] = [];
   private botPlayers = new Map<string, BotPlayer>();
 
   /**
@@ -236,7 +240,10 @@ export default class FishOilRoom extends GameRoom {
     this.weaponConfirmed.clear();
 
     // 每个玩家随机分配 3 个已实现的武器
-    const weaponPoolForClient = shuffleArray(IMPLEMENTED_WEAPONS).slice(0, 3);
+    const availableWeapons = this.isTestMode
+      ? IMPLEMENTED_WEAPONS.filter(w => !this.testDisabledWeapons.includes(w.id))
+      : IMPLEMENTED_WEAPONS;
+    const weaponPoolForClient = shuffleArray(availableWeapons).slice(0, 3);
 
     // 按人数分配 faction 颜色（轮转）
     const allFactions: School[] =
@@ -284,11 +291,18 @@ export default class FishOilRoom extends GameRoom {
 
     // 测试模式：Bot 立即随机选择武器（人类玩家仍需手动选择）
     if (this.isTestMode) {
+      let botIndex = 0;
       for (const bot of this.botPlayers.values()) {
         if (!this.weaponConfirmed.has(bot.id)) {
-          const randomWeapon = IMPLEMENTED_WEAPONS[Math.floor(Math.random() * IMPLEMENTED_WEAPONS.length)];
-          this.assignWeapon(bot.id, randomWeapon);
-          console.log(`[FishOil] Bot ${bot.id} 自动选择武器: ${randomWeapon.name}`);
+          const assignedId = this.testBotWeapons[botIndex];
+          const weapon = assignedId
+            ? IMPLEMENTED_WEAPONS.find(w => w.id === assignedId)
+            : IMPLEMENTED_WEAPONS[Math.floor(Math.random() * IMPLEMENTED_WEAPONS.length)];
+          if (weapon) {
+            this.assignWeapon(bot.id, weapon);
+            console.log(`[FishOil] Bot ${bot.id} 自动选择武器: ${weapon.name}`);
+          }
+          botIndex++;
         }
       }
       // 如果所有玩家都选了武器（只有人类还没选），提前结束倒计时
@@ -317,6 +331,16 @@ export default class FishOilRoom extends GameRoom {
         break;
       case 'start_test_mode':
         this.handleStartTestMode(sender, message.data);
+        break;
+      // ── 新增：测试模式调试命令 ──
+      case 'debug_energy':
+        this.handleDebugEnergy(sender, message.data);
+        break;
+      case 'debug_burst':
+        this.handleDebugBurst(sender, message.data);
+        break;
+      case 'debug_reset':
+        this.handleDebugReset(sender, message.data);
         break;
     }
   }
@@ -356,7 +380,11 @@ export default class FishOilRoom extends GameRoom {
   }
 
   // ─── 测试模式：自动添加 Bot ─────────────────────────
-  private handleStartTestMode(sender: RoomPlayer, data: { botCount: number }): void {
+  private handleStartTestMode(sender: RoomPlayer, data: {
+    botCount: number;
+    botWeapons?: string[];
+    disabledWeapons?: string[];
+  }): void {
     const botCount = Math.max(1, Math.min(7, data.botCount ?? 1));
     const totalPlayers = 1 + botCount; // 1 human + N bots
 
@@ -371,6 +399,8 @@ export default class FishOilRoom extends GameRoom {
     this.cleanupBots();
 
     this.isTestMode = true;
+    this.testBotWeapons = data.botWeapons ?? [];
+    this.testDisabledWeapons = data.disabledWeapons ?? [];
 
     // 创建并添加 Bot 玩家
     for (let i = 0; i < botCount; i++) {
@@ -388,6 +418,38 @@ export default class FishOilRoom extends GameRoom {
 
     // 直接启动游戏（绕过准备检查）
     this.room.start(sender);
+  }
+
+  /** 调试：设置某玩家武器能量（百分比 0-100） */
+  private handleDebugEnergy(_sender: RoomPlayer, data: { playerId: string; action: 'fill' | 'set'; value?: number }): void {
+    if (!this.isTestMode) return;
+    const weapon = this.scheduler.getWeapon(data.playerId);
+    if (!weapon) return;
+
+    if (data.action === 'fill') {
+      this.scheduler.setEnergy(data.playerId, 100);
+    } else if (data.action === 'set' && data.value !== undefined) {
+      this.scheduler.setEnergy(data.playerId, Math.max(0, Math.min(100, data.value)));
+    }
+    console.log(`[FishOil] debug_energy: player=${data.playerId} action=${data.action} value=${data.value ?? '-'}`);
+  }
+
+  /** 调试：强制某玩家武器爆发（绕过 isBurstReady 检查） */
+  private handleDebugBurst(_sender: RoomPlayer, data: { playerId: string }): void {
+    if (!this.isTestMode) return;
+    const effects = this.scheduler.debugForceBurst(data.playerId, this.battleState);
+    const player = this.battleState.getPlayer(data.playerId);
+    if (player) player.bursts++;
+    console.log(`[FishOil] debug_burst: player=${data.playerId} effects=${effects.length}`);
+  }
+
+  /** 调试：重置某玩家武器状态 */
+  private handleDebugReset(_sender: RoomPlayer, data: { playerId: string }): void {
+    if (!this.isTestMode) return;
+    const weapon = this.scheduler.getWeapon(data.playerId);
+    if (!weapon) return;
+    weapon.reset();
+    console.log(`[FishOil] debug_reset: player=${data.playerId}`);
   }
 
   /** 清理所有 Bot 玩家 */
@@ -726,7 +788,7 @@ export default class FishOilRoom extends GameRoom {
       const weapon = this.scheduler.getWeapon(p.id);
       const weaponMeta = IMPLEMENTED_WEAPONS.find(w => w.id === this.weaponSelections[p.id]);
 
-      players.push({
+      const playerData: GameStatePlayer = {
         id: p.id,
         name: p.name,
         x: Math.round(ball?.x ?? state.position.x),
@@ -745,7 +807,14 @@ export default class FishOilRoom extends GameRoom {
         overheated: state.isOverheated,
         avatar: this.playerAvatars[p.id] ?? '',
         alive: !isDead,
-      });
+      };
+
+      // 测试模式下附加 runtimeState
+      if (this.isTestMode && weapon) {
+        playerData.runtimeState = weapon.getRuntimeState();
+      }
+
+      players.push(playerData);
     }
 
     if (this.battleTick % 20 === 0 || this.battleTick <= 2) {

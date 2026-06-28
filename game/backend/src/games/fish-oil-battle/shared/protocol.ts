@@ -61,6 +61,15 @@ export interface GameStatePlayer {
   avatar?: string;
   /** 玩家是否存活（大逃杀模式，死亡后 HP=0 且开始灰化） */
   alive: boolean;
+  /** 调试模式：武器运行时状态（仅在 isTestMode 时序列化） */
+  runtimeState?: {
+    energy: number;
+    maxEnergy: number;
+    cooldowns: Record<string, number>;
+    stacks: Record<string, number>;
+    flags: Record<string, boolean>;
+    custom?: Record<string, any>;
+  };
 }
 
 // ─── 视觉事件（visual_event 用）───────────────

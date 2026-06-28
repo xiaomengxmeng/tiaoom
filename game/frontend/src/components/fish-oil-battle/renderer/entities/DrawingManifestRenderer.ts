@@ -13,7 +13,8 @@
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
-import { easeOutCubic, type ActiveEffect } from './VisualEffectUtils';
+import { easeOutCubic, lighten, dimColor, type ActiveEffect } from './VisualEffectUtils';
+import type { Palette } from './BaseWeaponEffectRenderer';
 
 // ══════════════════════════════════════════════════════
 //  颜色常量（水彩画作系）
@@ -112,7 +113,17 @@ export class DrawingManifestRenderer {
     isMuscle: boolean,
     _themeColor = 0xff69b4,
     visualCfg?: DrawingManifestVisualConfig,
+    palette?: Palette,
   ): void {
+    const baseColor = 0x8B4D9F;
+    const pal: Palette = palette ?? {
+      primary: baseColor,
+      glow: lighten(baseColor, 50),
+      highlight: lighten(baseColor, 100),
+      dim: dimColor(baseColor, 0.6),
+      shadow: dimColor(baseColor, 0.3),
+      accent: 0xFFB3D9,
+    };
     const rabbitRadius = visualCfg?.rabbitRadius ?? 20;
     const muscleRadius = visualCfg?.muscleRadius ?? 50;
 
@@ -151,9 +162,9 @@ export class DrawingManifestRenderer {
     rabbit.radius = isMuscle ? muscleRadius : rabbitRadius;
 
     // 重绘兔子（光环 + 身体 + 画笔）
-    this.drawRabbitAura(rabbit.auraGraphics, rabbit.radius, isMuscle);
-    this.drawRabbitBody(rabbit.bodyGraphics, rabbit.radius, isMuscle);
-    this.drawBrush(rabbit.brushGraphics, rabbit.inkStacks, rabbit.radius, isMuscle);
+    this.drawRabbitAura(rabbit.auraGraphics, rabbit.radius, isMuscle, pal);
+    this.drawRabbitBody(rabbit.bodyGraphics, rabbit.radius, isMuscle, pal);
+    this.drawBrush(rabbit.brushGraphics, rabbit.inkStacks, rabbit.radius, isMuscle, pal);
   }
 
   /**
@@ -164,6 +175,7 @@ export class DrawingManifestRenderer {
     g: PIXI.Graphics,
     radius: number,
     isMuscle: boolean,
+    pal: Palette,
   ): void {
     g.clear();
     const auraScale = isMuscle ? 1.6 : 1.4;
@@ -173,8 +185,8 @@ export class DrawingManifestRenderer {
       const r = radius * auraScale * (0.3 + 0.7 * t);
       const color =
         t < 0.5
-          ? this.interpolateColor(INK_WHITE, INK_MAIN, t * 2)
-          : INK_MAIN;
+          ? this.interpolateColor(INK_WHITE, pal.primary, t * 2)
+          : pal.primary;
       const alpha = (1 - t) * 0.2;
       g.circle(0, 0, r);
       g.fill({ color, alpha });
@@ -198,6 +210,7 @@ export class DrawingManifestRenderer {
     g: PIXI.Graphics,
     radius: number,
     isMuscle: boolean,
+    pal: Palette,
   ): void {
     g.clear();
 
@@ -209,25 +222,25 @@ export class DrawingManifestRenderer {
       const earH = radius * (isMuscle ? 0.7 : 0.55);
       // 外层紫粉填充
       g.ellipse(ex, ey, earW, earH);
-      g.fill({ color: INK_MAIN, alpha: 0.85 });
+      g.fill({ color: pal.primary, alpha: 0.85 });
       // 内层浅粉（小一号，描边感）
       g.ellipse(ex, ey, earW * 0.55, earH * 0.7);
-      g.fill({ color: INK_PINK, alpha: 0.7 });
+      g.fill({ color: pal.accent, alpha: 0.7 });
     }
 
     // ── 身体：4 层椭圆叠加（水彩晕染）──
     const bodyLayers = isMuscle
       ? [
-          { rx: 1.15, ry: 1.0, color: INK_DEEP, alpha: 0.35 },
-          { rx: 0.95, ry: 0.85, color: INK_MAIN, alpha: 0.55 },
-          { rx: 0.7, ry: 0.62, color: INK_LIGHT, alpha: 0.65 },
-          { rx: 0.35, ry: 0.3, color: INK_HIGHLIGHT, alpha: 0.75 },
+          { rx: 1.15, ry: 1.0, color: pal.shadow, alpha: 0.35 },
+          { rx: 0.95, ry: 0.85, color: pal.primary, alpha: 0.55 },
+          { rx: 0.7, ry: 0.62, color: pal.glow, alpha: 0.65 },
+          { rx: 0.35, ry: 0.3, color: pal.highlight, alpha: 0.75 },
         ]
       : [
-          { rx: 1.0, ry: 1.0, color: INK_DEEP, alpha: 0.3 },
-          { rx: 0.82, ry: 0.82, color: INK_MAIN, alpha: 0.5 },
-          { rx: 0.6, ry: 0.6, color: INK_LIGHT, alpha: 0.6 },
-          { rx: 0.28, ry: 0.28, color: INK_HIGHLIGHT, alpha: 0.7 },
+          { rx: 1.0, ry: 1.0, color: pal.shadow, alpha: 0.3 },
+          { rx: 0.82, ry: 0.82, color: pal.primary, alpha: 0.5 },
+          { rx: 0.6, ry: 0.6, color: pal.glow, alpha: 0.6 },
+          { rx: 0.28, ry: 0.28, color: pal.highlight, alpha: 0.7 },
         ];
     for (const layer of bodyLayers) {
       g.ellipse(0, 0, radius * layer.rx, radius * layer.ry);
@@ -256,7 +269,7 @@ export class DrawingManifestRenderer {
 
     // ── 鼻子（粉色小圆）──
     g.circle(0, radius * 0.08, radius * 0.07);
-    g.fill({ color: INK_PINK, alpha: 1 });
+    g.fill({ color: pal.accent, alpha: 1 });
 
     // ── 肌肉兔：曲线肌肉线条（bezier，替代矩形描边）──
     if (isMuscle) {
@@ -270,7 +283,7 @@ export class DrawingManifestRenderer {
         radius * 0.55,
         radius * 0.22,
       );
-      g.stroke({ color: INK_DEEP, width: 1.5, alpha: 0.6 });
+      g.stroke({ color: pal.shadow, width: 1.5, alpha: 0.6 });
       // 腹肌曲线
       g.moveTo(-radius * 0.3, radius * 0.5);
       g.bezierCurveTo(
@@ -281,7 +294,7 @@ export class DrawingManifestRenderer {
         radius * 0.3,
         radius * 0.5,
       );
-      g.stroke({ color: INK_DEEP, width: 1.2, alpha: 0.5 });
+      g.stroke({ color: pal.shadow, width: 1.2, alpha: 0.5 });
     }
   }
 
@@ -294,6 +307,7 @@ export class DrawingManifestRenderer {
     inkStacks: number,
     radius: number,
     isMuscle: boolean,
+    pal: Palette,
   ): void {
     g.clear();
     if (inkStacks <= 0 || isMuscle) return;
@@ -315,7 +329,7 @@ export class DrawingManifestRenderer {
       0,
       py + pencilLen * 0.5 + 5,
     ]);
-    g.fill({ color: INK_MAIN, alpha: 0.9 });
+    g.fill({ color: pal.primary, alpha: 0.9 });
 
     // 笔尖发光：6 层时多层光晕（内白 → 金 → 透明），替代粗糙白点
     if (inkStacks >= 6) {
@@ -389,7 +403,17 @@ export class DrawingManifestRenderer {
     radius: number,
     durationMs: number,
     _themeColor = 0xff69b4,
+    palette?: Palette,
   ): { effect: ActiveEffect | null } {
+    const baseColor = 0x8B4D9F;
+    const pal: Palette = palette ?? {
+      primary: baseColor,
+      glow: lighten(baseColor, 50),
+      highlight: lighten(baseColor, 100),
+      dim: dimColor(baseColor, 0.6),
+      shadow: dimColor(baseColor, 0.3),
+      accent: 0xFFB3D9,
+    };
     // 若已存在，先销毁旧实例（避免泄漏）
     const old = this.activeBursts.get(playerId);
     if (old && !old.container.destroyed) {
@@ -409,8 +433,8 @@ export class DrawingManifestRenderer {
     const haloGraphics = new PIXI.Graphics(); // 画笔光晕
 
     // 预绘制静态层
-    this.drawBurstCore(coreGraphics, radius);
-    this.drawBurstRipples(rippleGraphics, radius);
+    this.drawBurstCore(coreGraphics, radius, pal);
+    this.drawBurstRipples(rippleGraphics, radius, pal);
     this.drawBurstCanvas(canvasGraphics, radius);
     this.drawBurstHalo(haloGraphics, radius);
 
@@ -449,7 +473,7 @@ export class DrawingManifestRenderer {
           // ── 阶段1 泼墨：墨水从中心泼洒 ──
           const pt = t / p1End; // 0 → 1
           // 飞溅：向外飞散（距离 0 → maxDist）
-          this.drawBurstSplashes(splashGraphics, splashConfigs, pt);
+          this.drawBurstSplashes(splashGraphics, splashConfigs, pt, pal);
           // 画布：浮现（alpha 0 → 1, scale 0.5 → 1）
           canvasGraphics.alpha = pt;
           canvasGraphics.scale.set(0.5 + 0.5 * easeOutCubic(pt));
@@ -473,7 +497,7 @@ export class DrawingManifestRenderer {
           // 光晕：显现（alpha 0 → 0.7）
           haloGraphics.alpha = 0.7 * pt;
           // 飞溅：淡出（alpha 0.8 → 0.3）
-          this.drawBurstSplashes(splashGraphics, splashConfigs, 1);
+          this.drawBurstSplashes(splashGraphics, splashConfigs, 1, pal);
           splashGraphics.alpha = 0.8 - 0.5 * pt;
         } else {
           // ── 阶段3 消散：水彩晕染消散 ──
@@ -508,7 +532,7 @@ export class DrawingManifestRenderer {
   /**
    * 绘制画作核心：10 层同心圆（白→紫粉→金→透明），径向渐变
    */
-  private drawBurstCore(g: PIXI.Graphics, radius: number): void {
+  private drawBurstCore(g: PIXI.Graphics, radius: number, pal: Palette): void {
     g.clear();
     const coreR = radius * 0.6;
     // 10 层同心圆叠加（白 → 主紫粉 → 金 → 深紫）
@@ -518,11 +542,11 @@ export class DrawingManifestRenderer {
       // 颜色分段：白 → 主紫粉 → 金 → 深紫
       let color: number;
       if (t < 0.33) {
-        color = this.interpolateColor(INK_WHITE, INK_MAIN, t / 0.33);
+        color = this.interpolateColor(INK_WHITE, pal.primary, t / 0.33);
       } else if (t < 0.66) {
-        color = this.interpolateColor(INK_MAIN, INK_GOLD, (t - 0.33) / 0.33);
+        color = this.interpolateColor(pal.primary, INK_GOLD, (t - 0.33) / 0.33);
       } else {
-        color = this.interpolateColor(INK_GOLD, INK_DEEP, (t - 0.66) / 0.34);
+        color = this.interpolateColor(INK_GOLD, pal.dim, (t - 0.66) / 0.34);
       }
       const alpha = (1 - t) * 0.25;
       g.circle(0, 0, r);
@@ -536,9 +560,9 @@ export class DrawingManifestRenderer {
   /**
    * 绘制水彩波纹：5 层扩散圆环（不同紫色调）
    */
-  private drawBurstRipples(g: PIXI.Graphics, radius: number): void {
+  private drawBurstRipples(g: PIXI.Graphics, radius: number, pal: Palette): void {
     g.clear();
-    const colors = [INK_DEEP, INK_MAIN, INK_LIGHT, INK_PINK, INK_HIGHLIGHT];
+    const colors = [pal.dim, pal.primary, pal.glow, pal.accent, pal.highlight];
     for (let i = 0; i < 5; i++) {
       const r = radius * (0.3 + 0.15 * i);
       g.circle(0, 0, r);
@@ -555,6 +579,7 @@ export class DrawingManifestRenderer {
     g: PIXI.Graphics,
     configs: SplashConfig[],
     t: number,
+    pal: Palette,
   ): void {
     g.clear();
     for (const c of configs) {
@@ -564,7 +589,7 @@ export class DrawingManifestRenderer {
       // 墨点随距离缩小
       const r = c.size * (1 - t * 0.5);
       g.circle(px, py, r);
-      g.fill({ color: INK_MAIN, alpha: 0.8 * (1 - t * 0.3) });
+      g.fill({ color: pal.primary, alpha: 0.8 * (1 - t * 0.3) });
     }
   }
 
@@ -608,7 +633,17 @@ export class DrawingManifestRenderer {
     toY: number,
     isHit: boolean,
     _themeColor = 0xff69b4,
+    palette?: Palette,
   ): { effect: ActiveEffect | null } {
+    const baseColor = 0x8B4D9F;
+    const pal: Palette = palette ?? {
+      primary: baseColor,
+      glow: lighten(baseColor, 50),
+      highlight: lighten(baseColor, 100),
+      dim: dimColor(baseColor, 0.6),
+      shadow: dimColor(baseColor, 0.3),
+      accent: 0xFFB3D9,
+    };
     const s = this.scale;
     const g = new PIXI.Graphics();
     this.fieldContainer.addChild(g);
@@ -642,19 +677,19 @@ export class DrawingManifestRenderer {
         // 内层紫色
         g.moveTo(tsx, tsy);
         g.lineTo(cx, cy);
-        g.stroke({ color: INK_MAIN, width: 3 * s, alpha: 0.7 * (1 - t * 0.5) });
+        g.stroke({ color: pal.primary, width: 3 * s, alpha: 0.7 * (1 - t * 0.5) });
 
         // 肌肉兔头部：多层水彩圆
         const headR = 12 * s;
         // 外层光晕
         g.circle(cx, cy, headR * 1.5);
-        g.fill({ color: INK_MAIN, alpha: 0.2 * (1 - t * 0.3) });
+        g.fill({ color: pal.primary, alpha: 0.2 * (1 - t * 0.3) });
         // 主层
         g.circle(cx, cy, headR);
-        g.fill({ color: INK_PINK, alpha: 0.85 * (1 - t * 0.3) });
+        g.fill({ color: pal.accent, alpha: 0.85 * (1 - t * 0.3) });
         // 高光
         g.circle(cx, cy, headR * 0.5);
-        g.fill({ color: INK_HIGHLIGHT, alpha: 0.6 * (1 - t * 0.3) });
+        g.fill({ color: pal.highlight, alpha: 0.6 * (1 - t * 0.3) });
         // 描边
         g.circle(cx, cy, headR);
         g.stroke({ color: INK_GOLD, width: 2 * s, alpha: 0.8 });
@@ -669,7 +704,7 @@ export class DrawingManifestRenderer {
           g.stroke({ color: INK_GOLD, width: 2 * s, alpha: 0.5 * (1 - hitT) });
           // 中心水彩晕染
           g.circle(toX, toY, 15 * s * hitT);
-          g.fill({ color: INK_MAIN, alpha: 0.3 * (1 - hitT) });
+          g.fill({ color: pal.primary, alpha: 0.3 * (1 - hitT) });
         }
       },
       onDecay: () => {

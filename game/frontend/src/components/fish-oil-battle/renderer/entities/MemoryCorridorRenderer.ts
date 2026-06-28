@@ -15,6 +15,8 @@
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
+import type { Palette } from './BaseWeaponEffectRenderer';
+import { lighten, dimColor } from './VisualEffectUtils';
 
 // ══════════════════════════════════════════════════════
 //  颜色常量（虚空记忆系）
@@ -127,6 +129,7 @@ export class MemoryCorridorRenderer {
     echoCount: number,
     shardId: number,
     themeColor = MEMORY_MAIN,
+    palette?: Palette,
   ): void {
     // 已存在则仅更新位置、半径、碎片数
     const existing = this.activeEchoes.get(playerId);
@@ -139,13 +142,22 @@ export class MemoryCorridorRenderer {
       return;
     }
 
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0x6633CC,
+    };
+
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale); // 全局缩放由容器承担
 
     // 回响光环（8 层径向渐变）
     const auraGraphics = new PIXI.Graphics();
-    this.drawEchoAura(auraGraphics, radius, themeColor);
+    this.drawEchoAura(auraGraphics, radius, pal.primary);
     container.addChild(auraGraphics);
 
     // 记忆碎片（六边形公转）
@@ -384,6 +396,7 @@ export class MemoryCorridorRenderer {
     y: number,
     resonanceStacks: number,
     themeColor = MEMORY_MAIN,
+    palette?: Palette,
   ): void {
     // 若已存在，先销毁旧实例（避免泄漏）
     const old = this.activeResonances.get(targetId);
@@ -392,12 +405,21 @@ export class MemoryCorridorRenderer {
       old.container.destroy({ children: true });
     }
 
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0x6633CC,
+    };
+
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
 
     const coreGraphics = new PIXI.Graphics();
-    this.drawResonanceCore(coreGraphics, resonanceStacks, themeColor);
+    this.drawResonanceCore(coreGraphics, resonanceStacks, pal.primary);
     container.addChild(coreGraphics);
 
     this.fieldContainer.addChild(container);
@@ -493,6 +515,7 @@ export class MemoryCorridorRenderer {
     echoCount: number,
     themeColor = MEMORY_MAIN,
     durationMs?: number,
+    palette?: Palette,
   ): void {
     // 若已存在，先销毁旧实例
     const old = this.activeBursts.get(playerId);
@@ -501,13 +524,22 @@ export class MemoryCorridorRenderer {
       old.container.destroy({ children: true });
     }
 
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0x6633CC,
+    };
+
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
 
     // 1. 记忆核心（10 层渐变：深紫→主紫→银白→透明）
     const coreGraphics = new PIXI.Graphics();
-    this.drawBurstCore(coreGraphics, radius, themeColor);
+    this.drawBurstCore(coreGraphics, radius, pal.primary);
     container.addChild(coreGraphics);
 
     // 2. 共振波纹（5 层扩散圆环，从内到外颜色递进）

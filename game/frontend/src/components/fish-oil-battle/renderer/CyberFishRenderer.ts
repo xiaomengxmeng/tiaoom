@@ -12,8 +12,9 @@ import { GlobalEffectRenderer } from './GlobalEffectRenderer';
 import { getWeaponPalette } from './entities/WeaponPalettes';
 import type { ShapeDescriptor } from './systems/ShapeRenderer';
 import type { ShapeEffectConfig } from './entities/ShapeEffect';
-import type { VisualEventData } from '$/backend/src/games/fish-oil-battle/shared/protocol';
+import type { VisualEventData, HitReaction } from '$/backend/src/games/fish-oil-battle/shared/protocol';
 import { VisualEventType, WeaponId } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
+import { createWeaponDecorator } from './entities/decorators/WeaponDecorators';
 
 /**
  * 赛博鱼油主渲染器（编排层）
@@ -289,6 +290,19 @@ export class CyberFishRenderer {
       : undefined;
 
     switch (config.type) {
+      case VisualEventType.HIT_FEEDBACK: {
+        const reaction = (config as any).hitReaction ?? 'flash';
+        const targetId = (config as any).targetId;
+        const damage = (config as any).hitDamage;
+        if (targetId) {
+          const pr = this.playerRenderers.get(targetId);
+          if (pr) {
+            pr.playHitEffect(reaction as HitReaction);
+            if (damage !== undefined) pr.showDamageNumber(damage, this.getDamageColor(reaction as HitReaction));
+          }
+        }
+        break;
+      }
       case VisualEventType.SHOCKWAVE_TRIGGER:
         if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
           const shockRadius = config.radius ?? SHOCKWAVE_MAX_RADIUS;
@@ -330,6 +344,14 @@ export class CyberFishRenderer {
         break;
       case VisualEventType.BURST_TRIGGER:
         this.effectRenderer.triggerBurstFlash(themeColor ?? config.factionColor ?? 0xFF00FF);
+        if (config.playerId) {
+          this.playerRenderers.get(config.playerId)?.setBurstMode(true);
+          // 4 秒后关闭爆发态（由 burstDurationSec 决定）
+          // 简化：使用 setTimeout，后续可改为事件驱动
+          setTimeout(() => {
+            this.playerRenderers.get(config.playerId ?? '')?.setBurstMode(false);
+          }, ((config as any).durationMs ?? 4000) as number);
+        }
         break;
       case VisualEventType.OPTICAL_SLASH_TRIGGER:
         if (mapCfg.x !== undefined && mapCfg.y !== undefined && config.radius !== undefined) {
@@ -976,9 +998,9 @@ export class CyberFishRenderer {
   /**
    * 触发玩家受击效果（含拖尾截断防翻折）
    */
-  playHitEffect(playerId: string): void {
+  playHitEffect(playerId: string, reaction?: HitReaction): void {
     const pr = this.playerRenderers.get(playerId);
-    pr?.playHitEffect();
+    pr?.playHitEffect(reaction);
     // pr?.onCollision(); // 碰撞时截断旧拖尾，避免方向突变导致翻折
   }
 
@@ -992,8 +1014,34 @@ export class CyberFishRenderer {
   /**
    * 在指定玩家上方显示掉血数字
    */
-  showDamageNumber(playerId: string, damage: number): void {
-    this.playerRenderers.get(playerId)?.showDamageNumber(damage);
+  showDamageNumber(playerId: string, damage: number, color?: number): void {
+    this.playerRenderers.get(playerId)?.showDamageNumber(damage, color);
+  }
+
+  /**
+   * 设置玩家的武器装饰器（按 weaponId 创建对应装饰）
+   */
+  setWeaponDecorator(playerId: string, weaponId: WeaponId): void {
+    const pr = this.playerRenderers.get(playerId);
+    if (!pr) return;
+    const palette = getWeaponPalette(weaponId);
+    if (!palette) return;
+    const decorator = createWeaponDecorator(weaponId, this.l2Entity, palette);
+    pr.setWeaponDecorator(decorator);
+  }
+
+  /**
+   * 根据受击反应类型返回对应的伤害数字颜色
+   */
+  private getDamageColor(reaction: HitReaction): number {
+    switch (reaction) {
+      case 'freeze': return 0x88CCFF;
+      case 'shock': return 0xFFEE88;
+      case 'burn': return 0xFF8800;
+      case 'slash': return 0xDDDDDD;
+      case 'pull': return 0xCC99FF;
+      default: return 0xFF3333;
+    }
   }
 
   /**

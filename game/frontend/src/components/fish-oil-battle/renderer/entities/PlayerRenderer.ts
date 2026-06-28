@@ -274,7 +274,7 @@ export class PlayerRenderer {
   /**
    * 显示掉血数字（浮起渐隐）
    */
-  showDamageNumber(damage: number): void {
+  showDamageNumber(damage: number, color?: number): void {
     // 格式化伤害值：显示整数，避免浮点数精度问题（如 4.2000000000000）
     const formattedDamage = Math.round(damage);
     const text = new PIXI.Text({
@@ -282,7 +282,7 @@ export class PlayerRenderer {
       style: {
         fontFamily: 'system-ui, -apple-system, "SF Pro Display", Inter, sans-serif',
         fontSize: damage >= 20 ? 22 : 16,
-        fill: 0xFF3333,
+        fill: color ?? 0xFF3333,
         fontWeight: '800',
         stroke: { color: 0x000000, width: 3, alpha: 0.6 },
         align: 'center',

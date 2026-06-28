@@ -14,7 +14,7 @@
 
 import type { IBattleState } from '../../core/types';
 import type {
-  IWeapon, IPhysicsQuery, WeaponEffect, WeaponRuntimeState,
+  IWeapon, IPhysicsQuery, WeaponEffect, WeaponRuntimeState, PhysicsObstacle,
 } from '../../core/IWeapon';
 import { TICKS_PER_SEC } from '../../core/IWeapon';
 import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
@@ -61,6 +61,15 @@ export class MemoryCorridorWeapon implements IWeapon {
   private stacks: Record<string, number> = {};
   private flags: Record<string, boolean> = {};
   private tickCounter = 0;
+  /** 回响投射物（可碰撞物理障碍，3s 飞行） */
+  private echoProjectiles: Array<{
+    id: string;
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    spawnedAt: number;
+  }> = [];
 
   // ── 生命周期 ──────────────────────────────────────
 
@@ -190,7 +199,51 @@ export class MemoryCorridorWeapon implements IWeapon {
 
     // 被击中获得能量
     this.gainEnergy(CFG.energyPerBurstHit ?? 20);
+
+    // 生成回响投射物物理障碍（在攻击者位置生成，3s 飞行）
+    const attacker = state.getPlayer(attackerId);
+    if (attacker) {
+      this.echoProjectiles.push({
+        id: `echo_proj_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        x: attacker.position.x,
+        y: attacker.position.y,
+        vx: (Math.random() - 0.5) * 100,
+        vy: (Math.random() - 0.5) * 100,
+        spawnedAt: Date.now(),
+      });
+      // 清理过期投射物
+      const echoNow = Date.now();
+      this.echoProjectiles = this.echoProjectiles.filter(e => echoNow - e.spawnedAt < 3000);
+    }
+
     return effects;
+  }
+
+  // ── 物理障碍 ──────────────────────────────────────
+
+  getObstacles(): PhysicsObstacle[] {
+    const now = Date.now();
+    return this.echoProjectiles
+      .filter(e => now - e.spawnedAt < 3000)  // 3s 飞行
+      .map(e => ({
+        id: e.id,
+        x: e.x,
+        y: e.y,
+        radius: 15,
+        sourceId: this.playerId,
+        type: 'memory_echo',
+      }));
+  }
+
+  onObstacleHit(hittingPlayerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
+    if (hittingPlayerId === this.playerId) return [];
+    return [{
+      type: WeaponEffectType.DAMAGE,
+      targetId: hittingPlayerId,
+      sourceId: this.playerId,
+      value: 8,
+      metadata: { hitReaction: 'pull' },
+    }];
   }
 
   // ── 能量爆发 ──────────────────────────────────────
@@ -307,6 +360,7 @@ export class MemoryCorridorWeapon implements IWeapon {
     this.reactionCooldownTicks = 0;
     this.burstCooldownTicksLeft = 0;
     this.tickCounter = 0;
+    this.echoProjectiles = [];
     this.cooldowns = {};
     this.stacks = {};
     this.flags = {};

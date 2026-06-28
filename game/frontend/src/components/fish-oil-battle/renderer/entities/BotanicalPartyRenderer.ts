@@ -14,6 +14,8 @@
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
+import type { Palette } from './BaseWeaponEffectRenderer';
+import { lighten, dimColor } from './VisualEffectUtils';
 
 // ══════════════════════════════════════════════════════
 //  颜色常量（植物伙伴系）
@@ -139,7 +141,17 @@ export class BotanicalPartyRenderer {
     personality: PlantPersonality,
     radius: number,
     themeColor = PLANT_MAIN,
+    palette?: Palette,
   ): void {
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFFB3D9,
+    };
+
     // 已存在则先销毁旧实例（避免泄漏）
     const old = this.activePlants.get(plantId);
     if (old) {
@@ -153,13 +165,13 @@ export class BotanicalPartyRenderer {
 
     // 1. 植物光晕（6 层径向渐变：白→主绿→透明）
     const haloGraphics = new PIXI.Graphics();
-    this.drawPlantHalo(haloGraphics, radius, themeColor);
+    this.drawPlantHalo(haloGraphics, radius, pal);
     container.addChild(haloGraphics);
 
     // 2. 植物主体（4 层叠加）+ 叶子
     const bodyGraphics = new PIXI.Graphics();
-    this.drawPlantBody(bodyGraphics, radius);
-    this.drawLeaves(bodyGraphics, radius);
+    this.drawPlantBody(bodyGraphics, radius, pal);
+    this.drawLeaves(bodyGraphics, radius, pal);
     container.addChild(bodyGraphics);
 
     // 3. 性格装饰（花瓣/尖刺）
@@ -257,7 +269,7 @@ export class BotanicalPartyRenderer {
   private drawPlantHalo(
     g: PIXI.Graphics,
     radius: number,
-    themeColor: number,
+    pal: Palette,
   ): void {
     g.clear();
     for (let i = 0; i < 6; i++) {
@@ -266,8 +278,8 @@ export class BotanicalPartyRenderer {
       // 颜色：前半段 白→主绿，后半段保持主绿
       const color =
         t < 0.5
-          ? this.interpolateColor(PLANT_WHITE, themeColor, t * 2)
-          : themeColor;
+          ? this.interpolateColor(PLANT_WHITE, pal.primary, t * 2)
+          : pal.primary;
       const alpha = (1 - t) * 0.2; // 中心高 alpha，边缘趋近 0
       g.circle(0, 0, r);
       g.fill({ color, alpha });
@@ -279,14 +291,14 @@ export class BotanicalPartyRenderer {
   /**
    * 绘制植物主体：4 层叠加（深绿→主绿→浅绿→白色高亮）
    */
-  private drawPlantBody(g: PIXI.Graphics, radius: number): void {
+  private drawPlantBody(g: PIXI.Graphics, radius: number, pal: Palette): void {
     g.clear();
     const bodyR = radius * 0.32; // 主体半径
     // 4 层叠加：深绿 → 主绿 → 浅绿 → 白色高亮
     const layers = [
-      { r: bodyR, color: PLANT_DEEP, alpha: 0.9 },
-      { r: bodyR * 0.8, color: PLANT_MAIN, alpha: 0.95 },
-      { r: bodyR * 0.5, color: PLANT_LIGHT, alpha: 1 },
+      { r: bodyR, color: pal.shadow, alpha: 0.9 },
+      { r: bodyR * 0.8, color: pal.primary, alpha: 0.95 },
+      { r: bodyR * 0.5, color: pal.glow, alpha: 1 },
       { r: bodyR * 0.22, color: PLANT_WHITE, alpha: 1 },
     ];
     for (const l of layers) {
@@ -298,7 +310,7 @@ export class BotanicalPartyRenderer {
   /**
    * 绘制叶子：2-4 片椭圆叶子（绿色渐变），围绕主体分布
    */
-  private drawLeaves(g: PIXI.Graphics, radius: number): void {
+  private drawLeaves(g: PIXI.Graphics, radius: number, pal: Palette): void {
     const bodyR = radius * 0.32;
     const leafCount = 2 + Math.floor(Math.random() * 3); // 2-4 片
     const leafLen = bodyR * 0.9;
@@ -308,7 +320,7 @@ export class BotanicalPartyRenderer {
       const dist = bodyR * 0.7;
       const cx = Math.cos(a) * dist;
       const cy = Math.sin(a) * dist;
-      this.drawLeaf(g, cx, cy, a, leafLen, leafWidth);
+      this.drawLeaf(g, cx, cy, a, leafLen, leafWidth, pal);
     }
   }
 
@@ -320,6 +332,7 @@ export class BotanicalPartyRenderer {
     angle: number,
     len: number,
     width: number,
+    pal: Palette,
   ): void {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
@@ -334,7 +347,7 @@ export class BotanicalPartyRenderer {
     g.moveTo(baseX, baseY);
     g.quadraticCurveTo(cx + perpX, cy + perpY, tipX, tipY);
     g.quadraticCurveTo(cx - perpX, cy - perpY, baseX, baseY);
-    g.fill({ color: PLANT_LIGHT, alpha: 0.8 });
+    g.fill({ color: pal.glow, alpha: 0.8 });
   }
 
   // ── 绘制：性格装饰 ──────────────────────────────────
@@ -480,7 +493,17 @@ export class BotanicalPartyRenderer {
     plantCount: number,
     themeColor = PLANT_MAIN,
     durationMs?: number,
+    palette?: Palette,
   ): void {
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFFB3D9,
+    };
+
     // 若已存在，先销毁旧实例
     const old = this.activeBursts.get(playerId);
     if (old) {
@@ -494,7 +517,7 @@ export class BotanicalPartyRenderer {
 
     // 1. 派对核心（10 层同心圆渐变）
     const coreGraphics = new PIXI.Graphics();
-    this.drawBurstCore(coreGraphics, radius);
+    this.drawBurstCore(coreGraphics, radius, pal);
     container.addChild(coreGraphics);
 
     // 2. 兴奋光环（金色多层扩散环）
@@ -512,7 +535,7 @@ export class BotanicalPartyRenderer {
       maxLife: durationMs ?? 4000,
       radius,
       plantCount,
-      themeColor,
+      themeColor: pal.primary,
     };
     this.activeBursts.set(playerId, burst);
 
@@ -523,7 +546,7 @@ export class BotanicalPartyRenderer {
   /**
    * 绘制派对核心：10 层同心圆（白→高亮→浅绿→主绿→透明）
    */
-  private drawBurstCore(g: PIXI.Graphics, radius: number): void {
+  private drawBurstCore(g: PIXI.Graphics, radius: number, pal: Palette): void {
     g.clear();
     const coreR = radius * 0.8; // 核心区域半径
 
@@ -534,21 +557,21 @@ export class BotanicalPartyRenderer {
       // 颜色分段：白 → 高亮 → 浅绿 → 主绿
       let color: number;
       if (t < 0.25) {
-        color = this.interpolateColor(PLANT_WHITE, PLANT_HIGHLIGHT, t / 0.25);
+        color = this.interpolateColor(PLANT_WHITE, pal.highlight, t / 0.25);
       } else if (t < 0.5) {
         color = this.interpolateColor(
-          PLANT_HIGHLIGHT,
-          PLANT_LIGHT,
+          pal.highlight,
+          pal.glow,
           (t - 0.25) / 0.25,
         );
       } else if (t < 0.75) {
         color = this.interpolateColor(
-          PLANT_LIGHT,
-          PLANT_MAIN,
+          pal.glow,
+          pal.primary,
           (t - 0.5) / 0.25,
         );
       } else {
-        color = PLANT_MAIN;
+        color = pal.primary;
       }
       const alpha = (1 - t) * 0.22;
       g.circle(0, 0, r);

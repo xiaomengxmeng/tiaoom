@@ -216,6 +216,8 @@ export enum VisualEventType {
   RICOCHET_CORE_BURST = 'ricochet_core_burst',
   /** 形状特效（一次性） */
   SHAPE_EFFECT = 'shape',
+  /** 命中反馈（受击差异化视觉，由后端 applyDamage 时附带） */
+  HIT_FEEDBACK = 'hit_feedback',
   /** 持续形状特效（常驻，需 sustainedKey） */
   SUSTAINED_SHAPE = 'sustained_shape',
 }

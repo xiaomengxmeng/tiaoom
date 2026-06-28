@@ -9,6 +9,9 @@
 
 import { School, VisualEventType, GlobalEffectType, GameEndReason, WeaponId, ArenaShape } from '../config/GameEnums';
 
+// ─── 受击反馈类型（HIT_FEEDBACK 事件专用，前后端共享）────────
+export type HitReaction = 'flash' | 'freeze' | 'shock' | 'burn' | 'slash' | 'pull';
+
 // ─── 竞技场配置（数据驱动，根据玩家数量动态调整）────────
 export interface ArenaConfig {
   /** 逻辑坐标宽度 */
@@ -212,6 +215,12 @@ export interface VisualEventData {
   botanicalPersonality?: string;
   /** 沐里：植物数量（BOTANICAL_BURST 事件专用） */
   botanicalPlantCount?: number;
+  /** 命中反馈类型（HIT_FEEDBACK 事件专用） */
+  hitReaction?: HitReaction;
+  /** 命中伤害值（HIT_FEEDBACK 事件专用） */
+  hitDamage?: number;
+  /** 命中来源武器 ID（HIT_FEEDBACK 事件专用） */
+  hitSourceWeaponId?: WeaponId;
 }
 
 // ─── 游戏统计（game_end 用）───────────────

@@ -7,8 +7,21 @@ import type {
   GameStatePlayer,
   VisualEventData,
   ArenaConfig,
+  HitReaction,
 } from '$/backend/src/games/fish-oil-battle/shared/protocol';
 import { VisualEventType, WeaponId } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
+
+// ─── 受击反应颜色映射 ──────────────────────────────
+function getDamageColor(reaction: HitReaction): number {
+  switch (reaction) {
+    case 'freeze': return 0x88CCFF;
+    case 'shock': return 0xFFEE88;
+    case 'burn': return 0xFF8800;
+    case 'slash': return 0xDDDDDD;
+    case 'pull': return 0xCC99FF;
+    default: return 0xFF3333;
+  }
+}
 
 // ─── 前端扩展的 HUD 类型 ──────────────────────────────
 export interface HudPlayerInfo {
@@ -179,6 +192,9 @@ export function useFishOilBattle(
   /** 记录上一帧各玩家的 HP */
   const prevHp = new Map<string, number>();
 
+  /** 记录每个玩家最近一次 HIT_FEEDBACK 事件时间戳（用于避免与 HP 差值重复触发伤害数字） */
+  const lastHitFeedbackAt = new Map<string, number>();
+
   /** 处理 game_state 事件（高频，20fps） */
   function onGameState(data: {
     players: GameStatePlayer[];
@@ -201,8 +217,13 @@ export function useFishOilBattle(
       const prev = prevHp.get(p.id);
       if (prev !== undefined && prev > p.hp && p.alive) {
         const dmg = prev - p.hp;
-        rendererRef.value.playHitEffect(p.id);
-        rendererRef.value.showDamageNumber(p.id, dmg);
+        // 仅显示伤害数字（不再触发 flash，由 HIT_FEEDBACK 事件处理）
+        // 若距上次 HIT_FEEDBACK < 200ms 则跳过（避免重复显示）
+        const lastHitAt = lastHitFeedbackAt.get(p.id);
+        const now = performance.now();
+        if (!lastHitAt || now - lastHitAt > 200) {
+          rendererRef.value.showDamageNumber(p.id, dmg);
+        }
       }
       prevHp.set(p.id, p.hp);
 
@@ -256,6 +277,20 @@ export function useFishOilBattle(
     if (!rendererRef.value) return;
 
     switch (data.type) {
+      case VisualEventType.HIT_FEEDBACK: {
+        const reaction = (data as any).hitReaction ?? 'flash';
+        const damage = (data as any).hitDamage;
+        const targetId = (data as any).targetId;
+        if (targetId) {
+          // 记录最近一次 HIT_FEEDBACK 时间戳（用于 HP 差值检测去重）
+          lastHitFeedbackAt.set(targetId, performance.now());
+          rendererRef.value.playHitEffect(targetId, reaction);
+          if (damage !== undefined) {
+            rendererRef.value.showDamageNumber(targetId, damage, getDamageColor(reaction));
+          }
+        }
+        break;
+      }
       case VisualEventType.SHOCKWAVE_TRIGGER:
         if (data.x !== undefined && data.y !== undefined) {
           rendererRef.value.triggerSkillEffect({

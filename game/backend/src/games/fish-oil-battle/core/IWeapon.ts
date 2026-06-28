@@ -81,6 +81,10 @@ export interface PhysicsObstacle {
   height?: number;
   /** 障碍物所属玩家 ID（用于碰撞时追溯伤害来源 + 跳过创造者自己的碰撞） */
   sourceId: string;
+  /** 障碍物唯一标识（用于前端差异化渲染 + 去重） */
+  id?: string;
+  /** 障碍物类型（如 'slash' / 'air_anchor' / 'vortex' / 'memory_echo'，用于前端差异化渲染） */
+  type?: string;
 }
 
 export interface IPhysicsQuery {

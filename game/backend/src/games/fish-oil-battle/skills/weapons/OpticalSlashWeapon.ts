@@ -12,7 +12,7 @@
 
 import type { IBattleState } from '../../core/types';
 import type {
-  IWeapon, IPhysicsQuery, WeaponEffect, WeaponRuntimeState,
+  IWeapon, IPhysicsQuery, WeaponEffect, WeaponRuntimeState, PhysicsObstacle,
 } from '../../core/IWeapon';
 import { WEAPON_RANGE_CONFIG } from '../../config/WeaponRangeConfig';
 import { WeaponId, WeaponName, WeaponEffectType, VisualEventType, School } from '../../config/GameEnums';
@@ -46,6 +46,18 @@ export class OpticalSlashWeapon implements IWeapon {
   private speedBuffTimer = 0;
   private activeSlashes: Slash[] = [];
   private burstReady = false;
+
+  // 斩击残留实体（可碰撞）
+  private slashResidues: Array<{
+    id: string;
+    x: number;
+    y: number;
+    radius: number;
+    spawnedAt: number;
+    ownerId: string;
+  }> = [];
+  /** 障碍物碰撞 CD 时间戳（1s CD） */
+  private lastObstacleHitAt = 0;
 
   // ── 每 tick ───────────────────────────────────────────
 
@@ -198,6 +210,19 @@ export class OpticalSlashWeapon implements IWeapon {
 
     this.activeSlashes.push(slash);
 
+    // 记录斩击残留（可碰撞实体）
+    this.slashResidues.push({
+      id: `slash_residue_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      x: self.position.x,
+      y: self.position.y,
+      radius: 25,
+      spawnedAt: Date.now(),
+      ownerId: this.playerId,
+    });
+    // 清理过期残留
+    const residueNow = Date.now();
+    this.slashResidues = this.slashResidues.filter(r => residueNow - r.spawnedAt < 800);
+
     // 发送视觉事件
     effects.push({
       type: WeaponEffectType.VISUAL_ONLY,
@@ -226,6 +251,36 @@ export class OpticalSlashWeapon implements IWeapon {
 
   onHitByAttacker(_attackerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
     return [];
+  }
+
+  // ── 物理障碍 ──────────────────────────────────────
+
+  getObstacles(): PhysicsObstacle[] {
+    const now = Date.now();
+    return this.slashResidues
+      .filter(r => now - r.spawnedAt < 800)  // 0.8s 持续
+      .map(r => ({
+        id: r.id,
+        x: r.x,
+        y: r.y,
+        radius: r.radius,
+        sourceId: r.ownerId,
+        type: 'slash',
+      }));
+  }
+
+  onObstacleHit(hittingPlayerId: string, _state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
+    if (hittingPlayerId === this.playerId) return [];
+    const now = Date.now();
+    if (now - this.lastObstacleHitAt < 1000) return [];  // 1s CD
+    this.lastObstacleHitAt = now;
+    return [{
+      type: WeaponEffectType.DAMAGE,
+      targetId: hittingPlayerId,
+      sourceId: this.playerId,
+      value: 2,
+      metadata: { hitReaction: 'slash' },
+    }];
   }
 
   // ── 能量 / 爆发 ──────────────────────────────────────
@@ -342,5 +397,7 @@ export class OpticalSlashWeapon implements IWeapon {
     this.speedBuffTimer = 0;
     this.activeSlashes = [];
     this.burstReady = false;
+    this.slashResidues = [];
+    this.lastObstacleHitAt = 0;
   }
 }

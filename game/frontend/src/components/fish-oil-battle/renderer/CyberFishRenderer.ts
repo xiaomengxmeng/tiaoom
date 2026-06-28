@@ -9,10 +9,11 @@ import { ArenaRenderer } from './systems/ArenaRenderer';
 import { PlayerRenderer, type Faction } from './entities/PlayerRenderer';
 import { EffectRenderer } from './entities/EffectRenderer';
 import { GlobalEffectRenderer } from './GlobalEffectRenderer';
+import { getWeaponPalette } from './entities/WeaponPalettes';
 import type { ShapeDescriptor } from './systems/ShapeRenderer';
 import type { ShapeEffectConfig } from './entities/ShapeEffect';
 import type { VisualEventData } from '$/backend/src/games/fish-oil-battle/shared/protocol';
-import { VisualEventType } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
+import { VisualEventType, WeaponId } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
 
 /**
  * 赛博鱼油主渲染器（编排层）
@@ -337,6 +338,8 @@ export class CyberFishRenderer {
             (config as any).angle ?? 0, config.radius,
             themeColor ?? config.factionColor ?? 0x00BFFF,
             false,
+            undefined,
+            getWeaponPalette(WeaponId.OPTICAL_SLASH),
           );
         }
         break;
@@ -346,6 +349,8 @@ export class CyberFishRenderer {
             mapCfg.x, mapCfg.y,
             themeColor ?? config.factionColor ?? 0x00BFFF,
             config.radius,
+            undefined,
+            getWeaponPalette(WeaponId.OPTICAL_SLASH),
           );
         }
         break;
@@ -381,6 +386,8 @@ export class CyberFishRenderer {
             mapCfg.x, mapCfg.y,
             (config as any).anchorId ?? `anchor_${Date.now()}`,
             themeColor,
+            undefined,
+            getWeaponPalette(WeaponId.AIR_REPULSION_FIELD),
           );
         }
         break;
@@ -390,6 +397,8 @@ export class CyberFishRenderer {
             mapCfg.x, mapCfg.y,
             config.radius,
             themeColor,
+            undefined,
+            getWeaponPalette(WeaponId.AIR_REPULSION_FIELD),
           );
         }
         break;
@@ -401,6 +410,7 @@ export class CyberFishRenderer {
             mapCfg.x, mapCfg.y,
             config.radius ?? 50,
             themeColor,
+            getWeaponPalette(WeaponId.ENTROPIC_TOUCH),
           );
         }
         break;
@@ -412,6 +422,7 @@ export class CyberFishRenderer {
             config.frostbiteStacks ?? 1,
             mapCfg.x, mapCfg.y,
             themeColor,
+            getWeaponPalette(WeaponId.ENTROPIC_TOUCH),
           );
         }
         break;
@@ -423,6 +434,8 @@ export class CyberFishRenderer {
             mapCfg.x, mapCfg.y,
             config.radius ?? 200,
             themeColor,
+            undefined,
+            getWeaponPalette(WeaponId.ENTROPIC_TOUCH),
           );
         }
         break;
@@ -438,6 +451,7 @@ export class CyberFishRenderer {
               config.inkStacks ?? 0,
               config.isMuscleRabbit ?? false,
               themeColor,
+              getWeaponPalette(WeaponId.DRAWING_MANIFEST),
             );
           }
         }
@@ -453,6 +467,7 @@ export class CyberFishRenderer {
               bx, by,
               config.radius ?? 50,
               themeColor,
+              getWeaponPalette(WeaponId.DRAWING_MANIFEST),
             );
           }
         }
@@ -468,6 +483,7 @@ export class CyberFishRenderer {
               this.mapX(config.toX), this.mapY(config.toY),
               isHit,
               themeColor,
+              getWeaponPalette(WeaponId.DRAWING_MANIFEST),
             );
           }
         }
@@ -482,6 +498,7 @@ export class CyberFishRenderer {
           if (cx !== undefined && cy !== undefined) {
             this.effectRenderer.updateDischargeCat(
               config.playerId ?? 'unknown', cx, cy, isBurst, themeColor,
+              getWeaponPalette(WeaponId.DISCHARGE_CAT),
             );
           }
           // 绘制电弧弹射链
@@ -490,7 +507,10 @@ export class CyberFishRenderer {
               x: this.mapX(n.x),
               y: this.mapY(n.y),
             }));
-            this.effectRenderer.triggerDischargeArc(mappedNodes, isBurst, themeColor);
+            this.effectRenderer.triggerDischargeArc(
+              mappedNodes, isBurst, themeColor,
+              getWeaponPalette(WeaponId.DISCHARGE_CAT),
+            );
           }
         }
         break;
@@ -505,6 +525,7 @@ export class CyberFishRenderer {
               bx, by,
               config.radius ?? 120,
               themeColor,
+              getWeaponPalette(WeaponId.DISCHARGE_CAT),
             );
           }
         }
@@ -518,6 +539,7 @@ export class CyberFishRenderer {
             config.foresightStacks ?? 0,
             config.isBurst ?? false,
             themeColor,
+            getWeaponPalette(WeaponId.PRECOGNITIVE_LENS),
           );
         }
         break;
@@ -530,6 +552,7 @@ export class CyberFishRenderer {
             this.mapX(config.toX), this.mapY(config.toY),
             config.isBurst ?? false,
             themeColor,
+            getWeaponPalette(WeaponId.PRECOGNITIVE_LENS),
           );
         }
         break;
@@ -540,6 +563,7 @@ export class CyberFishRenderer {
             config.playerId ?? 'unknown',
             mapCfg.x, mapCfg.y,
             themeColor,
+            getWeaponPalette(WeaponId.PRECOGNITIVE_LENS),
           );
         }
         break;
@@ -550,6 +574,7 @@ export class CyberFishRenderer {
             mapCfg.x, mapCfg.y,
             config.radius ?? 40,
             config.weatherColor ?? 0x4DA6FF,
+            getWeaponPalette(WeaponId.EMOTIONAL_WEATHER),
           );
         }
         break;
@@ -559,6 +584,7 @@ export class CyberFishRenderer {
           this.effectRenderer.triggerWeatherHail(
             mapCfg.x, mapCfg.y,
             config.radius ?? 30,
+            getWeaponPalette(WeaponId.EMOTIONAL_WEATHER),
           );
         }
         break;
@@ -568,6 +594,7 @@ export class CyberFishRenderer {
           this.effectRenderer.triggerWeatherBurst(
             mapCfg.x, mapCfg.y,
             config.radius ?? 200,
+            getWeaponPalette(WeaponId.EMOTIONAL_WEATHER),
           );
         }
         break;
@@ -579,6 +606,7 @@ export class CyberFishRenderer {
             mapCfg.x, mapCfg.y,
             config.currentMood ?? 'anger',
             themeColor,
+            getWeaponPalette(WeaponId.EMOTION_MASTERY),
           );
         }
         break;
@@ -589,6 +617,7 @@ export class CyberFishRenderer {
             config.playerId ?? 'unknown',
             mapCfg.x, mapCfg.y,
             themeColor,
+            getWeaponPalette(WeaponId.EMOTION_MASTERY),
           );
         }
         break;
@@ -602,6 +631,7 @@ export class CyberFishRenderer {
             config.flowDir ?? 0,
             themeColor ?? config.factionColor,
             config.isAngry,
+            getWeaponPalette(WeaponId.FLUID_MASTERY),
           );
         }
         break;
@@ -615,6 +645,7 @@ export class CyberFishRenderer {
             config.pullForce ?? 0.5,
             themeColor ?? config.factionColor,
             config.isAngry,
+            getWeaponPalette(WeaponId.FLUID_MASTERY),
           );
         }
         break;
@@ -628,6 +659,7 @@ export class CyberFishRenderer {
             themeColor ?? config.factionColor,
             undefined,
             config.isAngry,
+            getWeaponPalette(WeaponId.FLUID_MASTERY),
           );
         }
         break;
@@ -641,6 +673,7 @@ export class CyberFishRenderer {
             config.echoCount ?? 0,
             config.shardId ?? '',
             themeColor ?? config.factionColor,
+            getWeaponPalette(WeaponId.MEMORY_CORRIDOR),
           );
         }
         break;
@@ -652,6 +685,7 @@ export class CyberFishRenderer {
             mapCfg.x, mapCfg.y,
             config.resonanceStacks ?? 1,
             themeColor ?? config.factionColor,
+            getWeaponPalette(WeaponId.MEMORY_CORRIDOR),
           );
         }
         break;
@@ -664,6 +698,8 @@ export class CyberFishRenderer {
             config.radius ?? 200,
             config.echoCount ?? 0,
             themeColor ?? config.factionColor,
+            undefined,
+            getWeaponPalette(WeaponId.MEMORY_CORRIDOR),
           );
         }
         break;
@@ -677,6 +713,7 @@ export class CyberFishRenderer {
             config.foldLayer ?? 1,
             config.dodgeSuccess ?? false,
             themeColor ?? config.factionColor,
+            getWeaponPalette(WeaponId.INFINITE_FOLD),
           );
         }
         break;
@@ -688,6 +725,7 @@ export class CyberFishRenderer {
             mapCfg.x, mapCfg.y,
             config.foldCount ?? 1,
             themeColor ?? config.factionColor,
+            getWeaponPalette(WeaponId.INFINITE_FOLD),
           );
         }
         break;
@@ -699,6 +737,8 @@ export class CyberFishRenderer {
             mapCfg.x, mapCfg.y,
             config.radius ?? 180,
             themeColor ?? config.factionColor,
+            undefined,
+            getWeaponPalette(WeaponId.INFINITE_FOLD),
           );
         }
         break;
@@ -711,6 +751,7 @@ export class CyberFishRenderer {
             (config.personality ?? 'gentle') as 'gentle' | 'fierce' | 'curious',
             config.radius ?? 40,
             themeColor,
+            getWeaponPalette(WeaponId.BOTANICAL_CONTROL),
           );
         }
         break;
@@ -730,6 +771,7 @@ export class CyberFishRenderer {
             config.plantCount ?? 0,
             themeColor,
             config.durationMs,
+            getWeaponPalette(WeaponId.BOTANICAL_CONTROL),
           );
         }
         break;

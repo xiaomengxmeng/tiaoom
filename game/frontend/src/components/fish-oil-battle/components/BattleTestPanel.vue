@@ -3,43 +3,152 @@
     <!-- ═══════════════════════════════════════════════ -->
     <!--  控制面板（侧边栏）                              -->
     <!-- ═══════════════════════════════════════════════ -->
-    <aside class="w-56 shrink-0 flex flex-col border-r border-base-300 bg-base-200/40 p-3 gap-4 overflow-y-auto">
+    <aside class="w-72 shrink-0 flex flex-col border-r border-base-300 bg-base-200/40 p-3 gap-3 overflow-y-auto">
       <h3 class="text-sm font-bold opacity-70">对局测试</h3>
 
-      <!-- Bot 数量 -->
-      <label class="form-control">
-        <span class="label-text text-xs flex justify-between">
-          <span>Bot 数量</span>
-          <span class="font-mono tabular-nums">{{ botCount }}</span>
-        </span>
-        <input
-          v-model.number="botCount"
-          type="range"
-          class="range range-primary range-xs mt-0.5"
-          :min="1" :max="7" :step="1"
-          :disabled="isBattleActive"
-        />
-      </label>
-
-      <!-- 房间状态 -->
-      <div v-if="roomStatus" class="text-xs opacity-60">
-        <span class="font-mono">{{ roomStatus }}</span>
+      <!-- 基础配置 -->
+      <div class="collapse collapse-arrow bg-base-200/50">
+        <input type="checkbox" checked />
+        <div class="collapse-title text-xs font-semibold">基础配置</div>
+        <div class="collapse-content flex flex-col gap-2">
+          <label class="form-control">
+            <span class="label-text text-xs flex justify-between">
+              <span>Bot 数量</span>
+              <span class="font-mono tabular-nums">{{ botCount }}</span>
+            </span>
+            <input
+              v-model.number="botCount"
+              type="range"
+              class="range range-primary range-xs mt-0.5"
+              :min="1" :max="7" :step="1"
+              :disabled="isBattleActive"
+            />
+          </label>
+          <div v-if="roomStatus" class="text-xs opacity-60">
+            <span class="font-mono">{{ roomStatus }}</span>
+          </div>
+          <button
+            class="btn btn-primary btn-sm w-full"
+            :disabled="isCreating"
+            @click="isBattleActive ? stopBattle() : startBattle()"
+          >
+            <span v-if="isCreating" class="loading loading-spinner loading-xs" />
+            {{ isBattleActive ? '结束对局' : '开始对局' }}
+          </button>
+        </div>
       </div>
 
-      <!-- 开始 / 停止 -->
-      <button
-        class="btn btn-primary btn-sm w-full"
-        :disabled="isCreating"
-        @click="isBattleActive ? stopBattle() : startBattle()"
-      >
-        <span v-if="isCreating" class="loading loading-spinner loading-xs" />
-        {{ isBattleActive ? '结束对局' : '开始对局' }}
-      </button>
+      <!-- 武器配置 -->
+      <div class="collapse collapse-arrow bg-base-200/50">
+        <input type="checkbox" :disabled="isBattleActive" />
+        <div class="collapse-title text-xs font-semibold">武器配置</div>
+        <div class="collapse-content flex flex-col gap-2">
+          <label class="form-control">
+            <span class="label-text text-xs">禁用武器（多选）</span>
+            <select
+              v-model="disabledWeapons"
+              multiple
+              class="select select-bordered select-xs mt-0.5 h-24"
+              :disabled="isBattleActive"
+            >
+              <option v-for="w in implementedWeapons" :key="w.id" :value="w.id">
+                {{ w.name }}
+              </option>
+            </select>
+          </label>
+          <div class="text-[10px] opacity-50 mt-1">Bot 武器配置</div>
+          <label
+            v-for="i in botCount"
+            :key="`bot-weapon-${i}`"
+            class="form-control"
+          >
+            <span class="label-text text-xs">Bot {{ i }} 武器</span>
+            <select
+              :value="botWeapons[i - 1] || ''"
+              class="select select-bordered select-xs mt-0.5"
+              :disabled="isBattleActive"
+              @change="botWeapons[i - 1] = ($event.target as HTMLSelectElement).value"
+            >
+              <option value="">随机</option>
+              <option v-for="w in implementedWeapons" :key="w.id" :value="w.id">
+                {{ w.name }}
+              </option>
+            </select>
+          </label>
+        </div>
+      </div>
 
-      <!-- 提示 -->
-      <p class="text-[10px] opacity-40 leading-relaxed">
-        自动添加 {{ botCount }} 个 Bot，随机选择武器，技能自动释放。完整 HUD 渲染。
-      </p>
+      <!-- 调试面板 -->
+      <div v-if="isBattleActive" class="collapse collapse-arrow bg-base-200/50">
+        <input type="checkbox" checked />
+        <div class="collapse-title text-xs font-semibold">调试面板</div>
+        <div class="collapse-content flex flex-col gap-2">
+          <label class="form-control">
+            <span class="label-text text-xs">目标玩家</span>
+            <select
+              v-model="debugTargetPlayerId"
+              class="select select-bordered select-xs mt-0.5"
+            >
+              <option value="">选择玩家</option>
+              <option v-for="p in debugTargetOptions" :key="p.id" :value="p.id">
+                {{ p.name }}
+              </option>
+            </select>
+          </label>
+          <div class="grid grid-cols-3 gap-1">
+            <button class="btn btn-primary btn-xs" @click="debugFillEnergy">
+              <Icon icon="ph:lightning-fill" />
+              充满
+            </button>
+            <button class="btn btn-error btn-xs" @click="debugForceBurst">
+              <Icon icon="ph:explosion-fill" />
+              爆发
+            </button>
+            <button class="btn btn-ghost btn-xs" @click="debugResetWeapon">
+              <Icon icon="ph:arrow-counter-clockwise" />
+              重置
+            </button>
+          </div>
+          <label class="form-control">
+            <span class="label-text text-xs flex justify-between">
+              <span>能量倍率</span>
+              <span class="font-mono tabular-nums">{{ energyMultiplier }}%</span>
+            </span>
+            <input
+              v-model.number="energyMultiplier"
+              type="range"
+              class="range range-secondary range-xs mt-0.5"
+              :min="0" :max="100" :step="10"
+              @change="debugSetEnergy"
+            />
+          </label>
+        </div>
+      </div>
+
+      <!-- 运行时状态 -->
+      <div v-if="isBattleActive && debugTargetPlayerId" class="collapse collapse-arrow bg-base-200/50">
+        <input type="checkbox" checked />
+        <div class="collapse-title text-xs font-semibold">运行时状态</div>
+        <div class="collapse-content flex flex-col gap-1 text-[11px] font-mono">
+          <template v-if="runtimeStates[debugTargetPlayerId]">
+            <div class="flex justify-between">
+              <span class="opacity-60">能量</span>
+              <span class="tabular-nums">{{ runtimeStates[debugTargetPlayerId].energy }}/{{ runtimeStates[debugTargetPlayerId].maxEnergy }}</span>
+            </div>
+            <div class="opacity-60 mt-1">冷却</div>
+            <pre class="bg-base-300/50 p-1 rounded text-[10px] overflow-x-auto">{{ JSON.stringify(runtimeStates[debugTargetPlayerId].cooldowns, null, 2) }}</pre>
+            <div class="opacity-60 mt-1">层数</div>
+            <pre class="bg-base-300/50 p-1 rounded text-[10px] overflow-x-auto">{{ JSON.stringify(runtimeStates[debugTargetPlayerId].stacks, null, 2) }}</pre>
+            <div class="opacity-60 mt-1">标记</div>
+            <pre class="bg-base-300/50 p-1 rounded text-[10px] overflow-x-auto">{{ JSON.stringify(runtimeStates[debugTargetPlayerId].flags, null, 2) }}</pre>
+            <template v-if="runtimeStates[debugTargetPlayerId].custom">
+              <div class="opacity-60 mt-1">自定义</div>
+              <pre class="bg-base-300/50 p-1 rounded text-[10px] overflow-x-auto">{{ JSON.stringify(runtimeStates[debugTargetPlayerId].custom, null, 2) }}</pre>
+            </template>
+          </template>
+          <div v-else class="opacity-40 text-center py-2">无数据</div>
+        </div>
+      </div>
 
       <!-- 测试报告 -->
       <button
@@ -171,12 +280,28 @@ import type { SelectableWeapon, HudPlayerInfo } from '../useFishOilBattle';
 import type { ArenaConfig, PlayerStats } from '$/backend/src/games/fish-oil-battle/shared/protocol';
 import { VisualEventType, WeaponId } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
 import BattleStatsModal from './BattleStatsModal.vue';
+import { getImplementedWeaponMetaList } from '$/backend/src/games/fish-oil-battle/core/WeaponRegistry';
+import type { WeaponRuntimeState } from '$/backend/src/games/fish-oil-battle/core/IWeapon';
 
 const router = useRouter();
 const gameStore = useGameStore();
 
 // ── 控制面板状态 ──────────────────────────────────
 const botCount = ref(3);
+// ── 武器配置状态 ──
+const implementedWeapons = getImplementedWeaponMetaList();
+const disabledWeapons = ref<string[]>([]);
+const botWeapons = ref<Record<number, string>>({});
+
+// ── 调试面板状态 ──
+const debugTargetPlayerId = ref<string>('');
+const energyMultiplier = ref(100);
+
+// ── 运行时状态 ──
+const runtimeStates = ref<Record<string, WeaponRuntimeState>>({});
+const playerNameToId = ref<Record<string, string>>({});
+const debugTargetOptions = ref<Array<{ id: string; name: string }>>([]);
+
 const isCreating = ref(false);
 const isBattleActive = ref(false);
 const roomStatus = ref('');
@@ -293,6 +418,34 @@ function sendCommand(type: string, data?: any): void {
   if (id && gameStore.game) {
     gameStore.game.command(id, { type, data });
   }
+}
+
+/** 调试：一键充满目标玩家能量 */
+function debugFillEnergy(): void {
+  if (!debugTargetPlayerId.value) return;
+  sendCommand('debug_energy', { playerId: debugTargetPlayerId.value, action: 'fill' });
+}
+
+/** 调试：强制目标玩家爆发 */
+function debugForceBurst(): void {
+  if (!debugTargetPlayerId.value) return;
+  sendCommand('debug_burst', { playerId: debugTargetPlayerId.value });
+}
+
+/** 调试：重置目标玩家武器状态 */
+function debugResetWeapon(): void {
+  if (!debugTargetPlayerId.value) return;
+  sendCommand('debug_reset', { playerId: debugTargetPlayerId.value });
+}
+
+/** 调试：设置能量倍率 */
+function debugSetEnergy(): void {
+  if (!debugTargetPlayerId.value) return;
+  sendCommand('debug_energy', {
+    playerId: debugTargetPlayerId.value,
+    action: 'set',
+    value: energyMultiplier.value,
+  });
 }
 
 // ── 后端事件处理 ──────────────────────────────────
@@ -413,6 +566,13 @@ function handleGameState(data: { players: any[]; tick: number; timestamp: number
     }
     prevHp.set(p.id, p.hp);
 
+    // 提取 runtimeState（测试模式）
+    if (p.runtimeState) {
+      runtimeStates.value[p.id] = p.runtimeState;
+    }
+    // 构建 玩家名 → playerId 映射
+    playerNameToId.value[p.name] = p.id;
+
     // 更新物理系统
     rendererRef.value.updatePlayerState(p.id, {
       tick: data.tick, x: p.x, y: p.y,
@@ -445,6 +605,9 @@ function handleGameState(data: { players: any[]; tick: number; timestamp: number
   }
 
   otherPlayerHuds.value = newOtherHuds;
+
+  // 更新调试目标选项列表
+  debugTargetOptions.value = data.players.map(p => ({ id: p.id, name: p.name }));
 }
 
 function handleVisualEvent(data: any): void {
@@ -656,7 +819,11 @@ async function startBattle(): Promise<void> {
     }
 
     // 发送测试模式命令
-    sendCommand('start_test_mode', { botCount: botCount.value });
+    sendCommand('start_test_mode', {
+      botCount: botCount.value,
+      botWeapons: Array.from({ length: botCount.value }, (_, i) => botWeapons.value[i] || ''),
+      disabledWeapons: disabledWeapons.value,
+    });
     roomStatus.value = `测试模式启动中 (${botCount.value} Bot)`;
 
     // 监听房间命令
@@ -703,6 +870,12 @@ function stopBattle(): void {
   showWeaponSelect.value = false;
   roomStatus.value = '已结束';
   roomId.value = '';
+
+  // 清空调试状态
+  debugTargetPlayerId.value = '';
+  runtimeStates.value = {};
+  playerNameToId.value = {};
+  debugTargetOptions.value = [];
 
   // 离开房间，确保下次能重新创建
   const room = gameStore.roomPlayer?.room;

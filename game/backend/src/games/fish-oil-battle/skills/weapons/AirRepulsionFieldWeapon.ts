@@ -225,6 +225,34 @@ export class AirRepulsionFieldWeapon implements IWeapon {
       }
     }
 
+    // ── 周期性发送气罩 + 锚点同步（每 5 tick ≈ 83ms 一次） ──
+    // 让前端始终能看到气罩跟随球体 + 存活锚点状态（即使未碰撞也保持可见）
+    // anchors 数组携带全部活跃锚点，isBurst 标识是否处于重力反转场持续期间
+    if (this.tickCounter % 5 === 0) {
+      effects.push({
+        type: WeaponEffectType.VISUAL_ONLY,
+        sourceId: this.playerId,
+        value: 0,
+        position: { x: self.position.x, y: self.position.y },
+        metadata: {
+          visualType: VisualEventType.AIR_REPULSION_ANCHOR,
+          isBurst: this.isBurstActive,
+          shieldX: self.position.x,
+          shieldY: self.position.y,
+          shieldRadius: shieldR,
+          anchors: this.anchors.map(a => ({
+            id: a.id,
+            x: a.x,
+            y: a.y,
+            radius: AR.radius!,
+            secondsLeft: a.secondsLeft,
+          })),
+          count: this.anchors.length,
+          max: AR.maxCount!,
+        },
+      });
+    }
+
     return effects;
   }
 

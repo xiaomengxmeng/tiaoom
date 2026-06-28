@@ -125,6 +125,30 @@ export class BotanicalControlWeapon implements IWeapon {
       this.plants = survivors;
     }
 
+    // ── 周期性发送植物状态同步（每 5 tick ≈ 83ms 一次） ──
+    // 让前端始终能看到存活植物 + 兴奋状态（即使未碰撞也保持可见）
+    // plants 数组携带全部存活植物，isBurst 标识是否处于植物派对爆发期间
+    if (this.tickCounter % 5 === 0) {
+      effects.push({
+        type: WeaponEffectType.VISUAL_ONLY,
+        sourceId: this.playerId,
+        value: 0,
+        position: { x: self.position.x, y: self.position.y },
+        metadata: {
+          visualType: VisualEventType.BOTANICAL_PLANT_SPAWN,
+          isBurst: this.isBurstActive,
+          plants: this.plants.map(p => ({
+            id: p.id,
+            personality: p.personality,
+            x: p.x,
+            y: p.y,
+            radius: p.radius,
+            ticksLeft: p.ticksLeft,
+          })),
+        },
+      });
+    }
+
     return effects;
   }
 

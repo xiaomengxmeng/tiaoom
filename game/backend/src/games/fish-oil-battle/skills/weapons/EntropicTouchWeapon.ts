@@ -71,8 +71,10 @@ export class EntropicTouchWeapon implements IWeapon {
       this.tickCounter = 0;
     }
 
-    // 定期发送低温场 aura 视觉事件（每 5 秒 = 100 ticks）
-    if (this.tickCounter % 100 === 0) {
+    // ── 周期性发送低温场 aura 视觉同步（每 5 tick ≈ 83ms 一次） ──
+    // 让前端始终能看到低温场跟随球体（即使无对手在场也保持可见）
+    // isBurst 标识当前是否处于热力学奇点爆发期间
+    if (this.tickCounter % 5 === 0) {
       effects.push({
         type: WeaponEffectType.VISUAL_ONLY,
         sourceId: this.playerId,
@@ -81,6 +83,7 @@ export class EntropicTouchWeapon implements IWeapon {
         metadata: {
           visualType: VisualEventType.ENTROPIC_TOUCH_AURA,
           radius: CFG.damageRadius ?? 50,
+          isBurst: this.isBurstActive,
         },
       });
     }
@@ -242,6 +245,22 @@ export class EntropicTouchWeapon implements IWeapon {
           this.burstTicksLeft--;
         }
       }
+    }
+
+    // ── 周期性发送热力学奇点爆发场视觉同步（每 5 tick ≈ 83ms 一次） ──
+    // 让前端在爆发持续期间持续看到热力学奇点场（不仅限于 burst() 启动时一次）
+    if (this.isBurstActive && this.tickCounter % 5 === 0) {
+      effects.push({
+        type: WeaponEffectType.VISUAL_ONLY,
+        sourceId: this.playerId,
+        value: 0,
+        position: { x: self.position.x, y: self.position.y },
+        metadata: {
+          visualType: VisualEventType.ENTROPIC_TOUCH_BURST,
+          isBurst: true,
+          radius: CFG.aoeMaxRadius ?? 200,
+        },
+      });
     }
 
     return effects;

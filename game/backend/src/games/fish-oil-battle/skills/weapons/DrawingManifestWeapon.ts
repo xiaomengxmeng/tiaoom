@@ -164,6 +164,25 @@ export class DrawingManifestWeapon implements IWeapon {
       }
     }
 
+    // ── 周期性发送小兔/肌肉兔位置同步（每 5 tick ≈ 83ms 一次） ──
+    // 让前端始终能看到小兔/肌肉兔跟随球体（即使未碰撞也保持可见）
+    // inkStacks 用于同步墨水层数，isMuscleRabbit 标识当前是否处于爆发形态
+    if (this.tickCounter % 5 === 0) {
+      effects.push({
+        type: WeaponEffectType.VISUAL_ONLY,
+        sourceId: this.playerId,
+        value: 0,
+        position: { x: this.rabbitX, y: this.rabbitY },
+        metadata: {
+          visualType: VisualEventType.DRAWING_MANIFEST_INK,
+          inkStacks: this.energy,
+          isMuscleRabbit: this.isBurstActive,
+          rabbitX: this.rabbitX,
+          rabbitY: this.rabbitY,
+        },
+      });
+    }
+
     return effects;
   }
 

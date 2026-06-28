@@ -1,6 +1,67 @@
 import type { EffectTestContext } from './EffectTestController';
 import { ref, type Ref } from 'vue';
-import { VisualEventType } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
+import { VisualEventType, WeaponId } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
+import { getWeaponPalette } from '../renderer/entities/WeaponPalettes';
+import type { Palette } from '../renderer/entities/BaseWeaponEffectRenderer';
+
+/**
+ * VisualEventType → WeaponId 映射
+ * 用于在测试页自动应用预设色板
+ */
+const VISUAL_TYPE_TO_WEAPON: Partial<Record<VisualEventType, WeaponId>> = {
+  // 光学斩击
+  [VisualEventType.OPTICAL_SLASH_TRIGGER]: WeaponId.OPTICAL_SLASH,
+  [VisualEventType.OPTICAL_SLASH_BURST]: WeaponId.OPTICAL_SLASH,
+  // 空气斥力场
+  [VisualEventType.AIR_REPULSION_ANCHOR]: WeaponId.AIR_REPULSION_FIELD,
+  [VisualEventType.AIR_REPULSION_BURST]: WeaponId.AIR_REPULSION_FIELD,
+  // 熵寂之触
+  [VisualEventType.ENTROPIC_TOUCH_AURA]: WeaponId.ENTROPIC_TOUCH,
+  [VisualEventType.ENTROPIC_TOUCH_FROSTBITE]: WeaponId.ENTROPIC_TOUCH,
+  [VisualEventType.ENTROPIC_TOUCH_BURST]: WeaponId.ENTROPIC_TOUCH,
+  // 画作实体化
+  [VisualEventType.DRAWING_MANIFEST_INK]: WeaponId.DRAWING_MANIFEST,
+  [VisualEventType.DRAWING_MANIFEST_BURST]: WeaponId.DRAWING_MANIFEST,
+  [VisualEventType.DRAWING_MANIFEST_DASH]: WeaponId.DRAWING_MANIFEST,
+  // 放电猫猫
+  [VisualEventType.DISCHARGE_CAT_ARC]: WeaponId.DISCHARGE_CAT,
+  [VisualEventType.DISCHARGE_CAT_BURST]: WeaponId.DISCHARGE_CAT,
+  // 预知透镜
+  [VisualEventType.PRECOGNITIVE_LENS_ECHO]: WeaponId.PRECOGNITIVE_LENS,
+  [VisualEventType.PRECOGNITIVE_LENS_FORESIGHT]: WeaponId.PRECOGNITIVE_LENS,
+  [VisualEventType.PRECOGNITIVE_LENS_BURST]: WeaponId.PRECOGNITIVE_LENS,
+  // 情绪天气
+  [VisualEventType.EMOTIONAL_WEATHER_LIGHTNING]: WeaponId.EMOTIONAL_WEATHER,
+  [VisualEventType.EMOTIONAL_WEATHER_HAIL]: WeaponId.EMOTIONAL_WEATHER,
+  [VisualEventType.EMOTIONAL_WEATHER_BURST]: WeaponId.EMOTIONAL_WEATHER,
+  // 情绪掌控
+  [VisualEventType.EMOTION_MASTERY_MOOD]: WeaponId.EMOTION_MASTERY,
+  [VisualEventType.EMOTION_MASTERY_BURST]: WeaponId.EMOTION_MASTERY,
+  // 流体操控
+  [VisualEventType.FLUID_MASTERY_TRAIL]: WeaponId.FLUID_MASTERY,
+  [VisualEventType.FLUID_MASTERY_VORTEX]: WeaponId.FLUID_MASTERY,
+  [VisualEventType.FLUID_MASTERY_BURST]: WeaponId.FLUID_MASTERY,
+  // 记忆回廊
+  [VisualEventType.MEMORY_CORRIDOR_ECHO]: WeaponId.MEMORY_CORRIDOR,
+  [VisualEventType.MEMORY_CORRIDOR_RESONANCE]: WeaponId.MEMORY_CORRIDOR,
+  [VisualEventType.MEMORY_CORRIDOR_BURST]: WeaponId.MEMORY_CORRIDOR,
+  // 无限折叠
+  [VisualEventType.INFINITE_FOLD_DODGE]: WeaponId.INFINITE_FOLD,
+  [VisualEventType.INFINITE_FOLD_REASSEMBLE]: WeaponId.INFINITE_FOLD,
+  [VisualEventType.INFINITE_FOLD_BURST]: WeaponId.INFINITE_FOLD,
+  // 植物伙伴
+  [VisualEventType.BOTANICAL_PLANT_SPAWN]: WeaponId.BOTANICAL_CONTROL,
+  [VisualEventType.BOTANICAL_PLANT_DECAY]: WeaponId.BOTANICAL_CONTROL,
+  [VisualEventType.BOTANICAL_BURST]: WeaponId.BOTANICAL_CONTROL,
+};
+
+/**
+ * 根据 VisualEventType 查询对应武器的预设色板
+ */
+function paletteFor(visualType: VisualEventType): Palette | undefined {
+  const weaponId = VISUAL_TYPE_TO_WEAPON[visualType];
+  return weaponId ? getWeaponPalette(weaponId) : undefined;
+}
 
 /**
  * 特效参数定义
@@ -193,6 +254,7 @@ export function autoRegisterFromEnum(): void {
         const color = v.primaryColor || 0xFF00FF;
         const size = v.size || 80;
         const duration = v.duration || 1000;
+        const palette = paletteFor(visualType);
 
         switch (visualType) {
           case VisualEventType.SHOCKWAVE_TRIGGER: {
@@ -235,65 +297,65 @@ export function autoRegisterFromEnum(): void {
           }
           case VisualEventType.OPTICAL_SLASH_TRIGGER: {
             const angleRad = (45 * Math.PI) / 180; // 45度
-            const ef = ctx.opticalSlashRenderer.triggerSlash(x, y, angleRad, size * 1.5, color, false);
+            const ef = ctx.opticalSlashRenderer.triggerSlash(x, y, angleRad, size * 1.5, color, false, undefined, palette);
             if (ef) ctx.addEffect(ef);
             break;
           }
           case VisualEventType.OPTICAL_SLASH_BURST: {
-            const effects = ctx.opticalSlashRenderer.triggerBurst(x, y, color);
+            const effects = ctx.opticalSlashRenderer.triggerBurst(x, y, color, undefined, undefined, palette);
             ctx.addEffect(effects);
             break;
           }
           case VisualEventType.AIR_REPULSION_ANCHOR: {
-            const result = ctx.airRepulsionRenderer?.triggerAnchor(x, y, `anchor_${Date.now()}`, color, size * 1.5);
+            const result = ctx.airRepulsionRenderer?.triggerAnchor(x, y, `anchor_${Date.now()}`, color, size * 1.5, palette);
             if (result?.effect) ctx.activeEffects.push(result.effect);
             break;
           }
           case VisualEventType.AIR_REPULSION_BURST: {
-            const result = ctx.airRepulsionRenderer?.triggerBurst(x, y, size * 2, color, duration);
+            const result = ctx.airRepulsionRenderer?.triggerBurst(x, y, size * 2, color, duration, palette);
             if (result?.effect) ctx.activeEffects.push(result.effect);
             break;
           }
           case VisualEventType.ENTROPIC_TOUCH_AURA: {
-            ctx.entropicTouchRenderer?.triggerAura(`player_${Date.now()}`, x, y, size, color);
+            ctx.entropicTouchRenderer?.triggerAura(`player_${Date.now()}`, x, y, size, color, palette);
             break;
           }
           case VisualEventType.ENTROPIC_TOUCH_FROSTBITE: {
-            ctx.entropicTouchRenderer?.triggerFrostbite(`target_${Date.now()}`, v.frostbiteStacks || 3, x, y, color);
+            ctx.entropicTouchRenderer?.triggerFrostbite(`target_${Date.now()}`, v.frostbiteStacks || 3, x, y, color, palette);
             break;
           }
           case VisualEventType.ENTROPIC_TOUCH_BURST: {
-            ctx.entropicTouchRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            ctx.entropicTouchRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color, palette);
             break;
           }
           // ── 预知透镜 ───────────────────────────────
           case VisualEventType.PRECOGNITIVE_LENS_ECHO: {
-            const result = ctx.precognitiveLensRenderer?.triggerEcho(x - 100, y, x + 100, y, false, color);
+            const result = ctx.precognitiveLensRenderer?.triggerEcho(x - 100, y, x + 100, y, false, color, palette);
             if (result?.effect) ctx.activeEffects.push(result.effect);
             break;
           }
           case VisualEventType.PRECOGNITIVE_LENS_FORESIGHT: {
-            ctx.precognitiveLensRenderer?.updateForesight(`player_${Date.now()}`, x, y, 4, false, color);
+            ctx.precognitiveLensRenderer?.updateForesight(`player_${Date.now()}`, x, y, 4, false, color, palette);
             break;
           }
           case VisualEventType.PRECOGNITIVE_LENS_BURST: {
-            const result = ctx.precognitiveLensRenderer?.triggerBurst(`player_${Date.now()}`, x, y, duration, color);
+            const result = ctx.precognitiveLensRenderer?.triggerBurst(`player_${Date.now()}`, x, y, duration, color, palette);
             if (result?.effect) ctx.activeEffects.push(result.effect);
             break;
           }
 
           // ── 画作实体化 ─────────────────────────────
           case VisualEventType.DRAWING_MANIFEST_INK: {
-            ctx.drawingManifestRenderer?.updateRabbit(`player_${Date.now()}`, x, y, 4, false, color);
+            ctx.drawingManifestRenderer?.updateRabbit(`player_${Date.now()}`, x, y, 4, false, color, palette);
             break;
           }
           case VisualEventType.DRAWING_MANIFEST_BURST: {
-            const result = ctx.drawingManifestRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size, duration, color);
+            const result = ctx.drawingManifestRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size, duration, color, palette);
             if (result?.effect) ctx.activeEffects.push(result.effect);
             break;
           }
           case VisualEventType.DRAWING_MANIFEST_DASH: {
-            const result = ctx.drawingManifestRenderer?.triggerDash(x - 100, y, x + 100, y, true, color);
+            const result = ctx.drawingManifestRenderer?.triggerDash(x - 100, y, x + 100, y, true, color, palette);
             if (result?.effect) ctx.activeEffects.push(result.effect);
             break;
           }
@@ -304,83 +366,84 @@ export function autoRegisterFromEnum(): void {
               [{ x, y }, { x: x + 80, y: y - 40 }, { x: x - 60, y: y + 60 }],
               false,
               color,
+              palette,
             );
             if (result?.effect) ctx.activeEffects.push(result.effect);
             break;
           }
           case VisualEventType.DISCHARGE_CAT_BURST: {
-            const result = ctx.dischargeCatRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size, duration, color);
+            const result = ctx.dischargeCatRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size, duration, color, palette);
             if (result?.effect) ctx.activeEffects.push(result.effect);
             break;
           }
 
           // ── 情绪天气 ───────────────────────────────
           case VisualEventType.EMOTIONAL_WEATHER_LIGHTNING: {
-            const result = ctx.emotionalWeatherRenderer?.triggerLightning(x, y, size, color);
+            const result = ctx.emotionalWeatherRenderer?.triggerLightning(x, y, size, color, palette);
             if (result?.effect) ctx.activeEffects.push(result.effect);
             break;
           }
           case VisualEventType.EMOTIONAL_WEATHER_HAIL: {
-            const result = ctx.emotionalWeatherRenderer?.triggerHail(x, y, size);
+            const result = ctx.emotionalWeatherRenderer?.triggerHail(x, y, size, undefined, palette);
             if (result?.effect) ctx.activeEffects.push(result.effect);
             break;
           }
           case VisualEventType.EMOTIONAL_WEATHER_BURST: {
-            const result = ctx.emotionalWeatherRenderer?.triggerBurst(x, y, size * 2, duration);
+            const result = ctx.emotionalWeatherRenderer?.triggerBurst(x, y, size * 2, duration, undefined, palette);
             if (result?.effect) ctx.activeEffects.push(result.effect);
             break;
           }
 
           // ── 情绪掌控 ───────────────────────────────
           case VisualEventType.EMOTION_MASTERY_MOOD: {
-            ctx.emotionMasteryRenderer?.updateMood(`player_${Date.now()}`, x, y, 'anger', color);
+            ctx.emotionMasteryRenderer?.updateMood(`player_${Date.now()}`, x, y, 'anger', color, palette);
             break;
           }
           case VisualEventType.EMOTION_MASTERY_BURST: {
-            const result = ctx.emotionMasteryRenderer?.triggerBurst(`player_${Date.now()}`, x, y, duration, color);
+            const result = ctx.emotionMasteryRenderer?.triggerBurst(`player_${Date.now()}`, x, y, duration, color, palette);
             if (result?.effect) ctx.activeEffects.push(result.effect);
             break;
           }
 
           // ── KE - 流体操控 ───────────────────────────────
           case VisualEventType.FLUID_MASTERY_TRAIL: {
-            ctx.fluidMasteryRenderer?.triggerTrail(`player_${Date.now()}`, x, y, size, 0, color);
+            ctx.fluidMasteryRenderer?.triggerTrail(`player_${Date.now()}`, x, y, size, 0, color, palette);
             break;
           }
           case VisualEventType.FLUID_MASTERY_VORTEX: {
-            ctx.fluidMasteryRenderer?.triggerVortex(`target_${Date.now()}`, x, y, size, 0.5, color);
+            ctx.fluidMasteryRenderer?.triggerVortex(`target_${Date.now()}`, x, y, size, 0.5, color, palette);
             break;
           }
           case VisualEventType.FLUID_MASTERY_BURST: {
-            ctx.fluidMasteryRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            ctx.fluidMasteryRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color, palette);
             break;
           }
 
           // ── 梦 - 记忆回廊 ───────────────────────────────
           case VisualEventType.MEMORY_CORRIDOR_ECHO: {
-            ctx.memoryCorridorRenderer?.triggerEcho(`player_${Date.now()}`, x, y, size, 3, 0, color);
+            ctx.memoryCorridorRenderer?.triggerEcho(`player_${Date.now()}`, x, y, size, 3, 0, color, palette);
             break;
           }
           case VisualEventType.MEMORY_CORRIDOR_RESONANCE: {
-            ctx.memoryCorridorRenderer?.triggerResonance(`target_${Date.now()}`, x, y, 3, color);
+            ctx.memoryCorridorRenderer?.triggerResonance(`target_${Date.now()}`, x, y, 3, color, palette);
             break;
           }
           case VisualEventType.MEMORY_CORRIDOR_BURST: {
-            ctx.memoryCorridorRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, 3, color);
+            ctx.memoryCorridorRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, 3, color, palette);
             break;
           }
 
           // ── 陈厌孑 - 无限折叠 ───────────────────────────
           case VisualEventType.INFINITE_FOLD_DODGE: {
-            ctx.infiniteFoldRenderer?.triggerDodge(`player_${Date.now()}`, x, y, size, 1, true, color);
+            ctx.infiniteFoldRenderer?.triggerDodge(`player_${Date.now()}`, x, y, size, 1, true, color, palette);
             break;
           }
           case VisualEventType.INFINITE_FOLD_REASSEMBLE: {
-            ctx.infiniteFoldRenderer?.triggerReassemble(`target_${Date.now()}`, x, y, 1, color);
+            ctx.infiniteFoldRenderer?.triggerReassemble(`target_${Date.now()}`, x, y, 1, color, palette);
             break;
           }
           case VisualEventType.INFINITE_FOLD_BURST: {
-            ctx.infiniteFoldRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            ctx.infiniteFoldRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color, palette);
             break;
           }
 
@@ -389,7 +452,7 @@ export function autoRegisterFromEnum(): void {
             // 随机选择性格
             const personalities = ['gentle', 'fierce', 'curious'] as const;
             const personality = personalities[Math.floor(Math.random() * personalities.length)];
-            ctx.botanicalPartyRenderer?.triggerPlantSpawn(`plant_${Date.now()}`, x, y, personality, size, color);
+            ctx.botanicalPartyRenderer?.triggerPlantSpawn(`plant_${Date.now()}`, x, y, personality, size, color, palette);
             break;
           }
           case VisualEventType.BOTANICAL_PLANT_DECAY: {
@@ -397,7 +460,7 @@ export function autoRegisterFromEnum(): void {
             break;
           }
           case VisualEventType.BOTANICAL_BURST: {
-            ctx.botanicalPartyRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, 3, color);
+            ctx.botanicalPartyRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, 3, color, palette);
             break;
           }
 

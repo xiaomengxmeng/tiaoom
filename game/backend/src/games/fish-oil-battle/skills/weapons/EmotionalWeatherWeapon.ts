@@ -83,6 +83,48 @@ export class EmotionalWeatherWeapon implements IWeapon {
       if (this.burstTicksLeft <= 0) this.isBurstActive = false;
     }
 
+    // ── 周期性发送天气状态同步（每 5 tick ≈ 83ms 一次） ──
+    // 让前端始终能看到天气效果（云层/颜色阶段跟随对局时间）
+    // hitCount=0 标识为状态同步，前端不应绘制实际落雷特效
+    if (this.tickCounter % 5 === 0) {
+      const elapsedSec = this.tickCounter / TICKS_PER_SEC;
+      let weatherPhase = 0;
+      let color = 0x4DA6FF;
+      if (elapsedSec > 60) { weatherPhase = 2; color = 0x6600CC; }
+      else if (elapsedSec > 30) { weatherPhase = 1; color = 0xFF8800; }
+
+      effects.push({
+        type: WeaponEffectType.VISUAL_ONLY,
+        sourceId: this.playerId,
+        value: 0,
+        position: { x: selfPos.x, y: selfPos.y },
+        metadata: {
+          visualType: VisualEventType.EMOTIONAL_WEATHER_LIGHTNING,
+          isBurst: this.isBurstActive,
+          weatherPhase,
+          color,
+          hitCount: 0,
+        },
+      });
+    }
+
+    // ── 爆发期间持续发送暴风雪状态（每 5 tick ≈ 83ms 一次） ──
+    // 让前端在爆发持续期间持续看到全屏暴风雪滤镜（不仅限于 burst() 启动时一次）
+    if (this.isBurstActive && this.tickCounter % 5 === 0) {
+      effects.push({
+        type: WeaponEffectType.VISUAL_ONLY,
+        sourceId: this.playerId,
+        value: 0,
+        position: { x: selfPos.x, y: selfPos.y },
+        metadata: {
+          visualType: VisualEventType.EMOTIONAL_WEATHER_BURST,
+          isBurst: true,
+          radius: CFG.aoeMaxRadius ?? 200,
+          burstTicksLeft: this.burstTicksLeft,
+        },
+      });
+    }
+
     return effects;
   }
 

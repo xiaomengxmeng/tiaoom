@@ -87,6 +87,26 @@ export class DischargeCatWeapon implements IWeapon {
       }
     }
 
+    // ── 周期性发送放电猫虚影位置更新事件（每 5 tick ≈ 83ms 一次） ──
+    // 让前端始终能看到放电猫虚影跟随球体（即使球体未碰撞也保持可见）
+    // arcNodes 为空数组：前端只调用 updateDischargeCat 更新猫位置，不画电弧
+    if (this.tickCounter % 5 === 0) {
+      effects.push({
+        type: WeaponEffectType.VISUAL_ONLY,
+        sourceId: this.playerId,
+        value: 0,
+        position: { x: this.catX, y: this.catY },
+        metadata: {
+          visualType: VisualEventType.DISCHARGE_CAT_ARC,
+          isBurst: this.isBurstActive,
+          catX: this.catX,
+          catY: this.catY,
+          bounceCount: 0,
+          arcNodes: [],
+        },
+      });
+    }
+
     return effects;
   }
 
@@ -109,11 +129,22 @@ export class DischargeCatWeapon implements IWeapon {
     const bounceRange = this.isBurstActive ? 120 : 80;
     const arcRange = CFG.damageRadius ?? 120;
 
-    const opponents = physics.getAllAliveOpponents(this.playerId);
-    if (opponents.length === 0) return effects;
+    // ── CD 检查（爆发期间无视 CD） ──
+    // 设计要求：正常模式电弧触发限频 0.5 秒
+    if (!this.isBurstActive) {
+      const cdSec = CFG.triggerCooldowns?.hitTargetSec ?? 0.5;
+      const cdTicks = Math.max(1, Math.round(cdSec * TICKS_PER_SEC));
+      const lastFire = this.cooldowns['fireArc'] ?? -cdTicks;
+      if (this.tickCounter - lastFire < cdTicks) {
+        return effects; // CD 未到，跳过本次电弧
+      }
+      this.cooldowns['fireArc'] = this.tickCounter;
+    }
 
-    // 找最近对手作为电弧起点目标
-    let current = opponents[0];
+    const opponents = physics.getAllAliveOpponents(this.playerId);
+
+    // 找最近对手作为电弧起点目标（必须在 arcRange 内）
+    let current: { id: string; x: number; y: number; hp: number } | null = null;
     let currentDist = Infinity;
     for (const opp of opponents) {
       const d = Math.sqrt(
@@ -125,7 +156,14 @@ export class DischargeCatWeapon implements IWeapon {
       }
     }
 
-    if (currentDist >= arcRange) return effects;
+    // 即使没找到近距离对手，也至少积累 1 点能量（球体碰撞已发生）
+    // 这保证 isBurstReady 不会永远 false
+    if (!current) {
+      if (!this.isBurstActive) {
+        this.energy = Math.min(CFG.maxEnergy ?? 6, this.energy + 1);
+      }
+      return effects;
+    }
 
     const arcNodes: ArcNode[] = [
       { x: this.catX, y: this.catY },

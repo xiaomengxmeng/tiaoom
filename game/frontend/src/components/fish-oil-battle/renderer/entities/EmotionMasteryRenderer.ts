@@ -1,6 +1,7 @@
 import * as PIXI from 'pixi.js';
 import type { ActiveEffect } from './VisualEffectUtils';
-import { lighten, glowColor, easeOutCubic } from './VisualEffectUtils';
+import { lighten, dimColor, easeOutCubic } from './VisualEffectUtils';
+import type { Palette } from './BaseWeaponEffectRenderer';
 
 /**
  * 情绪掌控视觉配置（数据驱动，从 WeaponRangeConfig 构建）
@@ -96,8 +97,18 @@ export class EmotionMasteryRenderer {
     y: number,
     mood: string,
     themeColor?: number,
+    palette?: Palette,
   ): void {
     const s = this.scale;
+    const baseColor = themeColor ?? 0xFF3333;
+    const pal: Palette = palette ?? {
+      primary: baseColor,
+      glow: lighten(baseColor, 50),
+      highlight: lighten(baseColor, 100),
+      dim: dimColor(baseColor, 0.6),
+      shadow: dimColor(baseColor, 0.3),
+      accent: 0x4488FF,
+    };
     let active = this.activeMoods.get(playerId);
 
     if (!active) {
@@ -126,7 +137,7 @@ export class EmotionMasteryRenderer {
     }
 
     const moodText = MOOD_LABELS[mood] ?? `> ${mood.toUpperCase()}`;
-    const moodColor = MOOD_COLORS[mood] ?? (themeColor ?? 0xFFFFFF);
+    const moodColor = MOOD_COLORS[mood] ?? pal.primary;
 
     // 更新文字
     active.label.text = moodText;
@@ -185,8 +196,18 @@ export class EmotionMasteryRenderer {
     durationMs: number,
     themeColor?: number,
     orbitRadius = 80,
+    palette?: Palette,
   ): { effect: ActiveEffect | null } {
     const s = this.scale;
+    const baseColor = themeColor ?? 0xFF3333;
+    const pal: Palette = palette ?? {
+      primary: baseColor,
+      glow: lighten(baseColor, 50),
+      highlight: lighten(baseColor, 100),
+      dim: dimColor(baseColor, 0.6),
+      shadow: dimColor(baseColor, 0.3),
+      accent: 0x4488FF,
+    };
 
     // 清理旧实体
     this.removeBurstEntities(playerId);
@@ -211,7 +232,7 @@ export class EmotionMasteryRenderer {
       container.addChild(eContainer);
 
       entities.push({ container: eContainer, body: eBody, aura: eAura, mood });
-      this.drawEmotionEntity(eBody, eAura, mood);
+      this.drawEmotionEntity(eBody, eAura, mood, pal);
     }
 
     this.burstEntities.set(playerId, entities);
@@ -263,8 +284,9 @@ export class EmotionMasteryRenderer {
     bodyG: PIXI.Graphics,
     auraG: PIXI.Graphics,
     mood: string,
+    pal: Palette,
   ): void {
-    const color = MOOD_COLORS[mood] ?? 0xFFFFFF;
+    const color = MOOD_COLORS[mood] ?? pal.primary;
     const emoji = MOOD_EMOJI[mood] ?? '?';
     const radius = 12;
 
@@ -272,7 +294,7 @@ export class EmotionMasteryRenderer {
     auraG.circle(0, 0, radius + 6);
     auraG.fill({ color, alpha: 0.15 });
     auraG.circle(0, 0, radius);
-    auraG.stroke({ color: glowColor(color), width: 2, alpha: 0.5 });
+    auraG.stroke({ color: pal.glow, width: 2, alpha: 0.5 });
 
     // 实体
     bodyG.circle(0, 0, radius);

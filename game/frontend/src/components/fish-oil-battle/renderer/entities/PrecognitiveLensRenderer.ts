@@ -9,7 +9,8 @@
  */
 
 import * as PIXI from 'pixi.js';
-import { easeOutCubic, type ActiveEffect } from './VisualEffectUtils';
+import { easeOutCubic, lighten, dimColor, type ActiveEffect } from './VisualEffectUtils';
+import type { Palette } from './BaseWeaponEffectRenderer';
 
 /** 预知透镜视觉配置（数据驱动） */
 export interface PrecognitiveLensVisualConfig {
@@ -71,7 +72,16 @@ export class PrecognitiveLensRenderer {
     stacks: number,
     isBurst: boolean,
     themeColor = 0x4DA6FF,
+    palette?: Palette,
   ): void {
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFFD700,
+    };
     const s = this.scale;
     let auraData = this.foresightAuras.get(playerId);
     if (!auraData) {
@@ -88,7 +98,7 @@ export class PrecognitiveLensRenderer {
     const maxStacks = 6;
     const t = stacks / maxStacks;
     // 层数越多越亮，6层时金色
-    const color = stacks >= 6 ? 0xFFD700 : 0x4DA6FF;
+    const color = stacks >= 6 ? pal.accent : pal.primary;
     const radius = (20 + stacks * 3) * s;
     const alpha = 0.3 + t * 0.4;
 
@@ -115,7 +125,7 @@ export class PrecognitiveLensRenderer {
       const text = new PIXI.Text('已看透', {
         fontFamily: 'monospace',
         fontSize: 8,
-        fill: 0xFFD700,
+        fill: pal.accent,
       });
       text.anchor.set(0.5);
       text.position.set(0, -radius - 12 * s);
@@ -130,7 +140,7 @@ export class PrecognitiveLensRenderer {
     // 爆发期间额外光环
     if (isBurst) {
       aura.circle(0, 0, radius * 1.3);
-      aura.stroke({ color: 0xFFD700, width: 3 * s, alpha: 0.4 });
+      aura.stroke({ color: pal.accent, width: 3 * s, alpha: 0.4 });
     }
   }
 
@@ -195,7 +205,16 @@ export class PrecognitiveLensRenderer {
     toY: number,
     isBurst: boolean,
     themeColor = 0x4DA6FF,
+    palette?: Palette,
   ): { effect: ActiveEffect | null } {
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFFD700,
+    };
     const s = this.scale;
     const dx = toX - fromX;
     const dy = toY - fromY;
@@ -212,7 +231,7 @@ export class PrecognitiveLensRenderer {
 
     const durationMs = 2000;
     const flightDist = 500 * s; // 飞行距离
-    const color = isBurst ? 0xFFD700 : themeColor;
+    const color = isBurst ? pal.accent : pal.primary;
 
     const ef: ActiveEffect = {
       type: 'precognitive_lens_echo',
@@ -273,7 +292,16 @@ export class PrecognitiveLensRenderer {
     y: number,
     durationMs: number,
     themeColor = 0x4DA6FF,
+    palette?: Palette,
   ): { effect: ActiveEffect | null } {
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFFD700,
+    };
     const s = this.scale;
     const g = new PIXI.Graphics();
     g.position.set(x, y);
@@ -296,14 +324,14 @@ export class PrecognitiveLensRenderer {
 
         // 蓝金波纹
         g.circle(0, 0, baseR);
-        g.stroke({ color: 0xFFD700, width: 3 * s, alpha: 0.6 * (1 - t * 0.3) });
+        g.stroke({ color: pal.accent, width: 3 * s, alpha: 0.6 * (1 - t * 0.3) });
         g.circle(0, 0, baseR * 0.7);
-        g.stroke({ color: themeColor, width: 2 * s, alpha: 0.5 * (1 - t * 0.3) });
+        g.stroke({ color: pal.primary, width: 2 * s, alpha: 0.5 * (1 - t * 0.3) });
 
         // 脉冲
         const pulseR = baseR * (0.5 + 0.5 * Math.abs(Math.sin(phase)));
         g.circle(0, 0, pulseR);
-        g.stroke({ color: 0xFFFFFF, width: 1.5 * s, alpha: 0.4 * (1 - t * 0.3) });
+        g.stroke({ color: pal.highlight, width: 1.5 * s, alpha: 0.4 * (1 - t * 0.3) });
         phase += _dt / 250;
 
         // 前 0.8s 全屏竖瞳猫眼
@@ -312,7 +340,7 @@ export class PrecognitiveLensRenderer {
           const eyeR = 40 * s;
           // 竖瞳
           g.ellipse(0, -baseR - 30 * s, eyeR * 0.5, eyeR);
-          g.fill({ color: 0xFFD700, alpha: eyeAlpha });
+          g.fill({ color: pal.accent, alpha: eyeAlpha });
           g.ellipse(0, -baseR - 30 * s, eyeR * 0.15, eyeR * 0.8);
           g.fill({ color: 0x000000, alpha: eyeAlpha });
         }

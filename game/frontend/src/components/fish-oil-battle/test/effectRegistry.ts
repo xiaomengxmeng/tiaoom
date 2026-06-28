@@ -230,6 +230,11 @@ export function autoRegisterFromEnum(): void {
       console.log('[EffectRegistry] 跳过 HIT');
       continue;
     }
+    if (visualType === VisualEventType.HIT_FEEDBACK) {
+      // HIT_FEEDBACK 需要 PlayerRenderer 支持，测试页无法预览
+      console.log('[EffectRegistry] 跳过 HIT_FEEDBACK');
+      continue;
+    }
     if (visualType === VisualEventType.BEE_COUNT_CHANGE) {
       console.log('[EffectRegistry] 跳过 BEE_COUNT_CHANGE');
       continue;
@@ -535,6 +540,12 @@ export function autoRegisterFromEnum(): void {
           }
           case VisualEventType.RICOCHET_CORE_BURST: {
             ctx.ricochetCoreRenderer?.triggerBurst(`player_${Date.now()}`, x, y, size * 2, color);
+            break;
+          }
+
+          // HIT_FEEDBACK：测试页无 PlayerRenderer，仅记录日志
+          case VisualEventType.HIT_FEEDBACK: {
+            console.log('[EffectRegistry] HIT_FEEDBACK 需 PlayerRenderer 支持，测试页跳过');
             break;
           }
 

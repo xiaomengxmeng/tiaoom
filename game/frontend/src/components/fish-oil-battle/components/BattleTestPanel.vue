@@ -615,6 +615,18 @@ function handleVisualEvent(data: any): void {
   if (!rendererRef.value) return;
 
   switch (data.type) {
+    case VisualEventType.HIT_FEEDBACK: {
+      const reaction = (data as any).hitReaction ?? 'flash';
+      const damage = (data as any).hitDamage;
+      const targetId = (data as any).targetId;
+      if (targetId) {
+        rendererRef.value.playHitEffect(targetId, reaction);
+        if (damage !== undefined) {
+          rendererRef.value.showDamageNumber(targetId, damage);
+        }
+      }
+      break;
+    }
     case VisualEventType.SHOCKWAVE_TRIGGER:
       if (data.x !== undefined && data.y !== undefined) {
         rendererRef.value.triggerSkillEffect({

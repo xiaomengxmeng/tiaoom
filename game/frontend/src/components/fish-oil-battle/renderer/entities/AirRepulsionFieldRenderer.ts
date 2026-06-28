@@ -16,7 +16,8 @@
 
 import * as PIXI from 'pixi.js';
 import { ParticlePool } from '../systems/ParticlePool';
-import { easeOutCubic, type ActiveEffect } from './VisualEffectUtils';
+import { easeOutCubic, lighten, dimColor, type ActiveEffect } from './VisualEffectUtils';
+import type { Palette } from './BaseWeaponEffectRenderer';
 
 // ══════════════════════════════════════════════════════
 //  颜色常量（懒散黄 → 爆发橙）
@@ -89,7 +90,18 @@ export class AirRepulsionFieldRenderer {
     themeColor?: number,
     maxLifeMs = 5000,
     radius = 55,
+    palette?: Palette,
   ): { effect: ActiveEffect | null; anchorId: string } {
+    const baseColor = themeColor ?? 0xFFCC44;
+    const pal: Palette = palette ?? {
+      primary: baseColor,
+      glow: lighten(baseColor, 50),
+      highlight: lighten(baseColor, 100),
+      dim: dimColor(baseColor, 0.6),
+      shadow: dimColor(baseColor, 0.3),
+      accent: 0xFF6622,
+    };
+
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
@@ -97,19 +109,16 @@ export class AirRepulsionFieldRenderer {
 
     // 主体 graphics：光环 + 双层环 + 中心光点（一次绘制，靠 transform 驱动呼吸/生长）
     const bodyGraphics = new PIXI.Graphics();
-    this.drawAnchorBody(bodyGraphics, radius);
+    this.drawAnchorBody(bodyGraphics, radius, pal);
     container.addChild(bodyGraphics);
 
     // 箭头 graphics：品字三角（独立旋转）
     const arrowGraphics = new PIXI.Graphics();
-    this.drawAnchorArrows(arrowGraphics, radius * 0.6);
+    this.drawAnchorArrows(arrowGraphics, radius * 0.6, pal);
     container.addChild(arrowGraphics);
 
     this.container.addChild(container);
     this.activeContainers.add(container);
-
-    // 主题色参数保留兼容（视觉以固定色板体现"开摆"角色身份）
-    void themeColor;
 
     let rotationAngle = 0;
     let particleTimer = 0;
@@ -146,7 +155,7 @@ export class AirRepulsionFieldRenderer {
           particleTimer += dt;
           if (particleTimer > 2000) {
             particleTimer = 0;
-            this.spawnLazyParticles(x, y, radius);
+            this.spawnLazyParticles(x, y, radius, pal);
           }
         }
       },
@@ -162,7 +171,7 @@ export class AirRepulsionFieldRenderer {
    * 绘制锚点主体：斥力场光环（8 层径向渐变）+ 双层锚点环 + 中心光点
    * 以 (0,0) 为中心，按完整半径 radius 一次绘制，呼吸/生长由外部 scale 驱动
    */
-  private drawAnchorBody(g: PIXI.Graphics, radius: number): void {
+  private drawAnchorBody(g: PIXI.Graphics, radius: number, pal: Palette): void {
     g.clear();
 
     // 斥力场光环：8 层同心圆叠加模拟径向渐变（中心白 → 懒散黄 → 透明）
@@ -171,31 +180,31 @@ export class AirRepulsionFieldRenderer {
       const r = radius * (0.15 + 0.85 * lt);
       const color =
         lt < 0.5
-          ? this.interpolateColor(AIR_WHITE, AIR_LAZY, lt * 2)
-          : AIR_LAZY;
+          ? this.interpolateColor(AIR_WHITE, pal.glow, lt * 2)
+          : pal.glow;
       const alpha = (1 - lt) * 0.2;
       g.circle(0, 0, Math.max(0.5, r));
       g.fill({ color, alpha });
     }
 
-    // 双层锚点环：外环 AIR_HIGHLIGHT + 内环 AIR_WHITE
+    // 双层锚点环：外环高亮色 + 内环白
     g.circle(0, 0, radius);
-    g.stroke({ color: AIR_HIGHLIGHT, width: 1, alpha: 0.7 });
+    g.stroke({ color: pal.highlight, width: 1, alpha: 0.7 });
     g.circle(0, 0, radius * 0.95);
     g.stroke({ color: AIR_WHITE, width: 0.4, alpha: 0.5 });
 
-    // 中心光点：懒散黄外晕 r=6 + 白色实心 r=4
+    // 中心光点：发光色外晕 r=6 + 白色实心 r=4
     g.circle(0, 0, 6);
-    g.fill({ color: AIR_LAZY, alpha: 0.5 });
+    g.fill({ color: pal.glow, alpha: 0.5 });
     g.circle(0, 0, 4);
     g.fill({ color: AIR_WHITE, alpha: 0.9 });
   }
 
   /**
-   * 绘制品字三角箭头：3 个三角形（120° 均分，尖端向外），带渐变填充（黄填充 + 金橙描边）
+   * 绘制品字三角箭头：3 个三角形（120° 均分，尖端向外），带渐变填充（主色填充 + 高亮色描边）
    * 以 (0,0) 为中心，按 orbitR 一次绘制，旋转由外部 rotation 驱动
    */
-  private drawAnchorArrows(g: PIXI.Graphics, orbitR: number): void {
+  private drawAnchorArrows(g: PIXI.Graphics, orbitR: number, pal: Palette): void {
     g.clear();
     const triSize = 5; // 三角形尺寸
     for (let i = 0; i < 3; i++) {
@@ -217,9 +226,9 @@ export class AirRepulsionFieldRenderer {
       g.lineTo(b1x, b1y);
       g.lineTo(b2x, b2y);
       g.closePath();
-      // 渐变填充近似：主黄填充 + 金橙描边
-      g.fill({ color: AIR_MAIN, alpha: 0.85 });
-      g.stroke({ color: AIR_HIGHLIGHT, width: 0.6, alpha: 0.7 });
+      // 渐变填充近似：主色填充 + 高亮色描边
+      g.fill({ color: pal.primary, alpha: 0.85 });
+      g.stroke({ color: pal.highlight, width: 0.6, alpha: 0.7 });
     }
   }
 
@@ -241,7 +250,18 @@ export class AirRepulsionFieldRenderer {
     radius = 180,
     themeColor?: number,
     durationMs = 4000,
+    palette?: Palette,
   ): { effect: ActiveEffect | null } {
+    const baseColor = themeColor ?? 0xFFCC44;
+    const pal: Palette = palette ?? {
+      primary: baseColor,
+      glow: lighten(baseColor, 50),
+      highlight: lighten(baseColor, 100),
+      dim: dimColor(baseColor, 0.6),
+      shadow: dimColor(baseColor, 0.3),
+      accent: 0xFF6622,
+    };
+
     const container = new PIXI.Container();
     container.position.set(x, y);
     container.scale.set(this.scale);
@@ -258,7 +278,9 @@ export class AirRepulsionFieldRenderer {
     this.container.addChild(container);
     this.activeContainers.add(container);
 
-    void themeColor;
+    // 基于色板构建圆环配色（白 → 高亮 → 强调 → 主色 → 发光）
+    const burstRingColors = [AIR_WHITE, pal.highlight, pal.accent, pal.primary, pal.glow];
+    const aftermathRingColors = [AIR_WHITE, pal.highlight, pal.accent, pal.primary];
 
     const T = durationMs;
 
@@ -290,14 +312,14 @@ export class AirRepulsionFieldRenderer {
           // ── 阶段1 蓄力：光环收缩，能量汇聚至中心核 ──
           const t = life / phase1End; // 0 → 1
           const shrink = 1 - 0.7 * t; // 1 → 0.3 收缩
-          // 收缩光环（6 层，向心汇聚；中心白 → 主黄 → 深黄褐，能量压缩转暗）
+          // 收缩光环（6 层，向心汇聚；中心白 → 主色 → 暗色，能量压缩转暗）
           for (let i = 0; i < 6; i++) {
             const lt = i / 5;
             const lr = radius * 0.3 * (0.3 + 0.7 * lt) * shrink;
             const color =
               lt < 0.5
-                ? this.interpolateColor(AIR_WHITE, AIR_MAIN, lt * 2)
-                : this.interpolateColor(AIR_MAIN, AIR_DEEP, (lt - 0.5) * 2);
+                ? this.interpolateColor(AIR_WHITE, pal.primary, lt * 2)
+                : this.interpolateColor(pal.primary, pal.dim, (lt - 0.5) * 2);
             const alpha = (1 - lt) * 0.3 * (1 - t * 0.5);
             shockwaveGraphics.circle(0, 0, Math.max(0.5, lr));
             shockwaveGraphics.fill({ color, alpha: Math.max(0, alpha) });
@@ -305,7 +327,7 @@ export class AirRepulsionFieldRenderer {
           // 中心核汇聚显现
           coreGraphics.alpha = t; // 0 → 1
           coreGraphics.circle(0, 0, Math.max(0.5, 14 * t));
-          coreGraphics.stroke({ color: AIR_BURST, width: 1.5, alpha: 0.8 });
+          coreGraphics.stroke({ color: pal.accent, width: 1.5, alpha: 0.8 });
           coreGraphics.circle(0, 0, Math.max(0.5, 8 * t));
           coreGraphics.fill({ color: AIR_WHITE, alpha: 0.9 });
           // 碎片尚未发射
@@ -315,23 +337,23 @@ export class AirRepulsionFieldRenderer {
           const t = (life - phase1End) / (phase2End - phase1End); // 0 → 1
           const eased = easeOutCubic(t);
 
-          // 5 层扩散圆环（白→金→橙→黄→懒散黄），层叠扩散
-          for (let i = 0; i < BURST_RING_COLORS.length; i++) {
+          // 5 层扩散圆环（白→高亮→强调→主色→发光），层叠扩散
+          for (let i = 0; i < burstRingColors.length; i++) {
             const lr = radius * eased * (1 - i * 0.08);
             const alpha = (0.9 - i * 0.15) * (1 - t * 0.2);
             shockwaveGraphics.circle(0, 0, Math.max(0.5, lr));
             shockwaveGraphics.stroke({
-              color: BURST_RING_COLORS[i],
+              color: burstRingColors[i],
               width: Math.max(0.5, 3 - i * 0.4),
               alpha: Math.max(0, alpha),
             });
           }
 
-          // 中心爆发核：白高亮 + 橙色辉光（爆发瞬间最亮，随后微降）
+          // 中心爆发核：白高亮 + 强调色辉光（爆发瞬间最亮，随后微降）
           const coreFlash = 1 - t * 0.3;
           coreGraphics.alpha = 1;
           coreGraphics.circle(0, 0, 16);
-          coreGraphics.fill({ color: AIR_BURST, alpha: 0.5 * coreFlash });
+          coreGraphics.fill({ color: pal.accent, alpha: 0.5 * coreFlash });
           coreGraphics.circle(0, 0, 10);
           coreGraphics.fill({ color: AIR_WHITE, alpha: 0.95 * coreFlash });
 
@@ -347,7 +369,7 @@ export class AirRepulsionFieldRenderer {
               fy,
               f.angle,
               5,
-              AIR_BURST,
+              pal.accent,
               0.9 * (1 - t * 0.2),
             );
           }
@@ -355,20 +377,20 @@ export class AirRepulsionFieldRenderer {
           // 扬尘粒子：爆发瞬间大量向外飞溅（仅阶段 2 前半段发射一次）
           if (this.particlePool && !dustEmitted && t > 0.05) {
             dustEmitted = true;
-            this.spawnDustParticles(x, y, radius);
+            this.spawnDustParticles(x, y, radius, pal);
           }
         } else {
           // ── 阶段3 余波：多层波纹继续扩散并消散 ──
           const t = (life - phase2End) / (T - phase2End); // 0 → 1
 
           // 4 层波纹循环扩散并淡出
-          for (let i = 0; i < AFTERMATH_RING_COLORS.length; i++) {
+          for (let i = 0; i < aftermathRingColors.length; i++) {
             const phase = (t + i * 0.2) % 1;
             const lr = radius * (0.5 + 0.5 * phase);
             const alpha = 0.45 * (1 - phase) * (1 - t * 0.6);
             shockwaveGraphics.circle(0, 0, Math.max(0.5, lr));
             shockwaveGraphics.stroke({
-              color: AFTERMATH_RING_COLORS[i],
+              color: aftermathRingColors[i],
               width: Math.max(0.5, 2.5 - i * 0.3),
               alpha: Math.max(0, alpha),
             });
@@ -377,7 +399,7 @@ export class AirRepulsionFieldRenderer {
           // 中心核消散
           coreGraphics.alpha = Math.max(0, 1 - t * 0.7);
           coreGraphics.circle(0, 0, Math.max(0.5, 16 * (1 - t * 0.5)));
-          coreGraphics.fill({ color: AIR_BURST, alpha: 0.3 * (1 - t) });
+          coreGraphics.fill({ color: pal.accent, alpha: 0.3 * (1 - t) });
 
           // 碎片飞远并消散
           fragmentGraphics.alpha = Math.max(0, 1 - t);
@@ -391,7 +413,7 @@ export class AirRepulsionFieldRenderer {
               fy,
               f.angle,
               Math.max(0.5, 5 * (1 - t * 0.5)),
-              AIR_BURST,
+              pal.accent,
               0.6 * (1 - t),
             );
           }
@@ -410,10 +432,10 @@ export class AirRepulsionFieldRenderer {
   // ══════════════════════════════════════════════════════
 
   /**
-   * 懒散粒子：每 2s 由锚点 emit 1-2 个黄色粒子，缓慢向外飘散
+   * 懒散粒子：每 2s 由锚点 emit 1-2 个发光色粒子，缓慢向外飘散
    * 坐标使用世界坐标（与 particlePool 容器同坐标系），尺寸/速度乘以全局 scale
    */
-  private spawnLazyParticles(x: number, y: number, radius: number): void {
+  private spawnLazyParticles(x: number, y: number, radius: number, pal: Palette): void {
     if (!this.particlePool) return;
     const s = this.scale;
     const count = 1 + (Math.random() < 0.5 ? 1 : 0); // 1-2 个
@@ -434,7 +456,7 @@ export class AirRepulsionFieldRenderer {
         scaleEnd: 0,
         alphaStart: 0.7,
         alphaEnd: 0,
-        tint: AIR_LAZY,
+        tint: pal.glow,
         radius: (1.5 + Math.random()) * s,
       });
     }
@@ -442,12 +464,12 @@ export class AirRepulsionFieldRenderer {
 
   /**
    * 扬尘粒子：爆发瞬间大量粒子向外飞溅
-   * 多色（懒散黄/主黄/金橙/爆发橙），高速短寿命
+   * 多色（发光/主色/高亮/强调），高速短寿命
    */
-  private spawnDustParticles(x: number, y: number, radius: number): void {
+  private spawnDustParticles(x: number, y: number, radius: number, pal: Palette): void {
     if (!this.particlePool) return;
     const s = this.scale;
-    const palette = [AIR_LAZY, AIR_MAIN, AIR_HIGHLIGHT, AIR_BURST];
+    const dustColors = [pal.glow, pal.primary, pal.highlight, pal.accent];
     const count = 16; // 大量飞溅
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -455,7 +477,7 @@ export class AirRepulsionFieldRenderer {
       const px = x + Math.cos(angle) * startDist;
       const py = y + Math.sin(angle) * startDist;
       const speed = (80 + Math.random() * 60) * s;
-      const color = palette[Math.floor(Math.random() * palette.length)];
+      const color = dustColors[Math.floor(Math.random() * dustColors.length)];
       this.particlePool.emit({
         x: px,
         y: py,

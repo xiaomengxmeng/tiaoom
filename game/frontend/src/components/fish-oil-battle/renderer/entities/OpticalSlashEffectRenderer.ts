@@ -1,5 +1,7 @@
 import * as PIXI from 'pixi.js';
+import { lighten, dimColor } from './VisualEffectUtils';
 import type { ActiveEffect, OpticalSlashVisualConfig } from './VisualEffectUtils';
+import type { Palette } from './BaseWeaponEffectRenderer';
 import type { ParticlePool } from '../systems/ParticlePool';
 
 /**
@@ -137,12 +139,30 @@ export class OpticalSlashEffectRenderer {
     themeColor: number,
     isBurst = false,
     config?: OpticalSlashVisualConfig,
+    palette?: Palette,
   ): ActiveEffect | null {
     const g = this.acquire();
     if (!g) return null;
 
     const s = this.scale;
-    const palette = this.buildPalette(themeColor);
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFFD700,
+    };
+    const optPalette: OpticalPalette = palette
+      ? {
+          deep: pal.shadow,
+          main: pal.primary,
+          light: pal.glow,
+          highlight: pal.highlight,
+          white: OPTICAL_WHITE,
+          gold: pal.accent,
+        }
+      : this.buildPalette(themeColor);
     const maxDist = length * s;
     const maxLife = isBurst ? 1000 : 800;
     const flightSpeed = config?.flightSpeed ?? 300;
@@ -185,7 +205,7 @@ export class OpticalSlashEffectRenderer {
         g.clear();
 
         // ── 月牙刀光（6 层叠加发光） ──
-        this.drawArcCrescent(g, cx, cy, angle, bow, halfW, palette, alpha, s);
+        this.drawArcCrescent(g, cx, cy, angle, bow, halfW, optPalette, alpha, s);
 
         // ── 飞行拖尾：particlePool.emit 光粒 + 残影月牙 ──
         if (flightT < 0.95) {
@@ -209,7 +229,7 @@ export class OpticalSlashEffectRenderer {
                 scaleEnd: 0,
                 alphaStart: 0.8,
                 alphaEnd: 0,
-                tint: Math.random() < 0.3 ? palette.white : palette.light,
+                tint: Math.random() < 0.3 ? optPalette.white : optPalette.light,
                 radius: (1.2 + Math.random() * 1.5) * s,
               });
             }
@@ -225,7 +245,7 @@ export class OpticalSlashEffectRenderer {
             angle,
             bow * 0.65,
             halfW * 0.5,
-            palette,
+            optPalette,
             alpha * 0.22,
             s,
           );
@@ -247,7 +267,7 @@ export class OpticalSlashEffectRenderer {
           markAlpha = fadeIn * fadeOut * 0.9;
         }
         if (markAlpha > 0.01) {
-          this.drawTargetMarker(g, endX, endY, 16 * s, markAlpha, s, palette.gold);
+          this.drawTargetMarker(g, endX, endY, 16 * s, markAlpha, s, optPalette.gold);
         }
       },
       onDecay: (_ef) => {
@@ -404,12 +424,30 @@ export class OpticalSlashEffectRenderer {
     themeColor: number,
     config?: OpticalSlashVisualConfig,
     durationMs?: number,
+    palette?: Palette,
   ): ActiveEffect[] {
     const g = this.acquire();
     if (!g) return [];
 
     const s = this.scale;
-    const palette = this.buildPalette(themeColor);
+    const pal: Palette = palette ?? {
+      primary: themeColor,
+      glow: lighten(themeColor, 50),
+      highlight: lighten(themeColor, 100),
+      dim: dimColor(themeColor, 0.6),
+      shadow: dimColor(themeColor, 0.3),
+      accent: 0xFFD700,
+    };
+    const optPalette: OpticalPalette = palette
+      ? {
+          deep: pal.shadow,
+          main: pal.primary,
+          light: pal.glow,
+          highlight: pal.highlight,
+          white: OPTICAL_WHITE,
+          gold: pal.accent,
+        }
+      : this.buildPalette(themeColor);
     const radius = (config?.maxRadius ?? 150) * s;
     const T = durationMs ?? 1200;
     const screenDiag = Math.sqrt(this.canvasW ** 2 + this.canvasH ** 2);
@@ -451,7 +489,7 @@ export class OpticalSlashEffectRenderer {
             x,
             y,
             radius * 0.35 * coreScale,
-            palette,
+            optPalette,
             coreAlpha,
           );
 
@@ -474,7 +512,7 @@ export class OpticalSlashEffectRenderer {
               const a = (i / 6) * Math.PI * 2;
               const bx = x + Math.cos(a) * bladeReach;
               const by = y + Math.sin(a) * bladeReach;
-              this.drawArcCrescent(g, bx, by, a, bow, halfW, palette, bladeAlpha * 0.85, s);
+              this.drawArcCrescent(g, bx, by, a, bow, halfW, optPalette, bladeAlpha * 0.85, s);
             }
           }
 
@@ -485,7 +523,7 @@ export class OpticalSlashEffectRenderer {
             else crossAlpha = 1 - (life - p2) / (T - p2);
           }
           if (crossAlpha > 0.01) {
-            this.drawCrosshair(g, x, y, radius * 1.1, crossAlpha, s, screenDiag, palette);
+            this.drawCrosshair(g, x, y, radius * 1.1, crossAlpha, s, screenDiag, optPalette);
           }
 
           // ── 光学粒子飞溅（阶段 2 大量 emit） ──
@@ -507,7 +545,7 @@ export class OpticalSlashEffectRenderer {
                   scaleEnd: 0,
                   alphaStart: 0.9,
                   alphaEnd: 0,
-                  tint: Math.random() < 0.4 ? palette.white : palette.light,
+                  tint: Math.random() < 0.4 ? optPalette.white : optPalette.light,
                   radius: (1.5 + Math.random() * 1.5) * s,
                 });
               }
@@ -519,13 +557,13 @@ export class OpticalSlashEffectRenderer {
             const tt = life < p1 ? life / p1 : 1;
             const coreR = 6 * s * tt;
             g.circle(x, y, coreR + 4 * s);
-            g.fill({ color: palette.light, alpha: 0.5 * tt });
+            g.fill({ color: optPalette.light, alpha: 0.5 * tt });
             g.circle(x, y, coreR);
-            g.fill({ color: palette.white, alpha: 0.95 });
+            g.fill({ color: optPalette.white, alpha: 0.95 });
           } else {
             const tt = (life - p2) / (T - p2);
             g.circle(x, y, 6 * s * (1 - tt));
-            g.fill({ color: palette.white, alpha: 0.95 * (1 - tt) });
+            g.fill({ color: optPalette.white, alpha: 0.95 * (1 - tt) });
           }
 
           // ── 金色锁定环（阶段 3 扩散，标记感） ──
@@ -533,9 +571,9 @@ export class OpticalSlashEffectRenderer {
             const tt = (life - p2) / (T - p2);
             const ringR = radius * (0.5 + 0.8 * this.easeOutCubic(tt));
             g.circle(x, y, ringR);
-            g.stroke({ color: palette.gold, width: 2.5 * s, alpha: (1 - tt) * 0.85 });
+            g.stroke({ color: optPalette.gold, width: 2.5 * s, alpha: (1 - tt) * 0.85 });
             g.circle(x, y, ringR * 0.92);
-            g.stroke({ color: palette.gold, width: 1 * s, alpha: (1 - tt) * 0.5 });
+            g.stroke({ color: optPalette.gold, width: 1 * s, alpha: (1 - tt) * 0.5 });
           }
         },
         onDecay: () => {

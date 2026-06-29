@@ -197,7 +197,11 @@ export class PlayerRenderer {
     }
 
     this.updateShake(dt);
-    this.weaponDecorator?.update(dt);
+    // 装饰器跟随小球：每帧同步位置（容器位置已被物理系统更新）
+    if (this.weaponDecorator) {
+      this.weaponDecorator.setPosition(this.container.x, this.container.y);
+      this.weaponDecorator.update(dt);
+    }
 
     // 减速特效：蓝色粒子拖尾
     if (this.slowEffectTimer > 0) {

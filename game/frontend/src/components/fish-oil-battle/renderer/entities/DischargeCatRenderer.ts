@@ -243,25 +243,25 @@ export class DischargeCatRenderer {
     const g = new PIXI.Graphics();
     this.fieldContainer.addChild(g);
 
-    const durationMs = isBurst ? 600 : 400;
-    const baseWidth = (isBurst ? 4 : 3) * s;
+    const durationMs = isBurst ? 1200 : 800;
+    const baseWidth = (isBurst ? 8 : 6) * s;
 
-    // 电弧粒子（每次弹射生成 3-4 个电蓝色粒子）
+    // 电弧粒子（每次弹射生成 8-12 个电蓝色粒子）
     const particles: SparkParticle[] = [];
     for (let i = 1; i < arcNodes.length; i++) {
       const node = arcNodes[i];
-      const count = 3 + Math.floor(Math.random() * 2); // 3-4 个
+      const count = 8 + Math.floor(Math.random() * 5);
       for (let p = 0; p < count; p++) {
         const ang = Math.random() * Math.PI * 2;
-        const speed = (40 + Math.random() * 40) * s;
+        const speed = (60 + Math.random() * 80) * s;
         particles.push({
           x: node.x,
           y: node.y,
           vx: Math.cos(ang) * speed,
           vy: Math.sin(ang) * speed,
           life: 0,
-          maxLife: 350 + Math.random() * 200,
-          size: (1 + Math.random() * 1.5) * s,
+          maxLife: 500 + Math.random() * 400,
+          size: (2 + Math.random() * 2.5) * s,
           color: Math.random() < 0.5 ? ELECTRIC_MAIN : ELECTRIC_LIGHT,
         });
       }
@@ -275,28 +275,55 @@ export class DischargeCatRenderer {
       onUpdate: (_ef, dt) => {
         const t = _ef.life / _ef.maxLife;
         g.clear();
-        const alpha = (1 - t) * 0.95;
 
-        // ── 链式闪电（每段三层叠加发光） ──
-        for (let i = 0; i < arcNodes.length - 1; i++) {
-          const from = arcNodes[i];
-          const to = arcNodes[i + 1];
-          this.drawLightningSegment(g, from.x, from.y, to.x, to.y, baseWidth, alpha, pal.primary);
+        // 双回闪：0-20% 主闪、40-55% 回闪、70-80% 再闪
+        let flashAlpha = 0;
+        if (t < 0.2) flashAlpha = 1 - t * 3;
+        else if (t >= 0.4 && t < 0.55) flashAlpha = 0.7 - (t - 0.4) * 3;
+        else if (t >= 0.7 && t < 0.8) flashAlpha = 0.4 - (t - 0.7) * 3;
+        const alpha = flashAlpha * 0.95;
+
+        // ── 链式闪电（每段三层叠加发光 + 抖动偏移） ──
+        if (flashAlpha > 0.05) {
+          for (let i = 0; i < arcNodes.length - 1; i++) {
+            const from = arcNodes[i];
+            const to = arcNodes[i + 1];
+            const jitter = Math.sin(t * 30 + i) * 3 * s;
+            this.drawLightningSegment(g, from.x + jitter, from.y, to.x - jitter, to.y, baseWidth, alpha, pal.primary);
+          }
         }
 
-        // ── 命中点闪光（多层径向渐变） ──
+        // ── 命中点闪光（多层径向渐变 + 放大动画） ──
         for (let i = 1; i < arcNodes.length; i++) {
           const node = arcNodes[i];
-          const flashR = 10 * s * (1 - t * 0.4);
+          const flashPhase = t < 0.3 ? t / 0.3 : Math.max(0, 1 - (t - 0.3) / 0.7);
+          const flashR = (15 + flashPhase * 12) * s;
           // 外晕（电青）
-          g.circle(node.x, node.y, flashR * 1.6);
-          g.fill({ color: ELECTRIC_MAIN, alpha: alpha * 0.25 });
+          g.circle(node.x, node.y, flashR * 2);
+          g.fill({ color: ELECTRIC_MAIN, alpha: flashAlpha * 0.2 });
           // 中层（金色）
-          g.circle(node.x, node.y, flashR);
-          g.fill({ color: pal.primary, alpha: alpha * 0.5 });
+          g.circle(node.x, node.y, flashR * 1.2);
+          g.fill({ color: pal.primary, alpha: flashAlpha * 0.45 });
           // 核心（白色）
-          g.circle(node.x, node.y, flashR * 0.4);
-          g.fill({ color: ELECTRIC_WHITE, alpha: alpha * 0.9 });
+          g.circle(node.x, node.y, flashR * 0.5);
+          g.fill({ color: ELECTRIC_WHITE, alpha: flashAlpha * 0.9 });
+        }
+
+        // ── 放射闪电（命中点向四周爆散） ──
+        if (flashAlpha > 0.1) {
+          for (let i = 1; i < arcNodes.length; i++) {
+            const node = arcNodes[i];
+            const boltCount = isBurst ? 8 : 5;
+            for (let b = 0; b < boltCount; b++) {
+              const angle = (b / boltCount) * Math.PI * 2 + i * 0.5;
+              const len = (20 + Math.random() * 30) * s;
+              const ex = node.x + Math.cos(angle) * len;
+              const ey = node.y + Math.sin(angle) * len;
+              this.strokePolyline(g,
+                this.generateJaggedPoints(node.x, node.y, ex, ey, 8 * s),
+                ELECTRIC_LIGHT, baseWidth * 0.5, flashAlpha * 0.5);
+            }
+          }
         }
 
         // ── 电弧粒子更新与绘制 ──

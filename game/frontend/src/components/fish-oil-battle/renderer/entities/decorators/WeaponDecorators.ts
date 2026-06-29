@@ -26,32 +26,33 @@ export class CatEarDecorator extends WeaponDecorator {
     const primary = this.palette.primary;
     const accent = this.palette.accent;
 
-    // 左耳：底部贴球顶 y=-36，顶点超出球外到 y=-48
-    g.moveTo(-14, -36);
-    g.quadraticCurveTo(-26, -48, -12, -42);
-    g.quadraticCurveTo(-6, -42, -4, -36);
+    // 左耳：底部伸入球内 y=-30（被球体遮挡），顶点 y=-66（超出球顶 30px）
+    // 耳宽 20px，耳高 36px，宽高比 ~0.56（胖嘟嘟可爱风格）
+    g.moveTo(-20, -30);
+    g.quadraticCurveTo(-26, -60, -10, -66);
+    g.quadraticCurveTo(-2, -58, -4, -30);
     g.closePath();
     g.fill({ color: primary });
-    g.stroke({ color: 0xCC8800, width: 1, join: 'round' });
+    g.stroke({ color: 0xCC8800, width: 1.5, join: 'round' });
 
-    // 左内耳：粉色
-    g.moveTo(-12, -38);
-    g.quadraticCurveTo(-18, -46, -10, -42);
-    g.quadraticCurveTo(-7, -42, -6, -38);
+    // 左内耳：粉色，占外耳 60%
+    g.moveTo(-15, -34);
+    g.quadraticCurveTo(-18, -54, -8, -58);
+    g.quadraticCurveTo(-3, -50, -5, -34);
     g.closePath();
     g.fill({ color: 0xFFB3D9 });
 
     // 右耳
-    g.moveTo(14, -36);
-    g.quadraticCurveTo(26, -48, 12, -42);
-    g.quadraticCurveTo(6, -42, 4, -36);
+    g.moveTo(20, -30);
+    g.quadraticCurveTo(26, -60, 10, -66);
+    g.quadraticCurveTo(2, -58, 4, -30);
     g.closePath();
     g.fill({ color: primary });
-    g.stroke({ color: 0xCC8800, width: 1, join: 'round' });
+    g.stroke({ color: 0xCC8800, width: 1.5, join: 'round' });
 
-    g.moveTo(12, -38);
-    g.quadraticCurveTo(18, -46, 10, -42);
-    g.quadraticCurveTo(7, -42, 6, -38);
+    g.moveTo(15, -34);
+    g.quadraticCurveTo(18, -54, 8, -58);
+    g.quadraticCurveTo(3, -50, 5, -34);
     g.closePath();
     g.fill({ color: 0xFFB3D9 });
   }

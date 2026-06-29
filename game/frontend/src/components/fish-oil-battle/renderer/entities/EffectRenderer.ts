@@ -304,6 +304,31 @@ export class EffectRenderer {
   }
 
   /**
+   * 更新气罩视觉（持续跟随玩家位置，按 playerId 去重）
+   * 用于被动 B：自身周围持续气罩
+   */
+  updateAirShield(
+    playerId: string,
+    x: number,
+    y: number,
+    radius?: number,
+    themeColor?: number,
+    palette?: Palette,
+  ): void {
+    const cfg = this.buildAirRepulsionVisualCfg();
+    this.airRepulsionFieldRenderer.updateShield(
+      playerId, x, y, radius ?? cfg.shieldRadius, themeColor, palette,
+    );
+  }
+
+  /**
+   * 移除玩家气罩
+   */
+  removeAirShield(playerId: string): void {
+    this.airRepulsionFieldRenderer.removeShield(playerId);
+  }
+
+  /**
    * 从 WeaponRangeConfig 构建空气斥力场视觉配置
    */
   private buildAirRepulsionVisualCfg() {
@@ -313,6 +338,7 @@ export class EffectRenderer {
       anchorDurationMs: (rc?.field?.durationSec ?? 5) * 1000,
       burstRadius: rc?.aoeMaxRadius ?? 180,
       burstDurationMs: (rc?.burstDurationSec ?? 4) * 1000,
+      shieldRadius: rc?.damageRadius ?? 35,
     };
   }
 
@@ -1541,6 +1567,8 @@ export class EffectRenderer {
     this.quantumRiftRenderer.clear();
     this.sizeWarpRenderer.clear();
     this.ricochetCoreRenderer.clear();
+    // 清理空气斥力场渲染器（含锚点 + 气罩，气罩为持久特效不走 ActiveEffect 生命周期）
+    this.airRepulsionFieldRenderer.clear();
   }
 
   destroy(): void {

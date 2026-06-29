@@ -414,11 +414,13 @@ export class EntropicTouchRenderer {
     durationMs?: number,
     palette?: Palette,
   ): void {
-    // 若已存在，先销毁旧实例
-    const old = this.activeBursts.get(playerId);
-    if (old) {
-      this.fieldContainer.removeChild(old.container);
-      old.container.destroy({ children: true });
+    // 修复：后端每 250ms 发送 ENTROPIC_TOUCH_BURST 周期同步事件，
+    // 已存在实例时仅更新位置和半径，不重建（避免 life 被重置为 0 导致永远卡在"蓄压"阶段）
+    const existing = this.activeBursts.get(playerId);
+    if (existing) {
+      existing.container.position.set(x, y);
+      existing.radius = radius;
+      return;
     }
 
     const pal: Palette = palette ?? {

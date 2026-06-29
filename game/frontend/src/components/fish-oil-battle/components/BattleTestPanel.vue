@@ -540,9 +540,12 @@ function handleRoundStart(data: { duration: number; players?: Array<{ id: string
     rendererRef.value.setBattleActive(true);
   }
 
-  // 为蜂巢母体玩家启用蜂群渲染
+  // 注册玩家武器装饰器 + 蜂巢母体蜂群渲染
   if (data.players && rendererRef.value) {
     for (const p of data.players) {
+      if (p.weaponId !== undefined) {
+        rendererRef.value.setWeaponDecorator(p.id, p.weaponId as WeaponId);
+      }
       if (p.weaponId === WeaponId.HIVE_MOTHER) {
         rendererRef.value.setPlayerHiveActive(p.id, 3, false);
       }
@@ -713,6 +716,10 @@ function handleVisualEvent(data: any): void {
             type: data.type,
             x: data.x, y: data.y,
             anchorId: data.anchorId,
+            airAnchors: data.airAnchors,
+            shieldX: data.shieldX,
+            shieldY: data.shieldY,
+            shieldRadius: data.shieldRadius,
             playerId: data.playerId,
           });
         }

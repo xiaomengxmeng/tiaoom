@@ -69,6 +69,7 @@ import BattleResultOverlay from './components/BattleResultOverlay.vue';
 import type { GameCore } from '@/core/game';
 import { CyberFishRenderer } from './renderer/CyberFishRenderer';
 import { useFishOilBattle, type SelectableWeapon } from './useFishOilBattle';
+import { WeaponId } from '$/backend/src/games/fish-oil-battle/config/GameEnums';
 
 const props = withDefaults(defineProps<{
   roomPlayer: RoomPlayer & { room: Room };
@@ -246,10 +247,18 @@ async function handleBattleStart(data: {
   }
 }
 
-/** 回合开始：激活物理运动 + 切换 Hud 可见 + 设置倒计时 */
-function handleRoundStart(data: { duration: number }): void {
+/** 回合开始：激活物理运动 + 切换 Hud 可见 + 设置倒计时 + 注册武器装饰器 */
+function handleRoundStart(data: { duration: number; players?: Array<{ id: string; weaponId: string }> }): void {
   if (rendererRef.value) {
     rendererRef.value.setBattleActive(true);
+    // 注册玩家武器装饰器（round_start 时 weaponId 才有效）
+    if (data.players) {
+      for (const p of data.players) {
+        if (p.weaponId !== undefined) {
+          rendererRef.value.setWeaponDecorator(p.id, p.weaponId as WeaponId);
+        }
+      }
+    }
   }
   battleState.onRoundStart(data);
 }

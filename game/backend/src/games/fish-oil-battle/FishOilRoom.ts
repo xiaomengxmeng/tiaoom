@@ -733,6 +733,10 @@ export default class FishOilRoom extends GameRoom {
         targetId: evt.metadata?.targetId,
         // 空气斥力场
         anchorId: evt.metadata?.anchorId,
+        airAnchors: evt.metadata?.anchors,
+        shieldX: evt.metadata?.shieldX,
+        shieldY: evt.metadata?.shieldY,
+        shieldRadius: evt.metadata?.shieldRadius,
         // 熵寂之触
         frostbiteTargetId: evt.metadata?.targetId,
         frostbiteStacks: evt.metadata?.stacks,

@@ -210,6 +210,14 @@ export class CyberFishRenderer {
     sustainedRemove?: boolean;
     /** 空气斥力场锚点 ID，air_anchor/air_burst 专用 */
     anchorId?: string;
+    /** 空气斥力场锚点列表（含真实坐标，由后端周期同步事件携带） */
+    airAnchors?: Array<{ id: string; x: number; y: number; radius: number; secondsLeft?: number }>;
+    /** 空气斥力场气罩位置 X（玩家自身位置） */
+    shieldX?: number;
+    /** 空气斥力场气罩位置 Y（玩家自身位置） */
+    shieldY?: number;
+    /** 空气斥力场气罩半径 */
+    shieldRadius?: number;
     /** 目标玩家 ID，entropic_frostbite 等效果专用 */
     targetId?: string;
     /** 熵寂之触冻伤层数，entropic_frostbite 专用 */
@@ -402,17 +410,50 @@ export class CyberFishRenderer {
           );
         }
         break;
-      case VisualEventType.AIR_REPULSION_ANCHOR:
-        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+      case VisualEventType.AIR_REPULSION_ANCHOR: {
+        // 修复：读取后端 metadata.anchors 数组（含真实锚点坐标），对每个锚点分别调用
+        const anchorPalette = getWeaponPalette(WeaponId.AIR_REPULSION_FIELD);
+        const anchors = config.airAnchors;
+
+        if (anchors && anchors.length > 0) {
+          // 有锚点列表：对每个锚点分别调用（用真实坐标）
+          for (const anchor of anchors) {
+            const ax = this.mapX(anchor.x);
+            const ay = this.mapY(anchor.y);
+            this.effectRenderer.triggerAirAnchor(
+              ax, ay,
+              anchor.id ?? `anchor_${Date.now()}_${Math.random()}`,
+              themeColor,
+              undefined,
+              anchorPalette,
+            );
+          }
+        } else if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+          // 无锚点列表（首次创建）：用事件坐标
           this.effectRenderer.triggerAirAnchor(
             mapCfg.x, mapCfg.y,
-            (config as any).anchorId ?? `anchor_${Date.now()}`,
+            config.anchorId ?? `anchor_${Date.now()}`,
             themeColor,
             undefined,
-            getWeaponPalette(WeaponId.AIR_REPULSION_FIELD),
+            anchorPalette,
+          );
+        }
+
+        // 气罩（shieldX/Y/radius）——由 AirRepulsionFieldRenderer.updateShield 渲染
+        const shieldX = config.shieldX;
+        const shieldY = config.shieldY;
+        const shieldRadius = config.shieldRadius;
+        if (shieldX !== undefined && shieldY !== undefined && shieldRadius !== undefined) {
+          this.effectRenderer.updateAirShield(
+            config.playerId ?? '',
+            this.mapX(shieldX), this.mapY(shieldY),
+            shieldRadius,
+            themeColor,
+            anchorPalette,
           );
         }
         break;
+      }
       case VisualEventType.AIR_REPULSION_BURST:
         if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
           this.effectRenderer.triggerAirBurst(

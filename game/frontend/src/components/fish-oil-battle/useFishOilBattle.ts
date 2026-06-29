@@ -392,6 +392,10 @@ export function useFishOilBattle(
             type: data.type,
             x: data.x, y: data.y,
             anchorId: data.anchorId,
+            airAnchors: data.airAnchors,
+            shieldX: data.shieldX,
+            shieldY: data.shieldY,
+            shieldRadius: data.shieldRadius,
             playerId: data.playerId,
           });
         }
@@ -944,9 +948,12 @@ export function useFishOilBattle(
     roundDuration.value = data.duration;
     stopCountdown();
 
-    // 为蜂巢母体玩家启用蜂群绕球公转渲染
+    // 注册玩家武器装饰器 + 蜂巢母体蜂群绕球公转渲染
     if (data.players && rendererRef.value) {
       for (const p of data.players) {
+        if (p.weaponId !== undefined) {
+          rendererRef.value.setWeaponDecorator(p.id, p.weaponId as WeaponId);
+        }
         if (p.weaponId === WeaponId.HIVE_MOTHER) {
           console.log(`[FishOilBattle] 启用蜂群渲染: playerId=${p.id}`);
           rendererRef.value.setPlayerHiveActive(p.id, 3, false);

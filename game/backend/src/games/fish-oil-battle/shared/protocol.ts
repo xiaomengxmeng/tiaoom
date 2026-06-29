@@ -126,6 +126,23 @@ export interface VisualEventData {
    */
   anchorId?: string;
   /**
+   * 空气斥力场锚点列表（含真实锚点坐标，由后端周期同步事件携带）
+   * 前端应据此对每个锚点分别渲染，而非仅用玩家当前位置
+   */
+  airAnchors?: Array<{ id: string; x: number; y: number; radius: number; secondsLeft?: number }>;
+  /**
+   * 空气斥力场气罩位置 X（玩家自身位置）
+   */
+  shieldX?: number;
+  /**
+   * 空气斥力场气罩位置 Y（玩家自身位置）
+   */
+  shieldY?: number;
+  /**
+   * 空气斥力场气罩半径
+   */
+  shieldRadius?: number;
+  /**
    * 熵寂之触：冻伤目标玩家 ID（ENTROPIC_TOUCH_FROSTBITE 事件专用）
    */
   frostbiteTargetId?: string;

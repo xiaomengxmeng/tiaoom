@@ -56,6 +56,16 @@ export class AirRepulsionFieldRenderer {
   private scale = 1;
   /** 活跃特效容器集合（用于 setScale 同步与 clear 批量清理） */
   private activeContainers: Set<PIXI.Container> = new Set();
+  /**
+   * 活跃锚点映射：anchorId → { container, effect }
+   * 用于按 anchorId 去重，避免后端周期同步事件（每 5 tick）导致重复创建锚点堆叠
+   */
+  private anchorEffects: Map<string, { container: PIXI.Container; effect: ActiveEffect }> = new Map();
+  /**
+   * 气罩映射：playerId → { container, graphics }
+   * 用于按 playerId 去重 + 跟随玩家位置更新（每 5 tick 同步一次）
+   */
+  private shields: Map<string, { container: PIXI.Container; graphics: PIXI.Graphics }> = new Map();
 
   constructor(container: PIXI.Container, particlePool?: ParticlePool) {
     this.container = container;
@@ -92,6 +102,15 @@ export class AirRepulsionFieldRenderer {
     radius = 55,
     palette?: Palette,
   ): { effect: ActiveEffect | null; anchorId: string } {
+    // 修复：按 anchorId 去重，已存在则更新位置并重置生命周期，不重建（避免堆叠约 20 个重复锚点）
+    const existing = this.anchorEffects.get(anchorId);
+    if (existing) {
+      existing.container.position.set(x, y);
+      existing.effect.life = 0;
+      existing.effect.maxLife = maxLifeMs;
+      return { effect: null, anchorId };
+    }
+
     const baseColor = themeColor ?? 0xFFCC44;
     const pal: Palette = palette ?? {
       primary: baseColor,
@@ -163,6 +182,9 @@ export class AirRepulsionFieldRenderer {
         this.removeContainer(container);
       },
     };
+
+    // 记录到 anchorEffects 以便后续去重
+    this.anchorEffects.set(anchorId, { container, effect: ef });
 
     return { effect: ef, anchorId };
   }
@@ -428,6 +450,89 @@ export class AirRepulsionFieldRenderer {
   }
 
   // ══════════════════════════════════════════════════════
+  //  气罩（被动 B：自身周围持续气罩）
+  // ══════════════════════════════════════════════════════
+
+  /**
+   * 更新气罩视觉（持续跟随玩家位置，按 playerId 去重）
+   * @param playerId 玩家 ID（作为 shield key 去重）
+   * @param x 玩家逻辑坐标 X
+   * @param y 玩家逻辑坐标 Y
+   * @param radius 气罩半径（逻辑 px，默认 35）
+   * @param themeColor 主题色（保留参数兼容）
+   * @param palette 调色板
+   */
+  updateShield(
+    playerId: string,
+    x: number,
+    y: number,
+    radius = 35,
+    themeColor?: number,
+    palette?: Palette,
+  ): void {
+    const baseColor = themeColor ?? 0xFFCC44;
+    const pal: Palette = palette ?? {
+      primary: baseColor,
+      glow: lighten(baseColor, 50),
+      highlight: lighten(baseColor, 100),
+      dim: dimColor(baseColor, 0.6),
+      shadow: dimColor(baseColor, 0.3),
+      accent: 0xFF6622,
+    };
+
+    let entry = this.shields.get(playerId);
+    if (!entry) {
+      // 首次创建：容器 + graphics
+      const container = new PIXI.Container();
+      container.scale.set(this.scale);
+      const graphics = new PIXI.Graphics();
+      container.addChild(graphics);
+      this.container.addChild(container);
+      this.activeContainers.add(container);
+      entry = { container, graphics };
+      this.shields.set(playerId, entry);
+    }
+
+    // 跟随玩家位置 + 重绘（基于当前半径，便于后续半径变化）
+    entry.container.position.set(x, y);
+    this.drawShield(entry.graphics, radius, pal);
+  }
+
+  /**
+   * 绘制气罩视觉：双层气罩环（外环虚线 + 内环实线）+ 6 个气流点 + 中心光晕
+   */
+  private drawShield(g: PIXI.Graphics, radius: number, pal: Palette): void {
+    g.clear();
+    // 外圈：虚线气罩边界（懒散黄）
+    g.circle(0, 0, radius);
+    g.stroke({ color: pal.primary, width: 1, alpha: 0.5, dash: [4, 3] });
+    // 内圈：实线呼吸（发光色）
+    g.circle(0, 0, radius * 0.9);
+    g.stroke({ color: pal.glow, width: 0.6, alpha: 0.4 });
+    // 中心光晕（懒散淡）
+    g.circle(0, 0, radius * 0.3);
+    g.fill({ color: pal.glow, alpha: 0.15 });
+    // 6 个气流点环绕（高亮色）
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const px = Math.cos(a) * radius * 0.95;
+      const py = Math.sin(a) * radius * 0.95;
+      g.circle(px, py, 1.5);
+      g.fill({ color: pal.highlight, alpha: 0.7 });
+    }
+  }
+
+  /**
+   * 移除玩家气罩
+   */
+  removeShield(playerId: string): void {
+    const entry = this.shields.get(playerId);
+    if (!entry) return;
+    this.removeContainer(entry.container);
+    this.shields.delete(playerId);
+  }
+
+  // ══════════════════════════════════════════════════════
   //  粒子发射
   // ══════════════════════════════════════════════════════
 
@@ -533,11 +638,28 @@ export class AirRepulsionFieldRenderer {
       c.destroy({ children: true });
     }
     this.activeContainers.delete(c);
+    // 同步清理 anchorEffects 映射（按容器引用反查 anchorId）
+    for (const [aid, entry] of this.anchorEffects) {
+      if (entry.container === c) {
+        this.anchorEffects.delete(aid);
+        break;
+      }
+    }
+    // 同步清理 shields 映射（按容器引用反查 playerId）
+    for (const [pid, entry] of this.shields) {
+      if (entry.container === c) {
+        this.shields.delete(pid);
+        break;
+      }
+    }
   }
 
   /** 清除所有特效（不销毁渲染器） */
   clear(): void {
     this.activeContainers.forEach((c) => this.removeContainer(c));
+    // 显式清空映射，避免 removeContainer 仅 break 第一个匹配后残留
+    this.anchorEffects.clear();
+    this.shields.clear();
   }
 
   destroy(): void {

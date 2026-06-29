@@ -466,16 +466,7 @@ export class CyberFishRenderer {
         }
         break;
       case VisualEventType.ENTROPIC_TOUCH_AURA:
-        // 低温场 aura 视觉效果
-        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
-          this.effectRenderer.triggerEntropicAura(
-            config.playerId ?? 'unknown',
-            mapCfg.x, mapCfg.y,
-            config.radius ?? 50,
-            themeColor,
-            getWeaponPalette(WeaponId.ENTROPIC_TOUCH),
-          );
-        }
+        // 低温场 aura 已移除（靠装饰器月轮表示，避免视觉杂乱）
         break;
       case VisualEventType.ENTROPIC_TOUCH_FROSTBITE:
         // 冻伤叠加视觉效果
@@ -503,21 +494,7 @@ export class CyberFishRenderer {
         }
         break;
       case VisualEventType.DRAWING_MANIFEST_INK:
-        // 小兔/肌肉兔状态同步（墨水层数 + 形态 + 位置）
-        {
-          const rx = config.rabbitX !== undefined ? this.mapX(config.rabbitX) : mapCfg.x;
-          const ry = config.rabbitY !== undefined ? this.mapY(config.rabbitY) : mapCfg.y;
-          if (rx !== undefined && ry !== undefined) {
-            this.effectRenderer.updateDrawingRabbit(
-              config.playerId ?? 'unknown',
-              rx, ry,
-              config.inkStacks ?? 0,
-              config.isMuscleRabbit ?? false,
-              themeColor,
-              getWeaponPalette(WeaponId.DRAWING_MANIFEST),
-            );
-          }
-        }
+        // 小兔/肌肉兔虚影已移除（靠装饰器画板表示，避免视觉杂乱）
         break;
       case VisualEventType.DRAWING_MANIFEST_BURST:
         // 肌肉兔降临爆发
@@ -552,18 +529,9 @@ export class CyberFishRenderer {
         }
         break;
       case VisualEventType.DISCHARGE_CAT_ARC:
-        // 电弧弹射链
+        // 电弧弹射链（放电猫虚影已移除，靠装饰器猫耳表示）
         {
           const isBurst = config.isBurst ?? false;
-          // 更新放电猫虚影位置
-          const cx = config.catX !== undefined ? this.mapX(config.catX) : mapCfg.x;
-          const cy = config.catY !== undefined ? this.mapY(config.catY) : mapCfg.y;
-          if (cx !== undefined && cy !== undefined) {
-            this.effectRenderer.updateDischargeCat(
-              config.playerId ?? 'unknown', cx, cy, isBurst, themeColor,
-              getWeaponPalette(WeaponId.DISCHARGE_CAT),
-            );
-          }
           // 绘制电弧弹射链
           if (config.arcNodes && config.arcNodes.length >= 2) {
             const mappedNodes = config.arcNodes.map(n => ({
@@ -594,17 +562,7 @@ export class CyberFishRenderer {
         }
         break;
       case VisualEventType.PRECOGNITIVE_LENS_FORESIGHT:
-        // 先见层数同步
-        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
-          this.effectRenderer.updatePrecognitiveForesight(
-            config.playerId ?? 'unknown',
-            mapCfg.x, mapCfg.y,
-            config.foresightStacks ?? 0,
-            config.isBurst ?? false,
-            themeColor,
-            getWeaponPalette(WeaponId.PRECOGNITIVE_LENS),
-          );
-        }
+        // 先见光环已移除（靠装饰器透镜刻度环表示，避免视觉杂乱）
         break;
       case VisualEventType.PRECOGNITIVE_LENS_ECHO:
         // 猫灵回响投射物
@@ -662,16 +620,7 @@ export class CyberFishRenderer {
         }
         break;
       case VisualEventType.EMOTION_MASTERY_MOOD:
-        // 心境轮转同步
-        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
-          this.effectRenderer.updateEmotionMood(
-            config.playerId ?? 'unknown',
-            mapCfg.x, mapCfg.y,
-            config.currentMood ?? 'anger',
-            themeColor,
-            getWeaponPalette(WeaponId.EMOTION_MASTERY),
-          );
-        }
+        // 心境轮转光环已移除（靠装饰器心境光环表示，避免视觉杂乱）
         break;
       case VisualEventType.EMOTION_MASTERY_BURST:
         // 情绪实体化爆发
@@ -685,18 +634,7 @@ export class CyberFishRenderer {
         }
         break;
       case VisualEventType.FLUID_MASTERY_TRAIL:
-        // KE 水流尾迹
-        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
-          this.effectRenderer.triggerFluidTrail(
-            config.playerId ?? 'unknown',
-            mapCfg.x, mapCfg.y,
-            config.radius ?? 45,
-            config.flowDir ?? 0,
-            themeColor ?? config.factionColor,
-            config.isAngry,
-            getWeaponPalette(WeaponId.FLUID_MASTERY),
-          );
-        }
+        // 水流尾迹已移除（靠装饰器漂浮古籍表示，避免视觉杂乱）
         break;
       case VisualEventType.FLUID_MASTERY_VORTEX:
         // KE 漩涡牵引
@@ -727,18 +665,7 @@ export class CyberFishRenderer {
         }
         break;
       case VisualEventType.MEMORY_CORRIDOR_ECHO:
-        // 梦回响光环
-        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
-          this.effectRenderer.triggerMemoryEcho(
-            config.playerId ?? 'unknown',
-            mapCfg.x, mapCfg.y,
-            config.radius ?? 50,
-            config.echoCount ?? 0,
-            config.shardId ?? '',
-            themeColor ?? config.factionColor,
-            getWeaponPalette(WeaponId.MEMORY_CORRIDOR),
-          );
-        }
+        // 梦回响光环已移除（靠装饰器六边形碎片环表示，避免视觉杂乱）
         break;
       case VisualEventType.MEMORY_CORRIDOR_RESONANCE:
         // 梦历史共振

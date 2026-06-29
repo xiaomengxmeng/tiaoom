@@ -302,11 +302,17 @@ export class CyberFishRenderer {
         const reaction = (config as any).hitReaction ?? 'flash';
         const targetId = (config as any).targetId;
         const damage = (config as any).hitDamage;
+        const sourceId = (config as any).hitSourceId;
         if (targetId) {
           const pr = this.playerRenderers.get(targetId);
           if (pr) {
             pr.playHitEffect(reaction as HitReaction);
-            if (damage !== undefined) pr.showDamageNumber(damage, this.getDamageColor(reaction as HitReaction));
+            // 优先使用攻击者主题色，回退到 reaction 颜色
+            const sourceColor = sourceId
+              ? this.playerRenderers.get(sourceId)?.getTrailColor()
+              : undefined;
+            const dmgColor = sourceColor ?? this.getDamageColor(reaction as HitReaction);
+            if (damage !== undefined) pr.showDamageNumber(damage, dmgColor);
           }
         }
         break;
@@ -987,6 +993,13 @@ export class CyberFishRenderer {
   }
 
   /**
+   * 获取玩家拖尾主题色（用于伤害数字着色）
+   */
+  getPlayerTrailColor(playerId: string): number | undefined {
+    return this.playerRenderers.get(playerId)?.getTrailColor();
+  }
+
+  /**
    * 设置玩家的武器装饰器（按 weaponId 创建对应装饰）
    */
   setWeaponDecorator(playerId: string, weaponId: WeaponId): void {
@@ -1030,6 +1043,9 @@ export class CyberFishRenderer {
     const pr = this.playerRenderers.get(playerId);
     if (pr) {
       pr.setVisible(alive);
+      if (!alive) {
+        pr.setWeaponDecorator(undefined);
+      }
     }
     if (!alive) {
       this.physics.removePlayer(playerId);

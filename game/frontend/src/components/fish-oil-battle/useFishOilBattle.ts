@@ -281,12 +281,18 @@ export function useFishOilBattle(
         const reaction = (data as any).hitReaction ?? 'flash';
         const damage = (data as any).hitDamage;
         const targetId = (data as any).targetId;
+        const sourceId = (data as any).hitSourceId;
         if (targetId) {
           // 记录最近一次 HIT_FEEDBACK 时间戳（用于 HP 差值检测去重）
           lastHitFeedbackAt.set(targetId, performance.now());
           rendererRef.value.playHitEffect(targetId, reaction);
           if (damage !== undefined) {
-            rendererRef.value.showDamageNumber(targetId, damage, getDamageColor(reaction));
+            // 优先使用攻击者主题色，回退到 reaction 颜色
+            const sourceColor = sourceId
+              ? rendererRef.value.getPlayerTrailColor?.(sourceId)
+              : undefined;
+            const dmgColor = sourceColor ?? getDamageColor(reaction);
+            rendererRef.value.showDamageNumber(targetId, damage, dmgColor);
           }
         }
         break;

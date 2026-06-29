@@ -31,10 +31,11 @@ export abstract class WeaponDecorator {
     (parentContainer as PIXI.Container).sortableChildren = true;
   }
 
-  /** 同步缩放（与 PlayerRenderer.setScale 联动） */
+  /** 同步缩放（与 PlayerRenderer.setScale 联动，仅记录供子类使用） */
   setScale(s: number): void {
     this.scale = s;
-    this.container.scale.set(s);
+    // 注意：container 不设置 scale，避免与 sprite 的 baseScale * scale 形成双重缩放
+    // 装饰器挂在 l1Player 上，与 PlayerRenderer.container 平级，位置已通过 setPosition 同步
   }
 
   /** 同步位置（与 PlayerRenderer 位置联动） */
@@ -53,6 +54,10 @@ export abstract class WeaponDecorator {
   /** 销毁 */
   destroy(): void {
     if (!this.container.destroyed) {
+      // 先从父容器移除，再销毁
+      if (this.container.parent) {
+        this.container.parent.removeChild(this.container);
+      }
       this.container.destroy({ children: true });
     }
   }

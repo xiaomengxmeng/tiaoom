@@ -238,6 +238,8 @@ export interface VisualEventData {
   hitDamage?: number;
   /** 命中来源武器 ID（HIT_FEEDBACK 事件专用） */
   hitSourceWeaponId?: WeaponId;
+  /** 命中来源玩家 ID（HIT_FEEDBACK 事件专用，用于获取攻击者主题色） */
+  hitSourceId?: string;
 }
 
 // ─── 游戏统计（game_end 用）───────────────

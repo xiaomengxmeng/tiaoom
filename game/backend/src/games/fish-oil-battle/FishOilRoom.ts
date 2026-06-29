@@ -781,6 +781,7 @@ export default class FishOilRoom extends GameRoom {
         hitReaction: evt.metadata?.hitReaction,
         hitDamage: evt.metadata?.damage,
         hitSourceWeaponId: evt.metadata?.weaponId,
+        hitSourceId: evt.metadata?.sourceId,
       });
     }
     return result;

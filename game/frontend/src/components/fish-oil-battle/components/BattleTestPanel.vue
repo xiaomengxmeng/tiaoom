@@ -622,10 +622,14 @@ function handleVisualEvent(data: any): void {
       const reaction = (data as any).hitReaction ?? 'flash';
       const damage = (data as any).hitDamage;
       const targetId = (data as any).targetId;
+      const sourceId = (data as any).hitSourceId;
       if (targetId) {
         rendererRef.value.playHitEffect(targetId, reaction);
         if (damage !== undefined) {
-          rendererRef.value.showDamageNumber(targetId, damage);
+          const sourceColor = sourceId
+            ? rendererRef.value.getPlayerTrailColor?.(sourceId)
+            : undefined;
+          rendererRef.value.showDamageNumber(targetId, damage, sourceColor);
         }
       }
       break;

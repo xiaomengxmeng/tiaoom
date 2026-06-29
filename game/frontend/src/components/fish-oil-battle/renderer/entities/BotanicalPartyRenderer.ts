@@ -694,16 +694,15 @@ export class BotanicalPartyRenderer {
       burst.life += dt;
       const T = burst.maxLife;
       if (burst.life >= T) {
+        // 先保存位置和半径，再移除（removeBurst 会销毁 container）
+        const bx = burst.container.x;
+        const by = burst.container.y;
+        const br = burst.radius;
         this.removeBurst(playerId);
         // 爆发结束：所有植物同时枯萎 + 大量咖啡香气粒子
         this.burstActive = false;
         this.triggerAllPlantsDecay();
-        this.spawnCoffeeParticles(
-          burst.container.x,
-          burst.container.y,
-          burst.radius,
-          16,
-        );
+        this.spawnCoffeeParticles(bx, by, br, 16);
         return;
       }
 

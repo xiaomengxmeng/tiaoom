@@ -67,18 +67,21 @@ export class DischargeCatWeapon implements IWeapon {
     if (!selfPos) return effects;
 
     // ── 放电猫虚影跟随（绕球体小幅游走） ──
-    if (!this.catInited) {
-      this.catX = selfPos.x;
-      this.catY = selfPos.y;
-      this.catInited = true;
+    // 仅在非爆发期跟随小球；爆发期放电猫实体化，位置固定
+    if (!this.isBurstActive) {
+      if (!this.catInited) {
+        this.catX = selfPos.x;
+        this.catY = selfPos.y;
+        this.catInited = true;
+      }
+      // 虚影在球体 30px 范围内游走
+      const orbitAngle = this.tickCounter * 0.08;
+      const orbitR = 25 + Math.sin(this.tickCounter * 0.05) * 5;
+      const targetX = selfPos.x + Math.cos(orbitAngle) * orbitR;
+      const targetY = selfPos.y + Math.sin(orbitAngle) * orbitR;
+      this.catX += (targetX - this.catX) * 0.15;
+      this.catY += (targetY - this.catY) * 0.15;
     }
-    // 虚影在球体 30px 范围内游走
-    const orbitAngle = this.tickCounter * 0.08;
-    const orbitR = 25 + Math.sin(this.tickCounter * 0.05) * 5;
-    const targetX = selfPos.x + Math.cos(orbitAngle) * orbitR;
-    const targetY = selfPos.y + Math.sin(orbitAngle) * orbitR;
-    this.catX += (targetX - this.catX) * 0.15;
-    this.catY += (targetY - this.catY) * 0.15;
 
     // ── 爆发倒计时 ──
     if (this.isBurstActive) {

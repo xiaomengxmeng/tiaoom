@@ -665,6 +665,7 @@ export default class FishOilRoom extends GameRoom {
         this.deadPlayers.add(pid);
         this.playerDeathTime.set(pid, Date.now());
         this.physics.removeBall(pid);
+        this.scheduler.unbind(pid);  // 卸载武器，清空所有障碍物与状态
         console.log(`[FishOil] 玩家死亡: ${pstate.name} (tick=${this.battleTick})`);
       }
     }
@@ -956,6 +957,7 @@ export default class FishOilRoom extends GameRoom {
         this.deadPlayers.add(pid);
         this.playerDeathTime.set(pid, Date.now());
         this.physics?.removeBall(pid);
+        this.scheduler?.unbind(pid);  // 卸载武器，清空所有障碍物与状态
         const aliveCount = Array.from(this.battleState.players.values())
           .filter(p => p.hp > 0 && !this.deadPlayers.has(p.id)).length;
         if (aliveCount <= 1) {

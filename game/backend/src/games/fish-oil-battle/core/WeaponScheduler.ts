@@ -67,6 +67,20 @@ export class WeaponScheduler {
     this.bindings.set(playerId, weapon);
   }
 
+  /**
+   * 卸载玩家武器（玩家死亡时调用）。
+   * - 调用 weapon.reset() 清空内部状态（anchors/firewalls/plants/vortex 等）
+   * - 从 bindings 移除，避免 getObstacles 返回残留障碍物
+   * - processObstacleHit 也会因 bindings.get 返回 undefined 而不再触发
+   */
+  unbind(playerId: string): void {
+    const weapon = this.bindings.get(playerId);
+    if (!weapon) return;
+    if (weapon.reset) weapon.reset();
+    this.bindings.delete(playerId);
+    console.log(`[WeaponScheduler] unbind: playerId=${playerId}`);
+  }
+
   /** 获取玩家武器 */
   getWeapon(playerId: string): IWeapon | undefined {
     return this.bindings.get(playerId);

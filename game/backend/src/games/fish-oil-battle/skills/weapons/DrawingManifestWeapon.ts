@@ -73,15 +73,18 @@ export class DrawingManifestWeapon implements IWeapon {
     const selfPos = physics.getSelfPosition(this.playerId);
     if (!selfPos) return effects;
 
-    // ── 小兔跟随球体（平滑插值，肌肉兔时偏移更大） ──
-    if (!this.rabbitInited) {
-      this.rabbitX = selfPos.x;
-      this.rabbitY = selfPos.y;
-      this.rabbitInited = true;
+    // ── 小兔跟随球体（平滑插值） ──
+    // 仅在非爆发期跟随小球；爆发期肌肉兔实体化独立
+    if (!this.isBurstActive) {
+      if (!this.rabbitInited) {
+        this.rabbitX = selfPos.x;
+        this.rabbitY = selfPos.y;
+        this.rabbitInited = true;
+      }
+      const followLerp = 0.12;
+      this.rabbitX += (selfPos.x - this.rabbitX) * followLerp;
+      this.rabbitY += (selfPos.y - this.rabbitY) * followLerp;
     }
-    const followLerp = this.isBurstActive ? 0.18 : 0.12;
-    this.rabbitX += (selfPos.x - this.rabbitX) * followLerp;
-    this.rabbitY += (selfPos.y - this.rabbitY) * followLerp;
 
     // ── 推进冲刺投射物 ──
     const maxLifetimeTicks = (CFG.projectile?.maxLifetimeSec ?? 1.5) * TICKS_PER_SEC;

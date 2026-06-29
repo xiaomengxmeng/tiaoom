@@ -26,32 +26,32 @@ export class CatEarDecorator extends WeaponDecorator {
     const primary = this.palette.primary;
     const accent = this.palette.accent;
 
-    // 左耳：宽矮圆润三角，底部 y=8 延伸到球内
-    g.moveTo(-14, 8);
-    g.quadraticCurveTo(-20, -6, -10, -14);
-    g.quadraticCurveTo(-6, -16, -4, -8);
+    // 左耳：底部贴球顶 y=-36，顶点超出球外到 y=-48
+    g.moveTo(-14, -36);
+    g.quadraticCurveTo(-26, -48, -12, -42);
+    g.quadraticCurveTo(-6, -42, -4, -36);
     g.closePath();
     g.fill({ color: primary });
     g.stroke({ color: 0xCC8800, width: 1, join: 'round' });
 
     // 左内耳：粉色
-    g.moveTo(-12, 4);
-    g.quadraticCurveTo(-15, -4, -10, -10);
-    g.quadraticCurveTo(-7, -10, -6, -4);
+    g.moveTo(-12, -38);
+    g.quadraticCurveTo(-18, -46, -10, -42);
+    g.quadraticCurveTo(-7, -42, -6, -38);
     g.closePath();
     g.fill({ color: 0xFFB3D9 });
 
     // 右耳
-    g.moveTo(14, 8);
-    g.quadraticCurveTo(20, -6, 10, -14);
-    g.quadraticCurveTo(6, -16, 4, -8);
+    g.moveTo(14, -36);
+    g.quadraticCurveTo(26, -48, 12, -42);
+    g.quadraticCurveTo(6, -42, 4, -36);
     g.closePath();
     g.fill({ color: primary });
     g.stroke({ color: 0xCC8800, width: 1, join: 'round' });
 
-    g.moveTo(12, 4);
-    g.quadraticCurveTo(15, -4, 10, -10);
-    g.quadraticCurveTo(7, -10, 6, -4);
+    g.moveTo(12, -38);
+    g.quadraticCurveTo(18, -46, 10, -42);
+    g.quadraticCurveTo(7, -42, 6, -38);
     g.closePath();
     g.fill({ color: 0xFFB3D9 });
   }
@@ -88,38 +88,38 @@ export class FloatingBookDecorator extends WeaponDecorator {
   private drawBook(): void {
     const g = this.bookGraphics;
     g.clear();
-    // 漂浮光晕
-    g.circle(0, -18, 16);
+    // 漂浮光晕（整体上移到球顶之上 y=-42）
+    g.circle(0, -42, 16);
     g.fill({ color: this.palette.accent, alpha: 0.15 });
     // 翻开古籍（-8° 倾斜）
     g.rotation = -0.14;
     // 左页
-    g.moveTo(-12, -16);
-    g.lineTo(-1, -18);
-    g.lineTo(-1, -2);
-    g.lineTo(-12, 0);
+    g.moveTo(-12, -40);
+    g.lineTo(-1, -42);
+    g.lineTo(-1, -26);
+    g.lineTo(-12, -24);
     g.closePath();
     g.fill({ color: 0xF5EFDC });
     g.stroke({ color: 0x8B7340, width: 0.8 });
     // 右页
-    g.moveTo(1, -18);
-    g.lineTo(12, -16);
-    g.lineTo(12, 0);
-    g.lineTo(1, -2);
+    g.moveTo(1, -42);
+    g.lineTo(12, -40);
+    g.lineTo(12, -24);
+    g.lineTo(1, -26);
     g.closePath();
     g.fill({ color: 0xF5EFDC });
     g.stroke({ color: 0x8B7340, width: 0.8 });
     // 书脊
-    g.moveTo(0, -18);
-    g.lineTo(0, -2);
+    g.moveTo(0, -42);
+    g.lineTo(0, -26);
     g.stroke({ color: 0x8B7340, width: 1 });
     // 文字线
     for (let i = 0; i < 3; i++) {
-      g.moveTo(-9, -12 + i * 4);
-      g.lineTo(-3, -12 + i * 4);
+      g.moveTo(-9, -36 + i * 4);
+      g.lineTo(-3, -36 + i * 4);
       g.stroke({ color: 0x664400, width: 0.4 });
-      g.moveTo(3, -12 + i * 4);
-      g.lineTo(9, -12 + i * 4);
+      g.moveTo(3, -36 + i * 4);
+      g.lineTo(9, -36 + i * 4);
       g.stroke({ color: 0x664400, width: 0.4 });
     }
   }
@@ -150,7 +150,8 @@ export class CloudDecorator extends WeaponDecorator {
   private drawCloud(): void {
     const g = this.cloudGraphics;
     g.clear();
-    g.y = -22;
+    // 云朵整体上移到球顶之上 y=-48（球半径 r=36）
+    g.y = -48;
     const c = this.burstActive ? 0xFF8800 : 0xFFFFFF;
     // 云朵（4 个椭圆）
     g.ellipse(-12, 0, 10, 6);
@@ -204,16 +205,16 @@ export class TripleBladeDecorator extends WeaponDecorator {
       const angle = (i / 3) * Math.PI * 2;
       g.save();
       g.rotate(angle);
-      // 刀身
-      g.moveTo(0, -16);
-      g.lineTo(3, -28);
-      g.lineTo(0, -32);
-      g.lineTo(-3, -28);
+      // 刀身：从 y=-40 延伸到 y=-56（超出球半径 r=36）
+      g.moveTo(0, -40);
+      g.lineTo(3, -52);
+      g.lineTo(0, -56);
+      g.lineTo(-3, -52);
       g.closePath();
       g.fill({ color: this.palette.primary });
       g.stroke({ color: this.palette.accent, width: 0.5 });
       // 刀柄
-      g.rect(-4, -16, 8, 3);
+      g.rect(-4, -40, 8, 3);
       g.fill({ color: this.palette.accent });
       g.restore();
     }
@@ -244,9 +245,10 @@ export class TripleTriangleDecorator extends WeaponDecorator {
       const angle = (i / 3) * Math.PI * 2;
       g.save();
       g.rotate(angle);
-      g.moveTo(0, -18);
-      g.lineTo(7, -4);
-      g.lineTo(-7, -4);
+      // 三角形顶点超出球外 y=-42，底部 y=-28（球半径 r=36）
+      g.moveTo(0, -42);
+      g.lineTo(7, -28);
+      g.lineTo(-7, -28);
       g.closePath();
       g.fill({ color: this.palette.accent });
       g.stroke({ color: 0x996600, width: 0.8, join: 'round' });
@@ -282,7 +284,8 @@ export class HexShardRingDecorator extends WeaponDecorator {
       const angle = (i / 6) * Math.PI * 2;
       g.save();
       g.rotate(angle);
-      g.translate(0, -22);
+      // 六边形环半径从 22 扩大到 42（超出球半径 r=36）
+      g.translate(0, -42);
       // 六边形
       g.moveTo(0, -6);
       g.lineTo(5, -3);
@@ -326,20 +329,20 @@ export class AirFieldDecorator extends WeaponDecorator {
   private drawRings(): void {
     const g = this.ringGraphics;
     g.clear();
-    // 外圈虚线斥力场
-    g.circle(0, 0, 38);
+    // 外圈虚线斥力场（半径从 38 扩大到 44，确保超出球半径 r=36）
+    g.circle(0, 0, 44);
     g.stroke({ color: this.palette.primary, width: 1, alpha: 0.6, dash: [4, 3] });
     // 内圈虚线
-    g.circle(0, 0, 34);
+    g.circle(0, 0, 40);
     g.stroke({ color: this.palette.glow, width: 0.6, alpha: 0.4, dash: [2, 4] });
-    // 4 条气流弧
-    g.arc(0, 0, 30, Math.PI * 0.3, Math.PI * 0.7);
+    // 4 条气流弧（半径从 30 扩大到 36）
+    g.arc(0, 0, 36, Math.PI * 0.3, Math.PI * 0.7);
     g.stroke({ color: this.palette.primary, width: 1.2, alpha: 0.8, cap: 'round' });
-    g.arc(0, 0, 30, Math.PI * 1.3, Math.PI * 1.7);
+    g.arc(0, 0, 36, Math.PI * 1.3, Math.PI * 1.7);
     g.stroke({ color: this.palette.primary, width: 1.2, alpha: 0.8, cap: 'round' });
-    g.arc(0, 0, 30, Math.PI * 0.8, Math.PI * 1.2);
+    g.arc(0, 0, 36, Math.PI * 0.8, Math.PI * 1.2);
     g.stroke({ color: this.palette.glow, width: 0.8, alpha: 0.6, cap: 'round' });
-    g.arc(0, 0, 30, Math.PI * 1.8, Math.PI * 2.2);
+    g.arc(0, 0, 36, Math.PI * 1.8, Math.PI * 2.2);
     g.stroke({ color: this.palette.glow, width: 0.8, alpha: 0.6, cap: 'round' });
   }
 
@@ -365,17 +368,17 @@ export class MoonHaloDecorator extends WeaponDecorator {
   private drawHalo(): void {
     const g = this.haloGraphics;
     g.clear();
-    // 外圈
-    g.circle(0, 0, 36);
+    // 外圈（半径从 36 扩大到 44，确保超出球半径 r=36）
+    g.circle(0, 0, 44);
     g.stroke({ color: this.palette.glow, width: 0.6, alpha: 0.5 });
     // 虚线月轮
-    g.circle(0, 0, 32);
+    g.circle(0, 0, 40);
     g.stroke({ color: this.palette.dim, width: 1, alpha: 0.7, dash: [6, 2] });
-    // 8 条放射纹
+    // 8 条放射纹（从 34 到 42）
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
-      g.moveTo(Math.cos(a) * 26, Math.sin(a) * 26);
-      g.lineTo(Math.cos(a) * 34, Math.sin(a) * 34);
+      g.moveTo(Math.cos(a) * 34, Math.sin(a) * 34);
+      g.lineTo(Math.cos(a) * 42, Math.sin(a) * 42);
       g.stroke({ color: this.palette.glow, width: 0.8, alpha: 0.7 });
     }
     // 中心小月
@@ -400,24 +403,24 @@ export class LensRingDecorator extends WeaponDecorator {
   private drawLens(): void {
     const g = this.lensGraphics;
     g.clear();
-    // 外圈
-    g.circle(0, 0, 36);
+    // 外圈（半径从 36 扩大到 44，确保超出球半径 r=36）
+    g.circle(0, 0, 44);
     g.stroke({ color: this.palette.primary, width: 0.8, alpha: 0.6 });
     // 虚线刻度环
-    g.circle(0, 0, 32);
+    g.circle(0, 0, 40);
     g.stroke({ color: this.palette.accent, width: 1, alpha: 0.7, dash: [3, 6] });
     // 12 个刻度点
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
-      g.circle(Math.cos(a) * 36, Math.sin(a) * 36, 1);
+      g.circle(Math.cos(a) * 44, Math.sin(a) * 44, 1);
       g.fill({ color: this.palette.primary, alpha: 0.8 });
     }
-    // 准星十字
-    g.moveTo(0, -28);
-    g.lineTo(0, 28);
+    // 准星十字（从 ±28 扩大到 ±36）
+    g.moveTo(0, -36);
+    g.lineTo(0, 36);
     g.stroke({ color: this.palette.accent, width: 0.6, alpha: 0.5 });
-    g.moveTo(-28, 0);
-    g.lineTo(28, 0);
+    g.moveTo(-36, 0);
+    g.lineTo(36, 0);
     g.stroke({ color: this.palette.accent, width: 0.6, alpha: 0.5 });
     // 中心准星
     g.circle(0, 0, 2);
@@ -441,17 +444,17 @@ export class MoodAuraDecorator extends WeaponDecorator {
   private drawAura(): void {
     const g = this.auraGraphics;
     g.clear();
-    // 三层光环
-    g.circle(0, 0, 38);
+    // 三层光环（半径 38/34/30 → 44/40/36，确保超出球半径 r=36）
+    g.circle(0, 0, 44);
     g.stroke({ color: this.palette.glow, width: 0.8, alpha: 0.4 });
-    g.circle(0, 0, 34);
+    g.circle(0, 0, 40);
     g.stroke({ color: this.palette.primary, width: 1, alpha: 0.6, dash: [5, 3] });
-    g.circle(0, 0, 30);
+    g.circle(0, 0, 36);
     g.stroke({ color: this.palette.glow, width: 0.5, alpha: 0.5 });
-    // 12 个心境符号点
+    // 12 个心境符号点（半径从 34 扩大到 40）
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
-      g.circle(Math.cos(a) * 34, Math.sin(a) * 34, 2);
+      g.circle(Math.cos(a) * 40, Math.sin(a) * 40, 2);
       g.fill({ color: this.palette.primary, alpha: 0.8 });
     }
   }
@@ -477,10 +480,10 @@ export class PaletteSlingDecorator extends WeaponDecorator {
   private drawSling(): void {
     const g = this.slingGraphics;
     g.clear();
-    // 右侧画板（倾斜 15°）
+    // 右侧画板（倾斜 15°，x 从 35 扩大到 48，确保超出球半径 r=36）
     g.save();
     g.rotate(0.26);
-    g.translate(35, 0);
+    g.translate(48, 0);
     g.rect(-6, -12, 12, 24);
     g.fill({ color: this.palette.primary });
     g.stroke({ color: this.palette.glow, width: 0.8 });
@@ -491,10 +494,10 @@ export class PaletteSlingDecorator extends WeaponDecorator {
     g.circle(2, 0, 1.5).fill({ color: 0xFFD700 });
     g.circle(-2, 5, 1.5).fill({ color: 0x66CCFF });
     g.restore();
-    // 左侧画笔（倾斜 -15°）
+    // 左侧画笔（倾斜 -15°，x 从 -35 扩大到 -48）
     g.save();
     g.rotate(-0.26);
-    g.translate(-35, 0);
+    g.translate(-48, 0);
     g.moveTo(0, -10);
     g.lineTo(0, 10);
     g.stroke({ color: this.palette.primary, width: 1.5, cap: 'round' });
@@ -519,24 +522,24 @@ export class VineWrapDecorator extends WeaponDecorator {
   private drawVine(): void {
     const g = this.vineGraphics;
     g.clear();
-    // 左藤蔓
-    g.moveTo(-22, -16);
-    g.quadraticCurveTo(-30, -6, -22, 4);
-    g.quadraticCurveTo(-14, 14, -22, 24);
+    // 左藤蔓（x 从 ±22 扩大到 ±42，y 从 ±16 扩大到 ±28，超出球半径 r=36）
+    g.moveTo(-42, -28);
+    g.quadraticCurveTo(-54, -10, -42, 4);
+    g.quadraticCurveTo(-30, 18, -42, 28);
     g.stroke({ color: this.palette.primary, width: 1.5, alpha: 0.9, cap: 'round' });
     // 右藤蔓
-    g.moveTo(22, -16);
-    g.quadraticCurveTo(30, -6, 22, 4);
-    g.quadraticCurveTo(14, 14, 22, 24);
+    g.moveTo(42, -28);
+    g.quadraticCurveTo(54, -10, 42, 4);
+    g.quadraticCurveTo(30, 18, 42, 28);
     g.stroke({ color: this.palette.primary, width: 1.5, alpha: 0.9, cap: 'round' });
     // 叶子
     const leafPositions = [
-      { x: -26, y: -10, rot: -0.5 },
-      { x: -14, y: 6, rot: 0.5 },
-      { x: -24, y: 18, rot: -0.5 },
-      { x: 26, y: -10, rot: 0.5 },
-      { x: 14, y: 6, rot: -0.5 },
-      { x: 24, y: 18, rot: 0.5 },
+      { x: -48, y: -16, rot: -0.5 },
+      { x: -30, y: 4, rot: 0.5 },
+      { x: -44, y: 22, rot: -0.5 },
+      { x: 48, y: -16, rot: 0.5 },
+      { x: 30, y: 4, rot: -0.5 },
+      { x: 44, y: 22, rot: 0.5 },
     ];
     for (const p of leafPositions) {
       g.save();
@@ -548,8 +551,8 @@ export class VineWrapDecorator extends WeaponDecorator {
       g.restore();
     }
     // 粉色小花
-    g.circle(-25, -6, 1.5).fill({ color: 0xFFB3D9 });
-    g.circle(25, -6, 1.5).fill({ color: 0xFFB3D9 });
+    g.circle(-48, -8, 1.5).fill({ color: 0xFFB3D9 });
+    g.circle(48, -8, 1.5).fill({ color: 0xFFB3D9 });
   }
 
   update(_dt: number): void { /* 静态 */ }

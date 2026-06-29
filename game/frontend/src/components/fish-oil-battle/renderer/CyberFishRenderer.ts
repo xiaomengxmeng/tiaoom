@@ -1067,7 +1067,8 @@ export class CyberFishRenderer {
     if (!pr) return;
     const palette = getWeaponPalette(weaponId);
     if (!palette) return;
-    const decorator = createWeaponDecorator(weaponId, this.l2Entity, palette);
+    // 修复：装饰器改挂到 l1Player（与 PlayerRenderer.container 同层），避免被球体遮挡
+    const decorator = createWeaponDecorator(weaponId, this.l1Player, palette);
     pr.setWeaponDecorator(decorator);
   }
 

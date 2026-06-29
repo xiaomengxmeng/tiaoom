@@ -23,7 +23,12 @@ export abstract class WeaponDecorator {
   constructor(parentContainer: PIXI.Container, palette: Palette) {
     this.container = new PIXI.Container();
     this.palette = palette;
+    // 确保装饰器在球体之上（球体由 PlayerRenderer.container 持有）
+    this.container.zIndex = 100;
     parentContainer.addChild(this.container);
+    // 启用父容器 sortableChildren，使 zIndex 生效
+    // l1Player 默认未启用 sortableChildren，此处确保启用
+    (parentContainer as PIXI.Container).sortableChildren = true;
   }
 
   /** 同步缩放（与 PlayerRenderer.setScale 联动） */

@@ -31,6 +31,12 @@ export interface PendingVisualEvent {
   ty?: number;
   radius?: number;
   isBurst?: boolean;
+  /** 小金喵 - 放电猫虚影位置 X */
+  catX?: number;
+  /** 小金喵 - 放电猫虚影位置 Y */
+  catY?: number;
+  /** 小金喵 - 电弧弹射链节点 */
+  arcNodes?: Array<{ x: number; y: number; targetId?: string }>;
   metadata?: WeaponEffectMetadata;
   /** 命中反馈目标 ID（HIT_FEEDBACK 事件专用） */
   targetId?: string;
@@ -232,6 +238,10 @@ export class WeaponScheduler {
           ty: effect.metadata?.ty,
           radius: effect.aoe?.radius ?? effect.metadata?.radius,
           isBurst: effect.metadata?.isBurst ?? effect.metadata?.burst,
+          // 小金喵 - 放电猫电弧特效字段提取到顶层，供前端直接读取
+          catX: effect.metadata?.catX,
+          catY: effect.metadata?.catY,
+          arcNodes: effect.metadata?.arcNodes,
           metadata: effect.metadata,
         });
         continue;

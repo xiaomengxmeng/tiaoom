@@ -153,22 +153,88 @@ export class BotanicalControlWeapon implements IWeapon {
     return effects;
   }
 
-  onHitTarget(_state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
+  onHitTarget(state: IBattleState, physics: IPhysicsQuery): WeaponEffect[] {
     // 主动碰撞时获得能量（无论是否生成植物）
     this.gainEnergy(WEAPON_RANGE_CONFIG[this.id].energyPerHit ?? 25);
-    return [];
+    // 主动撞别人也生成植物（与被撞行为一致）
+    return this.spawnPlant(state, physics);
   }
 
   getHitReaction(): HitReaction {
     return 'burn';
   }
 
-  onHitByAttacker(_attackerId: string, state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
-    const effects: WeaponEffect[] = [];
+  onHitByAttacker(_attackerId: string, state: IBattleState, physics: IPhysicsQuery): WeaponEffect[] {
+    // 每次碰撞获得能量（无论是否生成植物）
+    this.gainEnergy(WEAPON_RANGE_CONFIG[this.id].energyPerHit ?? 25);
+    // 被撞时生成植物
+    return this.spawnPlant(state, physics);
+  }
+
+  // ── 能量爆发 ──────────────────────────────────────
+
+  getEnergy(): number {
+    const max = WEAPON_RANGE_CONFIG[this.id].burstEnergyCost ?? WEAPON_RANGE_CONFIG[this.id].maxEnergy!;
+    return Math.round(this.energy / max * 100);
+  }
+  getMaxEnergy(): number {
+    return 100;
+  }
+  setEnergy(percent: number): void {
+    const max = WEAPON_RANGE_CONFIG[this.id].burstEnergyCost ?? WEAPON_RANGE_CONFIG[this.id].maxEnergy!;
+    this.energy = Math.max(0, Math.min(max, percent / 100 * max));
+  }
+
+  isBurstReady(): boolean {
+    return this.energy >= this.getMaxEnergy()
+      && !this.isBurstActive
+      && this.burstCooldownTicksLeft <= 0;
+  }
+
+  burst(state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
+    if (!this.isBurstReady()) return [];
     const CFG = WEAPON_RANGE_CONFIG[this.id];
 
-    // 每次碰撞获得能量（无论是否生成植物）
-    this.gainEnergy(CFG.energyPerHit ?? 25);
+    this.energy = 0;
+    this.isBurstActive = true;
+    this.burstTicksLeft = (CFG.burstDurationSec ?? 4) * TICKS_PER_SEC;
+    this.burstCooldownTicksLeft = Math.round(
+      ((CFG.cooldownMs ?? 8000) / 1000) * TICKS_PER_SEC,
+    );
+
+    const durationMs = (CFG.burstDurationSec ?? 4) * 1000;
+    const radius = CFG.aoeMaxRadius ?? 60;
+    const self = state.getPlayer(this.playerId);
+
+    // 派发爆发视觉事件（植物派对启动）
+    return [{
+      type: WeaponEffectType.VISUAL_ONLY,
+      sourceId: this.playerId,
+      value: 0,
+      position: self?.position ? { x: self.position.x, y: self.position.y } : undefined,
+      metadata: {
+        visualType: VisualEventType.BOTANICAL_BURST,
+        isBurst: true,
+        radius,
+        durationMs,
+        plantCount: this.plants.length,
+        desc: '植物派对爆发',
+      },
+    }];
+  }
+
+  // ── 内部方法 ──────────────────────────────────────
+
+  /**
+   * 生成植物（被撞 / 主动撞别人时均调用）
+   * - 限频：每 0.5 秒最多 1 次
+   * - 80% 概率生成；随机分配性格
+   * - 超过场上最大数量时移除最早的植物
+   * - 温柔型生成时立即施加护盾（爆发期翻倍）
+   */
+  private spawnPlant(state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
+    const effects: WeaponEffect[] = [];
+    const CFG = WEAPON_RANGE_CONFIG[this.id];
 
     // 生成限频：每 0.5 秒最多 1 次
     const minIntervalTicks = Math.max(
@@ -243,60 +309,6 @@ export class BotanicalControlWeapon implements IWeapon {
 
     return effects;
   }
-
-  // ── 能量爆发 ──────────────────────────────────────
-
-  getEnergy(): number {
-    const max = WEAPON_RANGE_CONFIG[this.id].burstEnergyCost ?? WEAPON_RANGE_CONFIG[this.id].maxEnergy!;
-    return Math.round(this.energy / max * 100);
-  }
-  getMaxEnergy(): number {
-    return 100;
-  }
-  setEnergy(percent: number): void {
-    const max = WEAPON_RANGE_CONFIG[this.id].burstEnergyCost ?? WEAPON_RANGE_CONFIG[this.id].maxEnergy!;
-    this.energy = Math.max(0, Math.min(max, percent / 100 * max));
-  }
-
-  isBurstReady(): boolean {
-    return this.energy >= this.getMaxEnergy()
-      && !this.isBurstActive
-      && this.burstCooldownTicksLeft <= 0;
-  }
-
-  burst(state: IBattleState, _physics: IPhysicsQuery): WeaponEffect[] {
-    if (!this.isBurstReady()) return [];
-    const CFG = WEAPON_RANGE_CONFIG[this.id];
-
-    this.energy = 0;
-    this.isBurstActive = true;
-    this.burstTicksLeft = (CFG.burstDurationSec ?? 4) * TICKS_PER_SEC;
-    this.burstCooldownTicksLeft = Math.round(
-      ((CFG.cooldownMs ?? 8000) / 1000) * TICKS_PER_SEC,
-    );
-
-    const durationMs = (CFG.burstDurationSec ?? 4) * 1000;
-    const radius = CFG.aoeMaxRadius ?? 60;
-    const self = state.getPlayer(this.playerId);
-
-    // 派发爆发视觉事件（植物派对启动）
-    return [{
-      type: WeaponEffectType.VISUAL_ONLY,
-      sourceId: this.playerId,
-      value: 0,
-      position: self?.position ? { x: self.position.x, y: self.position.y } : undefined,
-      metadata: {
-        visualType: VisualEventType.BOTANICAL_BURST,
-        isBurst: true,
-        radius,
-        durationMs,
-        plantCount: this.plants.length,
-        desc: '植物派对爆发',
-      },
-    }];
-  }
-
-  // ── 内部方法 ──────────────────────────────────────
 
   /** 随机分配植物性格（温柔 30% / 暴躁 40% / 好奇 30%） */
   private rollPersonality(): PlantPersonality {

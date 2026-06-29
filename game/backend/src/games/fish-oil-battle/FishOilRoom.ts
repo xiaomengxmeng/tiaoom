@@ -747,9 +747,9 @@ export default class FishOilRoom extends GameRoom {
         rabbitY: evt.metadata?.rabbitY,
         // 小金喵 - 放电猫猫
         bounceCount: evt.metadata?.bounceCount,
-        catX: evt.metadata?.catX,
-        catY: evt.metadata?.catY,
-        arcNodes: evt.metadata?.arcNodes,
+        catX: evt.catX ?? evt.metadata?.catX,
+        catY: evt.catY ?? evt.metadata?.catY,
+        arcNodes: evt.arcNodes ?? evt.metadata?.arcNodes,
         // 风随 - 预知透镜
         foresightStacks: evt.metadata?.foresightStacks,
         echoId: evt.metadata?.echoId,

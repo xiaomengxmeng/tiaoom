@@ -168,9 +168,134 @@
       }
     }
 
+    function drawCross(ctx, x, y, len) {
+      ctx.beginPath();
+      ctx.moveTo(x - len, y); ctx.lineTo(x + len, y);
+      ctx.moveTo(x, y - len); ctx.lineTo(x, y + len);
+      ctx.stroke();
+    }
+
+    function drawCanvas() {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const W = 512, H = 512;
+      ctx.clearRect(0, 0, W, H);
+
+      // 1. PNG
+      const img = images[state.current];
+      if (img && img.complete) ctx.drawImage(img, 0, 0, W, H);
+
+      // 2. 8px 网格（PNG 256px → 画布 512px，2 倍）
+      if (state.showGrid) {
+        ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= W; i += 16) {
+          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, H); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(W, i); ctx.stroke();
+        }
+      }
+
+      // 3. 图像中心（蓝十字）
+      ctx.strokeStyle = 'rgba(0,100,255,0.85)';
+      ctx.lineWidth = 2;
+      drawCross(ctx, W/2, H/2, 14);
+
+      // 4. 锚点（红十字 + 圆点）
+      const a = state.anchors[state.current];
+      const ax = a.x * W;
+      const ay = a.y * H;
+      ctx.strokeStyle = 'rgba(255,0,0,0.95)';
+      ctx.lineWidth = 3;
+      drawCross(ctx, ax, ay, 14);
+      ctx.fillStyle = '#f38ba8';
+      ctx.beginPath(); ctx.arc(ax, ay, 5, 0, Math.PI*2); ctx.fill();
+    }
+
+    let dragging = false;
+
+    function setupDrag() {
+      const canvas = document.getElementById('canvas');
+      canvas.addEventListener('pointerdown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const px = (e.clientX - rect.left) / rect.width;
+        const py = (e.clientY - rect.top) / rect.height;
+        const a = state.anchors[state.current];
+        // 容差 0.05（= 25px @512）
+        if (Math.abs(px - a.x) < 0.05 && Math.abs(py - a.y) < 0.05) {
+          dragging = true;
+          canvas.setPointerCapture(e.pointerId);
+        }
+      });
+      canvas.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const rect = canvas.getBoundingClientRect();
+        let nx = (e.clientX - rect.left) / rect.width;
+        let ny = (e.clientY - rect.top) / rect.height;
+        nx = Math.max(0, Math.min(1, nx));
+        ny = Math.max(0, Math.min(1, ny));
+        state.anchors[state.current] = { x: nx, y: ny };
+        saveState();
+        requestAnimationFrame(() => { drawCanvas(); updateInfo(); });
+      });
+      const stopDrag = () => { dragging = false; };
+      canvas.addEventListener('pointerup', stopDrag);
+      canvas.addEventListener('pointercancel', stopDrag);
+      canvas.addEventListener('pointerleave', stopDrag);
+    }
+
+    function setupKeyboard() {
+      document.addEventListener('keydown', (e) => {
+        if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+        const step = e.shiftKey ? 0.01 : 0.005;
+        const a = state.anchors[state.current];
+        let changed = false;
+        if (e.key === 'ArrowLeft')  { a.x = Math.max(0, a.x - step); changed = true; }
+        if (e.key === 'ArrowRight') { a.x = Math.min(1, a.x + step); changed = true; }
+        if (e.key === 'ArrowUp')    { a.y = Math.max(0, a.y - step); changed = true; }
+        if (e.key === 'ArrowDown')  { a.y = Math.min(1, a.y + step); changed = true; }
+        if (e.key === 'r' || e.key === 'R') {
+          state.anchors[state.current] = { x: 0.5, y: 0.5 };
+          changed = true;
+        }
+        if (changed) {
+          e.preventDefault();
+          saveState();
+          drawCanvas();
+          updateInfo();
+        }
+      });
+    }
+
+    function setupToolbar() {
+      document.getElementById('btn-reset').addEventListener('click', () => {
+        state.anchors[state.current] = { x: 0.5, y: 0.5 };
+        saveState();
+        drawCanvas();
+        updateInfo();
+      });
+      document.getElementById('btn-reset-all').addEventListener('click', () => {
+        if (!confirm('重置所有 12 个装饰的 anchor 到 (0.5, 0.5)？')) return;
+        for (const d of DECOS) state.anchors[d.name] = { x: 0.5, y: 0.5 };
+        saveState();
+        drawCanvas();
+        updateInfo();
+      });
+      document.getElementById('chk-grid').addEventListener('change', (e) => {
+        state.showGrid = e.target.checked;
+        drawCanvas();
+      });
+      document.getElementById('chk-bbox').addEventListener('change', (e) => {
+        state.showBBox = e.target.checked;
+        drawCanvas();
+      });
+    }
+
     loadState();
     renderGrid();
     preloadImages();
+    setupDrag();
+    setupKeyboard();
+    setupToolbar();
   </script>
 </body>
 </html>

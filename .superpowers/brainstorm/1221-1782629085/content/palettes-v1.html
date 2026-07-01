@@ -1,0 +1,260 @@
+<h2>12 套角色武器预设色板设计</h2>
+<p class="subtitle">每套 6 色：primary 主色 / glow 发光 / highlight 高亮 / dim 暗 / shadow 阴影 / accent 强调。鼠标悬停色块查看十六进制值。</p>
+
+<style>
+  .pal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 18px; margin-top: 16px; }
+  .pal-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px; }
+  .pal-card h3 { margin: 0 0 4px; font-size: 14px; color: #fff; }
+  .pal-card .wid { font-family: monospace; font-size: 10px; color: #8b93a7; margin-bottom: 10px; }
+  .pal-card .desc { font-size: 11px; color: #c5cad8; margin-bottom: 10px; line-height: 1.4; }
+  .swatch-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+  .swatch { aspect-ratio: 1; border-radius: 4px; position: relative; cursor: help; border: 1px solid rgba(0,0,0,0.3); }
+  .swatch::after { content: attr(data-hex); position: absolute; bottom: 2px; left: 2px; right: 2px; font-size: 8px; color: rgba(255,255,255,0.85); text-align: center; font-family: monospace; text-shadow: 0 1px 2px rgba(0,0,0,0.8); pointer-events: none; }
+  .swatch-label { font-size: 9px; color: #6b7185; text-align: center; margin-top: 4px; font-family: monospace; }
+  .preview-bar { height: 28px; border-radius: 4px; margin-top: 8px; background: linear-gradient(90deg, var(--shadow), var(--dim), var(--primary), var(--glow), var(--highlight), var(--accent)); display: flex; align-items: center; justify-content: center; font-size: 10px; color: white; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+</style>
+
+<div class="pal-grid">
+
+  <!-- 1. OPTICAL_SLASH — Liya -->
+  <div class="pal-card">
+    <h3>1. 光学斩击 — Liya</h3>
+    <div class="wid">OPTICAL_SLASH</div>
+    <div class="desc">杀手洗脑外壳下的玻璃刀光：冷蓝刃+金标记。爆发全屏闪白。</div>
+    <div class="swatch-row">
+      <div class="swatch" style="background:#0099FF" data-hex="0099FF"></div>
+      <div class="swatch" style="background:#66CCFF" data-hex="66CCFF"></div>
+      <div class="swatch" style="background:#AAEEFF" data-hex="AAEEFF"></div>
+      <div class="swatch" style="background:#003388" data-hex="003388"></div>
+      <div class="swatch" style="background:#001A44" data-hex="001A44"></div>
+      <div class="swatch" style="background:#FFD700" data-hex="FFD700"></div>
+    </div>
+    <div class="swatch-label">primary · glow · highlight · dim · shadow · accent</div>
+    <div class="preview-bar" style="--primary:#0099FF;--glow:#66CCFF;--highlight:#AAEEFF;--dim:#003388;--shadow:#001A44;--accent:#FFD700">无限剑制 · 目标已标记</div>
+  </div>
+
+  <!-- 2. AIR_REPULSION_FIELD — 开摆 -->
+  <div class="pal-card">
+    <h3>2. 空气斥力场 — 开摆</h3>
+    <div class="wid">AIR_REPULSION_FIELD</div>
+    <div class="desc">三枷锁下的压缩气罩：懒黄+品字锚点。爆发橙红如泄压。</div>
+    <div class="swatch-row">
+      <div class="swatch" style="background:#FFCC44" data-hex="FFCC44"></div>
+      <div class="swatch" style="background:#FFEE88" data-hex="FFEE88"></div>
+      <div class="swatch" style="background:#FFFFCC" data-hex="FFFFCC"></div>
+      <div class="swatch" style="background:#CC8800" data-hex="CC8800"></div>
+      <div class="swatch" style="background:#664400" data-hex="664400"></div>
+      <div class="swatch" style="background:#FF6622" data-hex="FF6622"></div>
+    </div>
+    <div class="swatch-label">primary · glow · highlight · dim · shadow · accent</div>
+    <div class="preview-bar" style="--primary:#FFCC44;--glow:#FFEE88;--highlight:#FFFFCC;--dim:#CC8800;--shadow:#664400;--accent:#FF6622">压缩气罩 · 高压锅泄压</div>
+  </div>
+
+  <!-- 3. ENTROPIC_TOUCH — 闲乘月 -->
+  <div class="pal-card">
+    <h3>3. 熵寂之触 — 闲乘月</h3>
+    <div class="wid">ENTROPIC_TOUCH</div>
+    <div class="desc">CEO 绝对零度之爱：冰蓝月华+熵寂紫黑。爆发吸光奇点。</div>
+    <div class="swatch-row">
+      <div class="swatch" style="background:#88DDFF" data-hex="88DDFF"></div>
+      <div class="swatch" style="background:#AAFFFF" data-hex="AAFFFF"></div>
+      <div class="swatch" style="background:#FFFFFF" data-hex="FFFFFF"></div>
+      <div class="swatch" style="background:#9966FF" data-hex="9966FF"></div>
+      <div class="swatch" style="background:#6600CC" data-hex="6600CC"></div>
+      <div class="swatch" style="background:#FF3333" data-hex="FF3333"></div>
+    </div>
+    <div class="swatch-label">primary · glow · highlight · dim · shadow · accent</div>
+    <div class="preview-bar" style="--primary:#88DDFF;--glow:#AAFFFF;--highlight:#FFFFFF;--dim:#9966FF;--shadow:#6600CC;--accent:#FF3333">牺牲率：1% · 热力学奇点</div>
+  </div>
+
+  <!-- 4. DRAWING_MANIFEST — 白猫 -->
+  <div class="pal-card">
+    <h3>4. 画作实体化 — 白猫</h3>
+    <div class="wid">DRAWING_MANIFEST</div>
+    <div class="desc">水汪汪眼+肌肉兔反差：墨紫粉+画笔金+纸张白。</div>
+    <div class="swatch-row">
+      <div class="swatch" style="background:#8B4D9F" data-hex="8B4D9F"></div>
+      <div class="swatch" style="background:#D4A5DD" data-hex="D4A5DD"></div>
+      <div class="swatch" style="background:#F5E1F5" data-hex="F5E1F5"></div>
+      <div class="swatch" style="background:#4A2C5A" data-hex="4A2C5A"></div>
+      <div class="swatch" style="background:#2A1830" data-hex="2A1830"></div>
+      <div class="swatch" style="background:#FFB3D9" data-hex="FFB3D9"></div>
+    </div>
+    <div class="swatch-label">primary · glow · highlight · dim · shadow · accent</div>
+    <div class="preview-bar" style="--primary:#8B4D9F;--glow:#D4A5DD;--highlight:#F5E1F5;--dim:#4A2C5A;--shadow:#2A1830;--accent:#FFB3D9">肌肉兔降临 · 笑脸便签</div>
+  </div>
+
+  <!-- 5. DISCHARGE_CAT — 小金喵 -->
+  <div class="pal-card">
+    <h3>5. 放电猫猫 — 小金喵</h3>
+    <div class="wid">DISCHARGE_CAT</div>
+    <div class="desc">契约猫电弧弹射：电青+猫金+爆发狮子影。</div>
+    <div class="swatch-row">
+      <div class="swatch" style="background:#00BBFF" data-hex="00BBFF"></div>
+      <div class="swatch" style="background:#66EEFF" data-hex="66EEFF"></div>
+      <div class="swatch" style="background:#FFFFFF" data-hex="FFFFFF"></div>
+      <div class="swatch" style="background:#0044AA" data-hex="0044AA"></div>
+      <div class="swatch" style="background:#002255" data-hex="002255"></div>
+      <div class="swatch" style="background:#FFCC00" data-hex="FFCC00"></div>
+    </div>
+    <div class="swatch-label">primary · glow · highlight · dim · shadow · accent</div>
+    <div class="preview-bar" style="--primary:#00BBFF;--glow:#66EEFF;--highlight:#FFFFFF;--dim:#0044AA;--shadow:#002255;--accent:#FFCC00">雷霆万钧 · 狮子闪回</div>
+  </div>
+
+  <!-- 6. PRECOGNITIVE_LENS — 风随 -->
+  <div class="pal-card">
+    <h3>6. 预知透镜 — 风随</h3>
+    <div class="wid">PRECOGNITIVE_LENS</div>
+    <div class="desc">高冷猎人猫灵回响：深蓝猫眼+金轨迹+6层已看透。</div>
+    <div class="swatch-row">
+      <div class="swatch" style="background:#4DA6FF" data-hex="4DA6FF"></div>
+      <div class="swatch" style="background:#A0D8FF" data-hex="A0D8FF"></div>
+      <div class="swatch" style="background:#FFFFFF" data-hex="FFFFFF"></div>
+      <div class="swatch" style="background:#1A4480" data-hex="1A4480"></div>
+      <div class="swatch" style="background:#0A2244" data-hex="0A2244"></div>
+      <div class="swatch" style="background:#FFD700" data-hex="FFD700"></div>
+    </div>
+    <div class="swatch-label">primary · glow · highlight · dim · shadow · accent</div>
+    <div class="preview-bar" style="--primary:#4DA6FF;--glow:#A0D8FF;--highlight:#FFFFFF;--dim:#1A4480;--shadow:#0A2244;--accent:#FFD700">已看透 · 猫眼竖瞳</div>
+  </div>
+
+  <!-- 7. EMOTIONAL_WEATHER — Carzeye -->
+  <div class="pal-card">
+    <h3>7. 情绪天气 — Carzeye</h3>
+    <div class="wid">EMOTIONAL_WEATHER</div>
+    <div class="desc">气象局大叔三段情绪：晴空蓝→烦躁橙→愤怒暗紫。</div>
+    <div class="swatch-row">
+      <div class="swatch" style="background:#AAEEFF" data-hex="AAEEFF"></div>
+      <div class="swatch" style="background:#FFFFFF" data-hex="FFFFFF"></div>
+      <div class="swatch" style="background:#E0F7FF" data-hex="E0F7FF"></div>
+      <div class="swatch" style="background:#4DA6FF" data-hex="4DA6FF"></div>
+      <div class="swatch" style="background:#223355" data-hex="223355"></div>
+      <div class="swatch" style="background:#FF8800" data-hex="FF8800"></div>
+    </div>
+    <div class="swatch-label">primary · glow · highlight · dim · shadow · accent</div>
+    <div class="preview-bar" style="--primary:#AAEEFF;--glow:#FFFFFF;--highlight:#E0F7FF;--dim:#4DA6FF;--shadow:#223355;--accent:#FF8800">气象局水印 · 暴风雪滤镜</div>
+  </div>
+
+  <!-- 8. EMOTION_MASTERY — 林澈 -->
+  <div class="pal-card">
+    <h3>8. 情绪掌控 — 林澈</h3>
+    <div class="wid">EMOTION_MASTERY</div>
+    <div class="desc">三心境轮转：愤怒红+幸福蓝+开心绿。爆发三实体同色。</div>
+    <div class="swatch-row">
+      <div class="swatch" style="background:#FF3333" data-hex="FF3333"></div>
+      <div class="swatch" style="background:#FF7777" data-hex="FF7777"></div>
+      <div class="swatch" style="background:#FFBBBB" data-hex="FFBBBB"></div>
+      <div class="swatch" style="background:#992222" data-hex="992222"></div>
+      <div class="swatch" style="background:#440000" data-hex="440000"></div>
+      <div class="swatch" style="background:#4488FF" data-hex="4488FF"></div>
+    </div>
+    <div class="swatch-label">primary · glow · highlight · dim · shadow · accent</div>
+    <div class="preview-bar" style="--primary:#FF3333;--glow:#FF7777;--highlight:#FFBBBB;--dim:#992222;--shadow:#440000;--accent:#4488FF">>ANGER · >BLISS · >HAPPY</div>
+  </div>
+
+  <!-- 9. FLUID_MASTERY — KE -->
+  <div class="pal-card">
+    <h3>9. 流体操控 — KE</h3>
+    <div class="wid">FLUID_MASTERY</div>
+    <div class="desc">书生古籍书馆：水蓝+书页金+isAngry 血红怒态。</div>
+    <div class="swatch-row">
+      <div class="swatch" style="background:#0099FF" data-hex="0099FF"></div>
+      <div class="swatch" style="background:#66CCFF" data-hex="66CCFF"></div>
+      <div class="swatch" style="background:#AAEEFF" data-hex="AAEEFF"></div>
+      <div class="swatch" style="background:#0044AA" data-hex="0044AA"></div>
+      <div class="swatch" style="background:#002255" data-hex="002255"></div>
+      <div class="swatch" style="background:#CC2200" data-hex="CC2200"></div>
+    </div>
+    <div class="swatch-label">primary · glow · highlight · dim · shadow · accent</div>
+    <div class="preview-bar" style="--primary:#0099FF;--glow:#66CCFF;--highlight:#AAEEFF;--dim:#0044AA;--shadow:#002255;--accent:#CC2200">书海潮汐 · 水龙卷</div>
+  </div>
+
+  <!-- 10. MEMORY_CORRIDOR — 梦 -->
+  <div class="pal-card">
+    <h3>10. 记忆回廊 — 梦</h3>
+    <div class="wid">MEMORY_CORRIDOR</div>
+    <div class="desc">千年观察者被遗忘：琥珀金光+渐淡涟漪+书页叹息。</div>
+    <div class="swatch-row">
+      <div class="swatch" style="background:#C9A961" data-hex="C9A961"></div>
+      <div class="swatch" style="background:#E0D4A0" data-hex="E0D4A0"></div>
+      <div class="swatch" style="background:#F5EFDC" data-hex="F5EFDC"></div>
+      <div class="swatch" style="background:#8B7340" data-hex="8B7340"></div>
+      <div class="swatch" style="background:#4A3A20" data-hex="4A3A20"></div>
+      <div class="swatch" style="background:#6633CC" data-hex="6633CC"></div>
+    </div>
+    <div class="swatch-label">primary · glow · highlight · dim · shadow · accent</div>
+    <div class="preview-bar" style="--primary:#C9A961;--glow:#E0D4A0;--highlight:#F5EFDC;--dim:#8B7340;--shadow:#4A3A20;--accent:#6633CC">琥珀光晕 · 嘘——</div>
+  </div>
+
+  <!-- 11. INFINITE_FOLD — 陈厌孑 -->
+  <div class="pal-card">
+    <h3>11. 无限折叠 — 陈厌孑</h3>
+    <div class="wid">INFINITE_FOLD</div>
+    <div class="desc">LV5 当代最强空间折叠：空间紫黑+重组金+维度青。</div>
+    <div class="swatch-row">
+      <div class="swatch" style="background:#6633CC" data-hex="6633CC"></div>
+      <div class="swatch" style="background:#9966FF" data-hex="9966FF"></div>
+      <div class="swatch" style="background:#CC99FF" data-hex="CC99FF"></div>
+      <div class="swatch" style="background:#1A1A2E" data-hex="1A1A2E"></div>
+      <div class="swatch" style="background:#000000" data-hex="000000"></div>
+      <div class="swatch" style="background:#FFD700" data-hex="FFD700"></div>
+    </div>
+    <div class="swatch-label">primary · glow · highlight · dim · shadow · accent</div>
+    <div class="preview-bar" style="--primary:#6633CC;--glow:#9966FF;--highlight:#CC99FF;--dim:#1A1A2E;--shadow:#000000;--accent:#FFD700">支付一次未来选择权 · LV5</div>
+  </div>
+
+  <!-- 12. BOTANICAL_CONTROL — 沐里 -->
+  <div class="pal-card">
+    <h3>12. 植物伙伴派对 — 沐里</h3>
+    <div class="wid">BOTANICAL_CONTROL</div>
+    <div class="desc">植物性格系统：草绿主+三性格色（粉温柔/红暴躁/青好奇）+咖啡枯萎。</div>
+    <div class="swatch-row">
+      <div class="swatch" style="background:#44AA22" data-hex="44AA22"></div>
+      <div class="swatch" style="background:#88DD44" data-hex="88DD44"></div>
+      <div class="swatch" style="background:#BBFF88" data-hex="BBFF88"></div>
+      <div class="swatch" style="background:#1A3A0A" data-hex="1A3A0A"></div>
+      <div class="swatch" style="background:#0A1F05" data-hex="0A1F05"></div>
+      <div class="swatch" style="background:#FFB3D9" data-hex="FFB3D9"></div>
+    </div>
+    <div class="swatch-label">primary · glow · highlight · dim · shadow · accent</div>
+    <div class="preview-bar" style="--primary:#44AA22;--glow:#88DD44;--highlight:#BBFF88;--dim:#1A3A0A;--shadow:#0A1F05;--accent:#FFB3D9">温柔/暴躁/好奇 · 咖啡香</div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top: 24px; padding: 14px; background: rgba(255,255,255,0.03); border-radius: 8px;">
+  <h3 style="margin-top:0">设计说明</h3>
+  <ul style="font-size: 12px; line-height: 1.6; color: #c5cad8;">
+    <li><b>primary</b>：武器 IP 标志色，决定主视觉</li>
+    <li><b>glow</b>：primary 加亮 50，用于发光环</li>
+    <li><b>highlight</b>：最亮色，用于核心闪光</li>
+    <li><b>dim</b>：primary 减弱，用于渐变中段</li>
+    <li><b>shadow</b>：最暗色，用于阴影/边缘</li>
+    <li><b>accent</b>：对比强调色（色相旋转 30° 或互补色），用于点缀/爆发提示</li>
+  </ul>
+  <p style="font-size: 12px; color: #8b93a7; margin-top: 10px;">点击下方选项反馈整体方案，或直接在终端描述要调整的武器。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>整体方案通过</h3>
+      <p>12 套色板配色都合理，可进入设计文档阶段</p>
+    </div>
+  </div>
+  <div class="option" data-choice="adjust" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content">
+      <h3>需要调整部分色板</h3>
+      <p>在终端列出需要调整的武器编号和方向</p>
+    </div>
+  </div>
+  <div class="option" data-choice="redesign" onclick="toggleSelect(this)">
+    <div class="letter">↻</div>
+    <div class="content">
+      <h3>整体方向有问题</h3>
+      <p>需要重新讨论色板设计思路</p>
+    </div>
+  </div>
+</div>

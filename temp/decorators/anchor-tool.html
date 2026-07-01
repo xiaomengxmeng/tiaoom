@@ -290,12 +290,108 @@
       });
     }
 
+    function updateInfo() {
+      const d = DECOS.find(x => x.name === state.current);
+      document.getElementById('deco-name').textContent = d ? d.label : state.current;
+      const a = state.anchors[state.current];
+      document.getElementById('anchor-val').textContent =
+        `set(${a.x.toFixed(3)}, ${a.y.toFixed(3)})`;
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2000);
+    }
+
+    function copyToClipboard(text) {
+      if (navigator.clipboard?.writeText) {
+        return navigator.clipboard.writeText(text);
+      }
+      return new Promise((resolve, reject) => {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          ok ? resolve() : reject(new Error('execCommand 失败'));
+        } catch (e) { reject(e); }
+      });
+    }
+
+    function formatAnchor(name) {
+      const d = DECOS.find(x => x.name === name);
+      const a = state.anchors[name];
+      return `/** ${d ? d.label : name} */\nthis.sprite.anchor.set(${a.x.toFixed(3)}, ${a.y.toFixed(3)});`;
+    }
+
+    function copyCurrent() {
+      copyToClipboard(formatAnchor(state.current))
+        .then(() => showToast('✓ 已复制'))
+        .catch(() => showToast('❌ 复制失败'));
+    }
+
+    function copyAll() {
+      const text = DECOS.map(d => formatAnchor(d.name)).join('\n');
+      copyToClipboard(text)
+        .then(() => showToast(`✓ 已复制 ${DECOS.length} 项`))
+        .catch(() => showToast('❌ 复制失败'));
+    }
+
+    function setupCopyButtons() {
+      document.getElementById('btn-copy-one').addEventListener('click', copyCurrent);
+      document.getElementById('btn-copy-all').addEventListener('click', copyAll);
+    }
+
+    function exportJSON() {
+      const data = { version: 1, anchors: state.anchors };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'anchors.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importJSON(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (data.anchors) Object.assign(state.anchors, data.anchors);
+          saveState();
+          drawCanvas();
+          updateInfo();
+          showToast('✓ 已导入');
+        } catch (err) {
+          showToast('❌ JSON 解析失败');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function setupImportExport() {
+      document.getElementById('btn-export').addEventListener('click', exportJSON);
+      const fileInput = document.getElementById('file-import');
+      document.getElementById('btn-import').addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files[0]) importJSON(e.target.files[0]);
+        e.target.value = '';
+      });
+    }
+
     loadState();
     renderGrid();
     preloadImages();
     setupDrag();
     setupKeyboard();
     setupToolbar();
+    setupCopyButtons();
+    setupImportExport();
+    updateInfo();
   </script>
 </body>
 </html>

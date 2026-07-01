@@ -61,7 +61,7 @@ abstract class SpriteDecorator extends WeaponDecorator {
     }
   }
 
-  private onTextureReady(tex: PIXI.Texture): void {
+  protected onTextureReady(tex: PIXI.Texture): void {
     console.log(`[WeaponDecorator] onTextureReady: texture size=${tex.width}x${tex.height}`);
     this.sprite = new PIXI.Sprite(tex);
     this.sprite.anchor.set(0.5); // 居中锚点（PNG 已居中处理）
@@ -107,21 +107,28 @@ abstract class SpriteDecorator extends WeaponDecorator {
 /** 放电猫猫 - 猫耳 */
 export class CatEarDecorator extends SpriteDecorator {
   constructor(parent: PIXI.Container, palette: Palette) {
-    super(parent, palette, './assets/cat-ear.png', 0, 0.44);
+    super(parent, palette, './assets/cat-ear.png', -30, 0.44);
   }
 }
 
 /** 流体操控(KE) - 漂浮古籍 */
 export class FloatingBookDecorator extends SpriteDecorator {
   constructor(parent: PIXI.Container, palette: Palette) {
-    super(parent, palette, './assets/floating-book.png', 0, 0.48);
+    super(parent, palette, './assets/floating-book.png', -15, 0.48);
   }
 }
 
 /** 情绪天气(Carzeye) - 云朵+闪电 */
 export class CloudDecorator extends SpriteDecorator {
   constructor(parent: PIXI.Container, palette: Palette) {
-    super(parent, palette, './assets/cloud-bolt.png', 0, 0.44);
+    super(parent, palette, './assets/cloud-bolt.png', -25, 0.44);
+  }
+
+  protected onTextureReady(tex: PIXI.Texture): void {
+    super.onTextureReady(tex);
+    if (this.sprite) {
+      this.sprite.anchor.set(0.507, 0.435);
+    }
   }
 }
 
@@ -132,6 +139,14 @@ export class TripleBladeDecorator extends SpriteDecorator {
   }
 
   private rot = 0;
+
+  protected onTextureReady(tex: PIXI.Texture): void {
+    super.onTextureReady(tex);
+    if (this.sprite) {
+      this.sprite.anchor.set(0.499, 0.611);
+    }
+  }
+
   update(dt: number): void {
     super.update(dt);
     if (this.sprite) {
@@ -148,6 +163,14 @@ export class TripleTriangleDecorator extends SpriteDecorator {
   }
 
   private rot = 0;
+
+  protected onTextureReady(tex: PIXI.Texture): void {
+    super.onTextureReady(tex);
+    if (this.sprite) {
+      this.sprite.anchor.set(0.517, 0.574);
+    }
+  }
+
   update(dt: number): void {
     super.update(dt);
     if (this.sprite) {
@@ -164,6 +187,14 @@ export class HexShardRingDecorator extends SpriteDecorator {
   }
 
   private rot = 0;
+
+  protected onTextureReady(tex: PIXI.Texture): void {
+    super.onTextureReady(tex);
+    if (this.sprite) {
+      this.sprite.anchor.set(0.512, 0.436);
+    }
+  }
+
   update(dt: number): void {
     super.update(dt);
     if (this.sprite) {
@@ -205,6 +236,13 @@ export class MoodAuraDecorator extends SpriteDecorator {
 export class PaletteSlingDecorator extends SpriteDecorator {
   constructor(parent: PIXI.Container, palette: Palette) {
     super(parent, palette, './assets/palette-brush.png', 0, 0.48);
+  }
+
+  protected onTextureReady(tex: PIXI.Texture): void {
+    super.onTextureReady(tex);
+    if (this.sprite) {
+      this.sprite.anchor.set(0.443, 0.690);
+    }
   }
 }
 

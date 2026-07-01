@@ -24,6 +24,11 @@
           :class="{ 'tab-active': currentTab === 'battle' }"
           @click="currentTab = 'battle'"
         >对局测试</a>
+        <a
+          class="tab tab-sm"
+          :class="{ 'tab-active': currentTab === 'anchor' }"
+          @click="currentTab = 'anchor'"
+        >装饰锚点</a>
       </div>
 
       <!-- 分隔 -->
@@ -104,6 +109,13 @@
     <!-- ══════════════════════════════════════════════════ -->
     <div v-if="currentTab === 'battle'" class="flex-1 overflow-hidden">
       <BattleTestPanel />
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  内容：装饰锚点调整模式                          -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div v-if="currentTab === 'anchor'" class="flex-1 overflow-hidden">
+      <DecoratorAnchorPanel />
     </div>
 
     <!-- ══════════════════════════════════════════════════ -->
@@ -462,6 +474,7 @@ import { ArenaShape } from '$/backend/src/games/fish-oil-battle/config/GameEnums
 import { WallStyle } from './renderer/systems/ArenaRenderer';
 import type { WallStyle as WallStyleType } from './renderer/systems/ArenaRenderer';
 import BattleTestPanel from './components/BattleTestPanel.vue';
+import DecoratorAnchorPanel from './components/DecoratorAnchorPanel.vue';
 
 // ── 状态 ────────────────────────────────────────────
 
@@ -472,7 +485,7 @@ const loopInterval = ref(1500);
 const activeCount = ref(0);
 const sidebarOpen = ref(true);
 const paramsOpen = ref(true);
-const currentTab = ref<'effect' | 'battle'>('effect');
+const currentTab = ref<'effect' | 'battle' | 'anchor'>('effect');
 
 // ── 实战比例常量 ────────────────────────────────────
 // 实战画布 800×450 / 逻辑坐标 1280×720 = 0.625

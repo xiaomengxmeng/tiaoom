@@ -87,7 +87,90 @@
   </div>
   <div id="toast" class="copied-toast">✓ 已复制</div>
   <script>
-    // 后续 Task 添加
+    const DECOS = [
+      { name: 'cat-ear',         label: '放电猫猫 - 猫耳' },
+      { name: 'cloud-bolt',      label: '情绪天气 - 云朵+闪电' },
+      { name: 'floating-book',   label: '流体操控 - 漂浮古籍' },
+      { name: 'vine-bud',        label: '植物伙伴 - 藤蔓' },
+      { name: 'triple-triangle', label: '无限折叠 - 3 个三角形' },
+      { name: 'hex-shard-ring',  label: '记忆回廊 - 6 边形环' },
+      { name: 'triple-blade',    label: '光学斩击 - 3 把刀' },
+      { name: 'palette-brush',   label: '画作实体化 - 画板' },
+      { name: 'air-field',       label: '空气斥力场 - 双圈虚线' },
+      { name: 'moon-halo',       label: '熵寂之触 - 月轮' },
+      { name: 'lens-crosshair',  label: '预知透镜 - 准星' },
+      { name: 'mood-aura',       label: '情绪掌控 - 心境光环' },
+    ];
+
+    const state = {
+      current: 'cat-ear',
+      anchors: Object.fromEntries(DECOS.map(d => [d.name, { x: 0.5, y: 0.5 }])),
+      showGrid: true,
+      showBBox: false,
+      storageOk: true,
+    };
+    state.anchors['triple-blade'] = { x: 0.609, y: 0.594 };  // 预设 Python 诊断值
+
+    const images = {};  // name -> HTMLImageElement
+
+    const STORAGE_KEY = 'decorator-anchors-v1';
+
+    function saveState() {
+      if (!state.storageOk) return;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.anchors));
+      } catch (e) {
+        state.storageOk = false;
+        document.getElementById('warning').textContent = '⚠ localStorage 不可用，调整不会持久化';
+        document.getElementById('warning').style.display = 'block';
+      }
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) Object.assign(state.anchors, JSON.parse(raw));
+      } catch (e) {
+        state.storageOk = false;
+      }
+    }
+
+    function renderGrid() {
+      const grid = document.getElementById('deco-grid');
+      grid.innerHTML = '';
+      for (const d of DECOS) {
+        const item = document.createElement('div');
+        item.className = 'grid-item' + (d.name === state.current ? ' active' : '');
+        item.dataset.name = d.name;
+        item.innerHTML = `
+          <img src="output/${d.name}.png" alt="${d.label}" loading="lazy"
+               onerror="this.style.background='#f38ba8'">
+          <div class="cross">+</div>
+          <div class="label">${d.name}</div>
+        `;
+        item.addEventListener('click', () => {
+          state.current = d.name;
+          renderGrid();
+          drawCanvas();
+          updateInfo();
+        });
+        grid.appendChild(item);
+      }
+    }
+
+    function preloadImages() {
+      for (const d of DECOS) {
+        const img = new Image();
+        img.src = `output/${d.name}.png`;
+        img.onload = () => { if (d.name === state.current) drawCanvas(); };
+        img.onerror = () => { console.error('PNG 加载失败:', d.name); };
+        images[d.name] = img;
+      }
+    }
+
+    loadState();
+    renderGrid();
+    preloadImages();
   </script>
 </body>
 </html>

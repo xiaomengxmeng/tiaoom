@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>装饰锚点调整工具</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background: #1e1e2e; color: #cdd6f4; padding: 16px; }
+    h1 { font-size: 18px; margin-bottom: 12px; }
+    .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
+               align-items: center; padding: 8px; background: #313244; border-radius: 6px; }
+    .toolbar button { padding: 6px 12px; background: #89b4fa; color: #1e1e2e;
+                      border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
+    .toolbar button:hover { background: #b4befe; }
+    .toolbar button:disabled { background: #45475a; color: #6c7086; cursor: not-allowed; }
+    .toolbar label { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+    .container { display: grid; grid-template-columns: 280px 1fr; gap: 16px; }
+    .grid-panel { background: #313244; border-radius: 6px; padding: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .grid-item { aspect-ratio: 1; background: #1e1e2e; border: 2px solid transparent;
+                 border-radius: 4px; cursor: pointer; overflow: hidden; position: relative; }
+    .grid-item img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+    .grid-item.active { border-color: #89b4fa; }
+    .grid-item .label { position: absolute; bottom: 0; left: 0; right: 0;
+                        background: rgba(0,0,0,0.7); color: #cdd6f4; font-size: 9px;
+                        text-align: center; padding: 1px 0; }
+    .grid-item .cross { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                        color: #f38ba8; font-size: 10px; pointer-events: none; }
+    .canvas-panel { background: #313244; border-radius: 6px; padding: 12px; }
+    .canvas-wrap { display: flex; justify-content: center; align-items: center;
+                   background: #1e1e2e; border-radius: 4px; padding: 8px; }
+    canvas { display: block; cursor: crosshair; image-rendering: pixelated; }
+    .info-bar { margin-top: 12px; padding: 12px; background: #1e1e2e;
+                border-radius: 4px; display: flex; justify-content: space-between;
+                align-items: center; flex-wrap: wrap; gap: 8px; }
+    .info-bar .meta { font-size: 13px; }
+    .info-bar .meta strong { color: #f9e2af; }
+    .info-bar code { background: #45475a; padding: 2px 6px; border-radius: 3px;
+                     font-family: 'Consolas', monospace; color: #a6e3a1; }
+    .info-bar .actions { display: flex; gap: 6px; }
+    .info-bar button { padding: 5px 10px; background: #94e2d5; color: #1e1e2e;
+                       border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px; }
+    .info-bar button.reset { background: #fab387; }
+    .warning { background: #f9e2af; color: #1e1e2e; padding: 6px 12px;
+               border-radius: 4px; font-size: 12px; margin-bottom: 8px; }
+    .copied-toast { position: fixed; top: 20px; right: 20px; background: #a6e3a1;
+                    color: #1e1e2e; padding: 8px 16px; border-radius: 4px;
+                    font-weight: 600; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+    .copied-toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <h1>🎨 装饰锚点调整工具</h1>
+  <div id="warning" class="warning" style="display:none"></div>
+  <div class="toolbar">
+    <button id="btn-copy-all">📋 全部复制</button>
+    <button id="btn-reset-all" class="reset">↺ 重置全部</button>
+    <span style="width:16px"></span>
+    <label><input type="checkbox" id="chk-grid" checked> 显示网格</label>
+    <label><input type="checkbox" id="chk-bbox"> 显示 bbox</label>
+    <span style="width:16px"></span>
+    <button id="btn-import">📂 导入</button>
+    <button id="btn-export">💾 导出</button>
+    <input type="file" id="file-import" accept=".json" style="display:none">
+  </div>
+  <div class="container">
+    <div class="grid-panel">
+      <div id="deco-grid" class="grid"></div>
+    </div>
+    <div class="canvas-panel">
+      <div class="canvas-wrap">
+        <canvas id="canvas" width="512" height="512"></canvas>
+      </div>
+      <div class="info-bar">
+        <div class="meta">
+          <div id="deco-name">—</div>
+          <div>anchor: <code id="anchor-val">set(0.500, 0.500)</code></div>
+        </div>
+        <div class="actions">
+          <button id="btn-reset" class="reset">重置</button>
+          <button id="btn-copy-one">📋 复制</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="toast" class="copied-toast">✓ 已复制</div>
+  <script>
+    // 后续 Task 添加
+  </script>
+</body>
+</html>

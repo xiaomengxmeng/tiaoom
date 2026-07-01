@@ -172,7 +172,19 @@ export async function createEffectTestController(canvas: HTMLCanvasElement): Pro
   const airRepulsionRenderer = new AirRepulsionFieldRenderer(l3Field, particlePool);
   const entropicTouchRenderer = new EntropicTouchRenderer(l3Field, particlePool);
   const drawingManifestRenderer = new DrawingManifestRenderer(l2Entity, l3Field);
-  const dischargeCatRenderer = new DischargeCatRenderer(l2Entity, l3Field);
+  // stub CyberFishRenderer：测试页无真实 PlayerRenderer，返回固定坐标供电弧链接特效查询
+  const stubCyberFish = {
+    getPlayerRenderer: (id: string) => {
+      if (id === 'test_source') {
+        return { getContainer: () => ({ x: 400, y: 225 }) } as any;
+      }
+      if (id === 'test_target') {
+        return { getContainer: () => ({ x: 480, y: 185 }) } as any;
+      }
+      return undefined;
+    },
+  } as any;
+  const dischargeCatRenderer = new DischargeCatRenderer(l2Entity, l3Field, stubCyberFish);
   const precognitiveLensRenderer = new PrecognitiveLensRenderer(l2Entity, l3Field);
   const emotionalWeatherRenderer = new EmotionalWeatherRenderer(l3Field);
   const emotionMasteryRenderer = new EmotionMasteryRenderer(l3Field, l2Entity);

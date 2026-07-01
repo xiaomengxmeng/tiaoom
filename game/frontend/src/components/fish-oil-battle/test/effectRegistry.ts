@@ -368,7 +368,7 @@ export function autoRegisterFromEnum(): void {
           // ── 放电猫猫 ───────────────────────────────
           case VisualEventType.DISCHARGE_CAT_ARC: {
             const result = ctx.dischargeCatRenderer?.triggerArc(
-              [{ x, y }, { x: x + 80, y: y - 40 }, { x: x - 60, y: y + 60 }],
+              'test_source', 'test_target',
               false,
               color,
               palette,

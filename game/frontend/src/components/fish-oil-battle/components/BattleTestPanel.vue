@@ -810,6 +810,7 @@ function handleVisualEvent(data: any): void {
           type: data.type,
           x: data.x, y: data.y,
           playerId: data.playerId,
+          targetId: data.targetId,
           isBurst: data.isBurst ?? false,
           catX: data.catX,
           catY: data.catY,

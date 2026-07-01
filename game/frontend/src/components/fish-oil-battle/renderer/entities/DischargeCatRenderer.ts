@@ -4,7 +4,8 @@
  *
  * 视觉设计（电系萌宠 - 可爱但危险）：
  * - 放电猫虚影：8 层径向渐变（金→电青→透明）+ 双层耳朵 + 多层猫瞳 + 爆发电火花
- * - 电弧弹射：链式闪电三层叠加发光（外晕白 / 主电青 / 核心白）+ 电弧粒子飞溅
+ * - 电弧链接：小金喵 → 对手球单段闪电（三层叠加发光：外晕白 / 主电青 / 核心白）+ 电弧粒子飞溅
+ *   持续时间固定 1.2s，不再弹射
  * - 雷霆万钧爆发：三阶段动画
  *   · 蓄电（0-15%T）：电弧向中心汇聚
  *   · 放电（15-30%T）：8 条放射闪电 + 3 层扩散电弧环 + 中心猫瞳显现
@@ -15,6 +16,7 @@
 import * as PIXI from 'pixi.js';
 import { easeOutCubic, lighten, dimColor, type ActiveEffect } from './VisualEffectUtils';
 import type { Palette } from './BaseWeaponEffectRenderer';
+import type { CyberFishRenderer } from '../CyberFishRenderer';
 
 // ══════════════════════════════════════════════════════
 //  颜色常（电系金 - 小金喵配色）
@@ -56,6 +58,14 @@ interface SparkParticle {
   color: number;
 }
 
+/** 能量颗粒（沿主线 from→to 单向流动） */
+interface EnergyParticle {
+  progress: number;   // 0 → 1，沿主线进度
+  speed: number;      // 每秒 progress 增量
+  size: number;       // 逻辑半径
+  jitter: number;     // 法线方向抖动相位
+}
+
 /** 锯齿点（用于多层叠加发光闪电） */
 interface JaggedPoint {
   x: number;
@@ -70,13 +80,26 @@ export class DischargeCatRenderer {
   /** 每个玩家的放电猫虚影（常驻跟随） */
   private cats: Map<string, PIXI.Graphics> = new Map();
 
-  constructor(entityContainer: PIXI.Container, fieldContainer: PIXI.Container) {
+  /** CyberFishRenderer 引用，用于查询 PlayerRenderer 实时坐标 */
+  private cyberFish: CyberFishRenderer | null = null;
+
+  constructor(
+    entityContainer: PIXI.Container,
+    fieldContainer: PIXI.Container,
+    cyberFish?: CyberFishRenderer,
+  ) {
     this.entityContainer = entityContainer;
     this.fieldContainer = fieldContainer;
+    this.cyberFish = cyberFish ?? null;
   }
 
   setScale(scale: number): void {
     this.scale = scale;
+  }
+
+  /** 延迟注入 CyberFishRenderer 引用（测试页 stub 注入用） */
+  setCyberFishRenderer(cyberFish: CyberFishRenderer | null): void {
+    this.cyberFish = cyberFish;
   }
 
   // ══════════════════════════════════════════════════════
@@ -212,23 +235,25 @@ export class DischargeCatRenderer {
   }
 
   // ══════════════════════════════════════════════════════
-  //  电弧弹射特效（链式闪电 - 三层叠加发光 + 电弧粒子）
+  //  电弧链接特效（小金喵 → 对手球，单段闪电 - 三层叠加发光 + 电弧粒子）
   // ══════════════════════════════════════════════════════
 
   /**
-   * 触发电弧弹射链特效
-   * @param arcNodes arcNodes[0] = 放电猫位置，后续为命中目标位置
-   * @param isBurst 是否爆发态（影响宽度与持续）
+   * 触发电弧链接特效（小金喵 → 对手球，单段链接，实时跟随）
+   * @param sourceId 自己的 playerId
+   * @param targetId 对手的playerId
+   * @param isBurst 是否爆发态（影响宽度）
    * @param themeColor 主题色（默认电系金）
    * @returns ActiveEffect 由 EffectRenderer 统一 update(dt) 驱动
    */
   triggerArc(
-    arcNodes: Array<{ x: number; y: number }>,
+    sourceId: string,
+    targetId: string,
     isBurst: boolean,
     themeColor = DEFAULT_THEME,
     palette?: Palette,
   ): { effect: ActiveEffect | null } {
-    if (arcNodes.length < 2) return { effect: null };
+    if (!sourceId || !targetId) return { effect: null };
 
     const pal: Palette = palette ?? {
       primary: themeColor,
@@ -243,28 +268,20 @@ export class DischargeCatRenderer {
     const g = new PIXI.Graphics();
     this.fieldContainer.addChild(g);
 
-    const durationMs = isBurst ? 1200 : 800;
+    // 特效持续时间固定 1.5s
+    const durationMs = 1500;
     const baseWidth = (isBurst ? 8 : 6) * s;
 
-    // 电弧粒子（每次弹射生成 8-12 个电蓝色粒子）
-    const particles: SparkParticle[] = [];
-    for (let i = 1; i < arcNodes.length; i++) {
-      const node = arcNodes[i];
-      const count = 8 + Math.floor(Math.random() * 5);
-      for (let p = 0; p < count; p++) {
-        const ang = Math.random() * Math.PI * 2;
-        const speed = (60 + Math.random() * 80) * s;
-        particles.push({
-          x: node.x,
-          y: node.y,
-          vx: Math.cos(ang) * speed,
-          vy: Math.sin(ang) * speed,
-          life: 0,
-          maxLife: 500 + Math.random() * 400,
-          size: (2 + Math.random() * 2.5) * s,
-          color: Math.random() < 0.5 ? ELECTRIC_MAIN : ELECTRIC_LIGHT,
-        });
-      }
+    // 能量颗粒（单向流动，7 个均匀分布）
+    const particles: EnergyParticle[] = [];
+    const particleCount = 7;
+    for (let i = 0; i < particleCount; i++) {
+      particles.push({
+        progress: i / particleCount,
+        speed: 0.4 + Math.random() * 0.2,
+        size: (2 + Math.random() * 1) * s,
+        jitter: Math.random() * Math.PI * 2,
+      });
     }
 
     const ef: ActiveEffect = {
@@ -276,58 +293,36 @@ export class DischargeCatRenderer {
         const t = _ef.life / _ef.maxLife;
         g.clear();
 
-        // 双回闪：0-20% 主闪、40-55% 回闪、70-80% 再闪
-        let flashAlpha = 0;
-        if (t < 0.2) flashAlpha = 1 - t * 3;
-        else if (t >= 0.4 && t < 0.55) flashAlpha = 0.7 - (t - 0.4) * 3;
-        else if (t >= 0.7 && t < 0.8) flashAlpha = 0.4 - (t - 0.7) * 3;
-        const alpha = flashAlpha * 0.95;
+        // ── 实时查询双方坐标 ──
+        const fromContainer = this.cyberFish?.getPlayerRenderer(sourceId)?.getContainer();
+        const toContainer = this.cyberFish?.getPlayerRenderer(targetId)?.getContainer();
+        if (!fromContainer || !toContainer) {
+          return; // 玩家不存在，跳过本帧绘制（life 继续推进自然消亡）
+        }
+        const from = { x: fromContainer.x, y: fromContainer.y };
+        const to = { x: toContainer.x, y: toContainer.y };
+        const dist = Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2);
 
-        // ── 链式闪电（每段三层叠加发光 + 抖动偏移） ──
-        if (flashAlpha > 0.05) {
-          for (let i = 0; i < arcNodes.length - 1; i++) {
-            const from = arcNodes[i];
-            const to = arcNodes[i + 1];
-            const jitter = Math.sin(t * 30 + i) * 3 * s;
-            this.drawLightningSegment(g, from.x + jitter, from.y, to.x - jitter, to.y, baseWidth, alpha, pal.primary);
-          }
+        // ── 整体透明度曲线：0-0.15 亮起 / 0.15-0.75 满亮 / 0.75-1.0 消散 ──
+        let alpha: number;
+        if (t < 0.15) alpha = t / 0.15;
+        else if (t < 0.75) alpha = 1;
+        else alpha = 1 - (t - 0.75) / 0.25;
+        alpha = Math.max(0, Math.min(1, alpha));
+
+        // ── 两端电场环（始终绘制，即使重叠） ──
+        this.drawEndpointHalo(g, from, ELECTRIC_GOLD, t, alpha, s);
+        this.drawEndpointHalo(g, to, ELECTRIC_MAIN, t, alpha * 1.2, s);
+
+        // ── 主闪电（仅在两球不重叠时绘制） ──
+        if (dist > 1) {
+          this.drawLinkedLightning(g, from, to, baseWidth, alpha, pal.primary, s);
         }
 
-        // ── 命中点闪光（多层径向渐变 + 放大动画） ──
-        for (let i = 1; i < arcNodes.length; i++) {
-          const node = arcNodes[i];
-          const flashPhase = t < 0.3 ? t / 0.3 : Math.max(0, 1 - (t - 0.3) / 0.7);
-          const flashR = (15 + flashPhase * 12) * s;
-          // 外晕（电青）
-          g.circle(node.x, node.y, flashR * 2);
-          g.fill({ color: ELECTRIC_MAIN, alpha: flashAlpha * 0.2 });
-          // 中层（金色）
-          g.circle(node.x, node.y, flashR * 1.2);
-          g.fill({ color: pal.primary, alpha: flashAlpha * 0.45 });
-          // 核心（白色）
-          g.circle(node.x, node.y, flashR * 0.5);
-          g.fill({ color: ELECTRIC_WHITE, alpha: flashAlpha * 0.9 });
+        // ── 能量颗粒（沿主线单向流动） ──
+        if (dist > 1) {
+          this.updateAndDrawEnergyParticles(g, particles, from, to, dt, alpha, s);
         }
-
-        // ── 放射闪电（命中点向四周爆散） ──
-        if (flashAlpha > 0.1) {
-          for (let i = 1; i < arcNodes.length; i++) {
-            const node = arcNodes[i];
-            const boltCount = isBurst ? 8 : 5;
-            for (let b = 0; b < boltCount; b++) {
-              const angle = (b / boltCount) * Math.PI * 2 + i * 0.5;
-              const len = (20 + Math.random() * 30) * s;
-              const ex = node.x + Math.cos(angle) * len;
-              const ey = node.y + Math.sin(angle) * len;
-              this.strokePolyline(g,
-                this.generateJaggedPoints(node.x, node.y, ex, ey, 8 * s),
-                ELECTRIC_LIGHT, baseWidth * 0.5, flashAlpha * 0.5);
-            }
-          }
-        }
-
-        // ── 电弧粒子更新与绘制 ──
-        this.updateAndDrawParticles(g, particles, dt);
       },
       onDecay: () => {
         this.fieldContainer.removeChild(g);
@@ -338,37 +333,124 @@ export class DischargeCatRenderer {
   }
 
   /**
-   * 绘制带锯齿的闪电线段（三层叠加发光）
-   * - 外层发光：粗白色低透明度（width 4，alpha 0.3）
-   * - 主色闪电：中电青（width 2，alpha 0.9）
-   * - 核心高亮：白色细线（width 0.8，alpha 1）
-   * 锯齿点每帧重新生成，制造闪电抖动感
+   * 绘制链接闪电（小金喵 → 对手球，端点实时跟随）
+   * 4 层叠加：
+   * - 外层光晕：平滑曲线（4 控制点 Bezier）粗白低透明
+   * - 主题辉光：平滑曲线（同控制点）金色
+   * - 主色闪电：锯齿折线（每帧随机抖动）电青
+   * - 核心高亮：锯齿折线（同点）纯白
    */
-  private drawLightningSegment(
+  private drawLinkedLightning(
     g: PIXI.Graphics,
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number,
+    from: { x: number; y: number },
+    to: { x: number; y: number },
     baseWidth: number,
     alpha: number,
     themeColor: number,
+    s: number,
   ): void {
-    const s = this.scale;
-    // 生成锯齿点（每帧随机，制造抖动）
-    const pts = this.generateJaggedPoints(x1, y1, x2, y2, 15 * s);
+    // ── 平滑曲线控制点（4 个，垂直于主线方向偏移产生 S 形弧度） ──
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const nx = -dy / dist;
+    const ny = dx / dist;
+    const offset1 = dist * 0.15;
+    const offset2 = -dist * 0.15;
+    const cp1 = { x: from.x + dx * 0.33 + nx * offset1, y: from.y + dy * 0.33 + ny * offset1 };
+    const cp2 = { x: from.x + dx * 0.66 + nx * offset2, y: from.y + dy * 0.66 + ny * offset2 };
 
-    // 外层发光：粗白色低透明度（光晕扩散感）
-    this.strokePolyline(g, pts, ELECTRIC_WHITE, baseWidth * 1.6, alpha * 0.3);
+    // 外层光晕：平滑曲线（粗白低透明）
+    g.moveTo(from.x, from.y);
+    g.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, to.x, to.y);
+    g.stroke({ color: ELECTRIC_WHITE, width: baseWidth * 2.0, alpha: alpha * 0.25 });
 
-    // 主色闪电：中电青
-    this.strokePolyline(g, pts, ELECTRIC_MAIN, baseWidth * 0.8, alpha * 0.9);
+    // 主题辉光：平滑曲线（金色）
+    g.moveTo(from.x, from.y);
+    g.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, to.x, to.y);
+    g.stroke({ color: themeColor, width: baseWidth * 1.4, alpha: alpha * 0.45 });
 
-    // 主题色辉光（金色边缘 - 与猫的金色呼应）
-    this.strokePolyline(g, pts, themeColor, baseWidth * 1.1, alpha * 0.4);
+    // 主色闪电：锯齿折线（电青）
+    const jaggedPts = this.generateJaggedPoints(from.x, from.y, to.x, to.y, 15 * s);
+    this.strokePolyline(g, jaggedPts, ELECTRIC_MAIN, baseWidth * 0.8, alpha * 0.9);
 
-    // 核心高亮：白色细线
-    this.strokePolyline(g, pts, ELECTRIC_WHITE, Math.max(0.8, baseWidth * 0.3), alpha);
+    // 核心高亮：锯齿折线（纯白）
+    this.strokePolyline(g, jaggedPts, ELECTRIC_WHITE, Math.max(0.8, baseWidth * 0.3), alpha);
+  }
+
+  /**
+   * 绘制端点电场环（多层径向渐变圆）
+   * @param pos 端点坐标
+   * @param color 主色（from 端金色，to 端电青）
+   * @param t 全局时间 0-1
+   * @param alpha 整体透明度
+   * @param s 缩放
+   */
+  private drawEndpointHalo(
+    g: PIXI.Graphics,
+    pos: { x: number; y: number },
+    color: number,
+    t: number,
+    alpha: number,
+    s: number,
+  ): void {
+    const pulse = 1 + 0.2 * Math.sin(t * 20);
+    const baseR = 10 * s * pulse;
+
+    // 外晕（主色，最透明）
+    g.circle(pos.x, pos.y, baseR * 2.5);
+    g.fill({ color, alpha: alpha * 0.15 });
+
+    // 中层（主色）
+    g.circle(pos.x, pos.y, baseR * 1.4);
+    g.fill({ color, alpha: alpha * 0.4 });
+
+    // 核心（白色高亮）
+    g.circle(pos.x, pos.y, baseR * 0.6);
+    g.fill({ color: ELECTRIC_WHITE, alpha: alpha * 0.85 });
+  }
+
+  /**
+   * 更新并绘制能量颗粒（沿主线 from→to 单向流动）
+   * 颗粒 progress 0→1 循环，到达 1 后重置为 0
+   * 位置 = lerp(from, to, progress) + 法线方向 sin 抖动
+   * 透明度 = sin(progress * π)（中段最亮）
+   */
+  private updateAndDrawEnergyParticles(
+    g: PIXI.Graphics,
+    particles: EnergyParticle[],
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    dt: number,
+    alpha: number,
+    s: number,
+  ): void {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const nx = -dy / dist;
+    const ny = dx / dist;
+    const dtSec = dt / 1000;
+
+    for (const p of particles) {
+      p.progress += p.speed * dtSec;
+      if (p.progress >= 1) p.progress -= 1;
+
+      const jitterAmp = 3 * s;
+      const jitter = Math.sin(p.jitter + p.progress * Math.PI * 4) * jitterAmp;
+      const x = from.x + dx * p.progress + nx * jitter;
+      const y = from.y + dy * p.progress + ny * jitter;
+
+      const particleAlpha = Math.sin(p.progress * Math.PI) * alpha;
+
+      // 外晕（电青）
+      g.circle(x, y, p.size * 1.8);
+      g.fill({ color: ELECTRIC_MAIN, alpha: particleAlpha * 0.35 });
+
+      // 核心（白色）
+      g.circle(x, y, p.size);
+      g.fill({ color: ELECTRIC_WHITE, alpha: particleAlpha * 0.9 });
+    }
   }
 
   // ══════════════════════════════════════════════════════

@@ -90,6 +90,7 @@ import type {
 } from './VisualEffectUtils';
 import type { DrawingManifestVisualConfig } from './DrawingManifestRenderer';
 import type { DischargeCatVisualConfig } from './DischargeCatRenderer';
+import type { CyberFishRenderer } from '../CyberFishRenderer';
 import type { PrecognitiveLensVisualConfig } from './PrecognitiveLensRenderer';
 import type { EmotionMasteryVisualConfig } from './EmotionMasteryRenderer';
 import type { EmotionalWeatherVisualConfig } from './EmotionalWeatherRenderer';
@@ -174,6 +175,7 @@ export class EffectRenderer {
     fieldContainer: PIXI.Container,
     hologramContainer: PIXI.Container,
     particlePool: ParticlePool,
+    cyberFishRenderer?: CyberFishRenderer,
   ) {
     // 初始化子渲染器
     // 冲击波渲染器（注入 particlePool 用于震波飞溅粒子）
@@ -200,7 +202,7 @@ export class EffectRenderer {
     this.drawingManifestRenderer = new DrawingManifestRenderer(entityContainer, fieldContainer, particlePool);
 
     // 放电猫猫渲染器
-    this.dischargeCatRenderer = new DischargeCatRenderer(entityContainer, fieldContainer);
+    this.dischargeCatRenderer = new DischargeCatRenderer(entityContainer, fieldContainer, cyberFishRenderer);
 
     // 预知透镜渲染器
     this.precognitiveLensRenderer = new PrecognitiveLensRenderer(entityContainer, fieldContainer);
@@ -771,12 +773,13 @@ export class EffectRenderer {
    * 触发电弧弹射链特效
    */
   triggerDischargeArc(
-    arcNodes: Array<{ x: number; y: number }>,
+    sourceId: string,
+    targetId: string,
     isBurst: boolean,
     themeColor?: number,
     palette?: Palette,
   ): void {
-    const ef = this.dischargeCatRenderer.triggerArc(arcNodes, isBurst, themeColor, palette);
+    const ef = this.dischargeCatRenderer.triggerArc(sourceId, targetId, isBurst, themeColor, palette);
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
 

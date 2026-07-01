@@ -4,3 +4,13 @@ sessions
 /src
 cache
 .DS_Store
+
+# 临时文件夹
+temp/
+
+# AI 工具技能文件夹
+.superpowers/
+.codebuddy/
+.codex/
+.github/skills/
+docs/superpowers/

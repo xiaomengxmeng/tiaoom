@@ -86,6 +86,7 @@ export class CyberFishRenderer {
       this.l3Field,
       this.l5Hologram,
       this.particlePool,
+      this,
     );
     this.globalEffectRenderer = new GlobalEffectRenderer(
       this.l2Entity,
@@ -535,17 +536,15 @@ export class CyberFishRenderer {
         }
         break;
       case VisualEventType.DISCHARGE_CAT_ARC:
-        // 电弧弹射链（放电猫虚影已移除，靠装饰器猫耳表示）
+        // 电弧链接（小金喵 → 对手球，实时跟随）
         {
           const isBurst = config.isBurst ?? false;
-          // 绘制电弧弹射链
-          if (config.arcNodes && config.arcNodes.length >= 2) {
-            const mappedNodes = config.arcNodes.map(n => ({
-              x: this.mapX(n.x),
-              y: this.mapY(n.y),
-            }));
+          const sourceId = config.playerId ?? '';
+          const targetId = config.targetId ?? '';
+          if (sourceId && targetId) {
             this.effectRenderer.triggerDischargeArc(
-              mappedNodes, isBurst, themeColor,
+              sourceId, targetId, isBurst,
+              themeColor,
               getWeaponPalette(WeaponId.DISCHARGE_CAT),
             );
           }

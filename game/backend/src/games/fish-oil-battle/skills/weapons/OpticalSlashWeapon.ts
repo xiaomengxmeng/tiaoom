@@ -31,6 +31,17 @@ interface Slash {
   lifetime: number;
 }
 
+// ─── 爆发刀刃（追踪突进） ───────────────────────────────
+interface BurstBlade {
+  targetId: string;
+  startX: number;
+  startY: number;
+  endX: number;        // 实时更新（追踪目标）
+  endY: number;
+  locked: boolean;
+  hit: boolean;
+}
+
 export class OpticalSlashWeapon implements IWeapon {
   static readonly ID = WeaponId.OPTICAL_SLASH;
   readonly id = WeaponId.OPTICAL_SLASH;
@@ -46,6 +57,12 @@ export class OpticalSlashWeapon implements IWeapon {
   private speedBuffTimer = 0;
   private activeSlashes: Slash[] = [];
   private burstReady = false;
+
+  // ── 爆发三阶段状态 ──
+  private burstFloatEndTime = 0;      // 浮动结束时间戳（Date.now()）
+  private burstDashEndTime = 0;       // 突进结束时间戳（Date.now()）
+  private burstBlades: BurstBlade[] = [];
+  private burstHitCount: Map<string, number> = new Map();
 
   // 斩击残留实体（可碰撞）
   private slashResidues: Array<{
@@ -64,6 +81,23 @@ export class OpticalSlashWeapon implements IWeapon {
   onTick(state: IBattleState, physics: IPhysicsQuery): WeaponEffect[] {
     const effects: WeaponEffect[] = [];
     const CFG = WEAPON_RANGE_CONFIG[this.id];
+
+    // ── 爆发阶段 2/3 驱动（基于时间戳） ──
+    const now = Date.now();
+
+    // 阶段 2：锁定（浮动结束时触发）
+    if (this.burstFloatEndTime > 0 && now >= this.burstFloatEndTime) {
+      this.executeBurstLock(state, physics, effects);
+      this.burstFloatEndTime = 0;
+    }
+
+    // 阶段 3：追踪 + 伤害结算（突进结束时触发）
+    if (this.burstDashEndTime > 0 && now >= this.burstDashEndTime) {
+      this.executeBurstDamage(state, physics, effects);
+      this.burstDashEndTime = 0;
+      this.energy = 0;
+      this.hitCount = 0;
+    }
 
     // 移速加成衰减
     if (this.speedBuff > 0) {
@@ -307,55 +341,17 @@ export class OpticalSlashWeapon implements IWeapon {
     const effects: WeaponEffect[] = [];
     const CFG = WEAPON_RANGE_CONFIG[this.id];
 
-    // 6道扇形斩击
-    const burstSlashes: Slash[] = [];
-    for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI * 2;
-      burstSlashes.push({
-        id: `burst_${i}_${Date.now()}`,
-        originX: self.position.x,
-        originY: self.position.y,
-        angle,
-        length: CFG.visualRadius!,
-        width: CFG.projectile!.hitRadius * 2,
-        hitPlayers: new Set(),
-        isFinished: false,
-        lifetime: 0,
-      });
-    }
+    // ── 阶段 1：启动浮动（0.8s） ──
+    // 不立即造成伤害，仅发送视觉事件
+    const now = Date.now();
+    const floatDur = CFG.burstFloatDurationMs ?? 800;
+    const dashDur = CFG.burstDashDurationMs ?? 400;
+    this.burstFloatEndTime = now + floatDur;
+    this.burstDashEndTime = now + floatDur + dashDur;
+    this.burstBlades = [];
+    this.burstHitCount.clear();
 
-    // 检测命中
-    const opponents = physics.getAllAliveOpponents(this.playerId);
-    for (const slash of burstSlashes) {
-      for (const opp of opponents) {
-        if (slash.hitPlayers.has(opp.id)) continue;
-
-        const dx = opp.x - slash.originX;
-        const dy = opp.y - slash.originY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const angleToOpp = Math.atan2(dy, dx);
-        let angleDiff = angleToOpp - slash.angle;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-
-        const burstTolerance = CFG.projectile?.slashAngleTolerance ?? 0.1;
-        if (dist <= slash.length && Math.abs(angleDiff) < burstTolerance) {
-          slash.hitPlayers.add(opp.id);
-          effects.push({
-            type: WeaponEffectType.BURST_DAMAGE,
-            sourceId: this.playerId,
-            targetId: opp.id,
-            value: CFG.burstDamage!,
-            metadata: {
-              desc: '无限剑制',
-              visualType: VisualEventType.OPTICAL_SLASH_BURST,
-            },
-          });
-        }
-      }
-    }
-
-    // 视觉事件
+    // 发送浮动阶段视觉事件
     effects.push({
       type: WeaponEffectType.VISUAL_ONLY,
       sourceId: this.playerId,
@@ -364,16 +360,132 @@ export class OpticalSlashWeapon implements IWeapon {
       metadata: {
         visualType: VisualEventType.OPTICAL_SLASH_BURST,
         isBurst: true,
-        length: CFG.visualRadius,
+        phase: 'float',
+        floatRadius: CFG.burstFloatRadius ?? 60,
+        floatDuration: floatDur,
+        dashDuration: dashDur,
       },
     });
 
-    // 重置
-    this.energy = 0;
-    this.hitCount = 0;
+    // 重置爆发就绪（但保留 energy 用于 onTick 阶段 2/3）
     this.burstReady = false;
-
     return effects;
+  }
+
+  /** 爆发阶段 2：锁定目标 + 分配 6 把刀 */
+  private executeBurstLock(
+    state: IBattleState,
+    physics: IPhysicsQuery,
+    effects: WeaponEffect[],
+  ): void {
+    const self = state.getPlayer(this.playerId);
+    if (!self) return;
+
+    const opponents = physics.getAllAliveOpponents(this.playerId);
+    if (opponents.length === 0) return;
+
+    const CFG = WEAPON_RANGE_CONFIG[this.id];
+    const floatR = CFG.burstFloatRadius ?? 60;
+
+    // ── 分配 6 把刀的目标（优先均分 + 随机） ──
+    const targets: string[] = [];
+    // 第 1 轮：每个敌人分配 1 把（最多 6 个）
+    for (let i = 0; i < Math.min(6, opponents.length); i++) {
+      targets.push(opponents[i].id);
+    }
+    // 第 2 轮：剩余的刀随机分配
+    while (targets.length < 6 && opponents.length > 0) {
+      targets.push(opponents[Math.floor(Math.random() * opponents.length)].id);
+    }
+
+    // ── 创建 6 把刀 ──
+    this.burstBlades = [];
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const target = opponents.find(o => o.id === targets[i]);
+      this.burstBlades.push({
+        targetId: targets[i],
+        startX: self.position.x + Math.cos(angle) * floatR,
+        startY: self.position.y + Math.sin(angle) * floatR,
+        endX: target?.x ?? self.position.x,
+        endY: target?.y ?? self.position.y,
+        locked: true,
+        hit: false,
+      });
+    }
+
+    // 发送锁定视觉事件（携带 burstBlades 数组）
+    effects.push({
+      type: WeaponEffectType.VISUAL_ONLY,
+      sourceId: this.playerId,
+      value: 0,
+      position: { x: self.position.x, y: self.position.y },
+      metadata: {
+        visualType: VisualEventType.OPTICAL_SLASH_BURST,
+        isBurst: true,
+        phase: 'lock',
+        burstBlades: this.burstBlades.map(b => ({
+          targetId: b.targetId,
+          startX: b.startX,
+          startY: b.startY,
+          endX: b.endX,
+          endY: b.endY,
+        })),
+      },
+    });
+  }
+
+  /** 爆发阶段 3：追踪更新 + 伤害结算（同敌人多刀衰减） */
+  private executeBurstDamage(
+    state: IBattleState,
+    physics: IPhysicsQuery,
+    effects: WeaponEffect[],
+  ): void {
+    // ── 追踪：最后再更新一次目标位置 ──
+    const opponents = physics.getAllAliveOpponents(this.playerId);
+    for (const blade of this.burstBlades) {
+      if (blade.hit) continue;
+      const target = opponents.find(o => o.id === blade.targetId);
+      if (target) {
+        blade.endX = target.x;
+        blade.endY = target.y;
+      }
+    }
+
+    // ── 伤害结算（按刀序，同敌人衰减） ──
+    const CFG = WEAPON_RANGE_CONFIG[this.id];
+    const baseDamage = CFG.burstDamage ?? 10;
+    const decay = CFG.burstDecayPerHit ?? 0.5;
+
+    for (const blade of this.burstBlades) {
+      if (blade.hit) continue;
+      blade.hit = true;
+
+      // 目标已死则跳过伤害（刀光仍飞行但不造成伤害）
+      const targetAlive = opponents.find(o => o.id === blade.targetId);
+      if (!targetAlive) continue;
+
+      const hitCount = this.burstHitCount.get(blade.targetId) ?? 0;
+      const damage = Math.max(1, Math.floor(baseDamage * Math.pow(decay, hitCount)));
+      this.burstHitCount.set(blade.targetId, hitCount + 1);
+
+      effects.push({
+        type: WeaponEffectType.BURST_DAMAGE,
+        sourceId: this.playerId,
+        targetId: blade.targetId,
+        value: damage,
+        metadata: {
+          desc: '无限剑制·追踪斩',
+          visualType: VisualEventType.OPTICAL_SLASH_BURST,
+          phase: 'hit',
+          hitOrder: hitCount,
+        },
+      });
+    }
+
+    // 清理
+    this.burstBlades = [];
+    this.burstHitCount.clear();
   }
 
   // ── 运行时状态 ────────────────────────────────────────
@@ -399,5 +511,9 @@ export class OpticalSlashWeapon implements IWeapon {
     this.burstReady = false;
     this.slashResidues = [];
     this.lastObstacleHitAt = 0;
+    this.burstFloatEndTime = 0;
+    this.burstDashEndTime = 0;
+    this.burstBlades = [];
+    this.burstHitCount.clear();
   }
 }

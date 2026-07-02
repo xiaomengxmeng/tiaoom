@@ -307,8 +307,22 @@ export function autoRegisterFromEnum(): void {
             break;
           }
           case VisualEventType.OPTICAL_SLASH_BURST: {
-            const effects = ctx.opticalSlashRenderer.triggerBurst(x, y, color, undefined, undefined, palette);
-            ctx.addEffect(effects);
+            // 测试页模拟：启动浮动 → 800ms 后锁定到固定目标位置
+            // 构造 6 把刀的浮动起始位置（环绕中心 60px 半径）
+            const burstBlades = [
+              { targetId: 't1', startX: x + 60, startY: y },
+              { targetId: 't2', startX: x + 30, startY: y + 52 },
+              { targetId: 't3', startX: x - 30, startY: y + 52 },
+              { targetId: 't4', startX: x - 60, startY: y },
+              { targetId: 't5', startX: x - 30, startY: y - 52 },
+              { targetId: 't6', startX: x + 30, startY: y - 52 },
+            ];
+            const result = ctx.opticalSlashRenderer?.triggerBurst(
+              x, y, color, undefined, undefined, undefined, burstBlades,
+            );
+            if (result) {
+              for (const ef of result) ctx.activeEffects.push(ef);
+            }
             break;
           }
           case VisualEventType.AIR_REPULSION_ANCHOR: {

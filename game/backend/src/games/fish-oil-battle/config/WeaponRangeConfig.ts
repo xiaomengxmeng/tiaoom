@@ -162,6 +162,15 @@ export interface WeaponRangeConfig {
   burstEnergyCost?: number;
   /** 爆发冷却（毫秒） */
   cooldownMs?: number;
+
+  /** 爆发浮动环绕半径（光学斩击专用） */
+  burstFloatRadius?: number;
+  /** 爆发浮动持续时间（毫秒，光学斩击专用） */
+  burstFloatDurationMs?: number;
+  /** 爆发突进飞行时间（毫秒，光学斩击专用） */
+  burstDashDurationMs?: number;
+  /** 爆发同敌人多刀衰减系数（光学斩击专用） */
+  burstDecayPerHit?: number;
 }
 
 // ── 配置表 ──────────────────────────────────────────
@@ -296,24 +305,28 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
 
   /** 光学斩击 - Liya */
   [WeaponId.OPTICAL_SLASH]: {
-    damage: 5,
+    damage: 4,
     burstDamage: 10,
     maxEnergy: 6,
-    damageRadius: 100,
-    visualRadius: 150,
-    visualDurationMs: 800,
+    damageRadius: 160,
+    visualRadius: 120,
+    visualDurationMs: 1200,
+    burstFloatRadius: 60,        // 新增：浮动环绕半径
+    burstFloatDurationMs: 800,   // 新增：浮动持续时间
+    burstDashDurationMs: 400,    // 新增：突进飞行时间
+    burstDecayPerHit: 0.5,       // 新增：同敌人多刀衰减系数
     projectile: {
       speed: 0,
       maxBounces: 0,
       maxLifetimeSec: 0.8,
-      hitRadius: 4,
+      hitRadius: 6,
       visualFlightSpeed: 300,
-      visualArcBow: 28,
-      visualBladeHalfWidth: 20,
-      slashAngleTolerance: 0.15,   // 斩击命中锥角 (rad)，100px处有效宽度≈30px
+      visualArcBow: 36,
+      visualBladeHalfWidth: 32,
+      slashAngleTolerance: 0.18,
     },
     triggerCooldowns: {
-      hitTargetSec: 0.3,   // 斩击限频：每 0.3s 最多触发 1 次（比冲击波快，因为是近战）
+      hitTargetSec: 0.3,
     },
   },
 

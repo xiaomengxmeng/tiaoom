@@ -132,6 +132,8 @@ export class EffectRenderer {
   private firewallRenderer: FirewallEffectRenderer;
   private hiveRenderer: HiveEffectRenderer;
   private opticalSlashRenderer: OpticalSlashEffectRenderer;
+  /** 光学斩击爆发刀刃引用 holder（闭包通过 holder.blades 读取最新值） */
+  private opticalBurstBladesHolder: { blades: Array<{ targetId: string; startX: number; startY: number }> } = { blades: [] };
   private airRepulsionFieldRenderer: AirRepulsionFieldRenderer;
   private entropicTouchRenderer: EntropicTouchRenderer;
   private drawingManifestRenderer: DrawingManifestRenderer;
@@ -455,18 +457,30 @@ export class EffectRenderer {
     if (ef) this.activeEffects.push(ef);
   }
 
-  triggerOpticalSlashBurst(
+  triggerOpticalBurst(
     x: number, y: number,
     themeColor: number,
     radius?: number,
     visualCfg?: OpticalSlashVisualConfig,
     palette?: Palette,
+    burstBlades?: Array<{ targetId: string; startX: number; startY: number }>,
   ): void {
+    this.opticalBurstBladesHolder.blades = burstBlades ?? [];
     const dataCfg = this.buildOpticalSlashVisualCfg();
     const cfg: OpticalSlashVisualConfig = { ...dataCfg, ...visualCfg };
     if (radius !== undefined) cfg.maxRadius = radius;
-    const effects = this.opticalSlashRenderer.triggerBurst(x, y, themeColor, cfg, palette);
+    const effects = this.opticalSlashRenderer.triggerBurst(
+      x, y, themeColor, cfg, undefined, palette, this.opticalBurstBladesHolder.blades,
+    );
     for (const ef of effects) this.activeEffects.push(ef);
+  }
+
+  /**
+   * 更新正在运行的光学斩击爆发刀刃信息（锁定阶段调用）
+   * 通过 holder 对象让 onUpdate 闭包能读取最新值
+   */
+  updateOpticalBurstBlades(blades: Array<{ targetId: string; startX: number; startY: number }>): void {
+    this.opticalBurstBladesHolder.blades = blades;
   }
 
   // ══════════════════════════════════════════════════════

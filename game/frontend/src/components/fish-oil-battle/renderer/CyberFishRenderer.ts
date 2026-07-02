@@ -381,14 +381,33 @@ export class CyberFishRenderer {
         }
         break;
       case VisualEventType.OPTICAL_SLASH_BURST:
-        if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
-          this.effectRenderer.triggerOpticalSlashBurst(
-            mapCfg.x, mapCfg.y,
-            themeColor ?? config.factionColor ?? 0x00BFFF,
-            config.radius,
-            undefined,
-            getWeaponPalette(WeaponId.OPTICAL_SLASH),
-          );
+        // 无限剑制三阶段：浮动 → 锁定 → 突进追踪
+        {
+          const phase = (mapCfg.metadata?.phase as string) ?? 'float';
+          if (phase === 'float') {
+            // 浮动阶段：启动动画
+            if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+              this.effectRenderer.triggerOpticalBurst(
+                mapCfg.x, mapCfg.y,
+                themeColor ?? config.factionColor ?? 0x00BFFF,
+                config.radius,
+                undefined,
+                getWeaponPalette(WeaponId.OPTICAL_SLASH),
+              );
+            }
+          } else if (phase === 'lock') {
+            // 锁定阶段：更新刀刃信息（转换逻辑坐标为画布坐标）
+            const rawBlades = (mapCfg.metadata?.burstBlades as Array<{
+              targetId: string; startX: number; startY: number;
+              endX: number; endY: number;
+            }>) ?? [];
+            const blades = rawBlades.map(b => ({
+              targetId: b.targetId,
+              startX: this.mapX(b.startX),
+              startY: this.mapY(b.startY),
+            }));
+            this.effectRenderer.updateOpticalBurstBlades(blades);
+          }
         }
         break;
       case VisualEventType.SHAPE_EFFECT:

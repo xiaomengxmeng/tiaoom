@@ -3,6 +3,7 @@ import { lighten, dimColor } from './VisualEffectUtils';
 import type { ActiveEffect, OpticalSlashVisualConfig } from './VisualEffectUtils';
 import type { Palette } from './BaseWeaponEffectRenderer';
 import type { ParticlePool } from '../systems/ParticlePool';
+import type { CyberFishRenderer } from '../CyberFishRenderer';
 
 /**
  * 光学斩击特效渲染器 - Liya（OpticalSlash 光学月刃）
@@ -53,14 +54,19 @@ export class OpticalSlashEffectRenderer {
   private canvasW = 1280;
   private canvasH = 720;
 
+  /** CyberFishRenderer 引用，用于爆发阶段 3 实时追踪目标坐标 */
+  private cyberFish: CyberFishRenderer | null = null;
+
   constructor(
     container: PIXI.Container,
     _hologramContainer: PIXI.Container,
     prePoolCount = 20,
     particlePool?: ParticlePool,
+    cyberFish?: CyberFishRenderer,
   ) {
     this.container = container;
     this.particlePool = particlePool;
+    this.cyberFish = cyberFish ?? null;
 
     for (let i = 0; i < prePoolCount; i++) {
       const g = new PIXI.Graphics();
@@ -74,6 +80,11 @@ export class OpticalSlashEffectRenderer {
     this.scale = s;
     this.canvasW = w;
     this.canvasH = h;
+  }
+
+  /** 延迟注入 CyberFishRenderer 引用（测试页 stub 注入用） */
+  setCyberFishRenderer(cyberFish: CyberFishRenderer | null): void {
+    this.cyberFish = cyberFish;
   }
 
   // ── 对象池 ──────────────────────────────────────────
@@ -411,12 +422,19 @@ export class OpticalSlashEffectRenderer {
   // ══════════════════════════════════════════════════════
 
   /**
-   * 触发爆发无限剑制
+   * 触发爆发无限剑制（三阶段动画）
+   *
+   * 阶段 1 浮动蓄势（0 - 800ms）：6 把刀环绕自转浮动
+   * 阶段 2 锁定瞬间（800ms 处）：金色准星闪烁，刀光指向目标
+   * 阶段 3 突进追踪（800ms - 1200ms）：6 把刀实时追踪目标飞行
+   *
    * @param x 中心逻辑坐标 X
    * @param y 中心逻辑坐标 Y
    * @param themeColor 主题色（派生光学调色板）
    * @param config 视觉配置（数据驱动）
-   * @param durationMs 持续时间（ms），默认 1200
+   * @param durationMs 总持续时间（ms），默认 1200
+   * @param palette 调色板
+   * @param burstBlades 锁定阶段的 6 把刀信息（含 targetId + startX/Y）
    */
   triggerBurst(
     x: number,
@@ -425,6 +443,7 @@ export class OpticalSlashEffectRenderer {
     config?: OpticalSlashVisualConfig,
     durationMs?: number,
     palette?: Palette,
+    burstBlades?: Array<{ targetId: string; startX: number; startY: number }>,
   ): ActiveEffect[] {
     const g = this.acquire();
     if (!g) return [];
@@ -448,11 +467,16 @@ export class OpticalSlashEffectRenderer {
           gold: pal.accent,
         }
       : this.buildPalette(themeColor);
-    const radius = (config?.maxRadius ?? 150) * s;
+    const radius = (config?.maxRadius ?? 120) * s;
     const T = durationMs ?? 1200;
+    const floatDur = 800;
     const screenDiag = Math.sqrt(this.canvasW ** 2 + this.canvasH ** 2);
 
-    // 粒子飞溅节流累积
+    const floatAngles = [0, Math.PI / 3, (2 * Math.PI) / 3, Math.PI, (4 * Math.PI) / 3, (5 * Math.PI) / 3];
+    // blades 是引用类型，外部通过 updateBurstBlades 更新数组成员时闭包能读取
+    const blades: Array<{ targetId: string; startX: number; startY: number }> = burstBlades ?? [];
+    const floatR = 60 * s;
+
     let particleAcc = 0;
 
     return [
@@ -463,117 +487,108 @@ export class OpticalSlashEffectRenderer {
         maxLife: T,
         onUpdate: (ef, dt) => {
           const life = ef.life;
-          const p1 = T * 0.15; // 蓄光阶段结束
-          const p2 = T * 0.3; // 斩击阶段结束
+          const p1 = floatDur;
+          const p2 = T;
           g.clear();
 
-          // ── 光学核心（10 层同心圆径向渐变，全程显现，强度随阶段变化） ──
-          let coreScale: number, coreAlpha: number;
+          // ── 阶段 1：浮动蓄势（0 - 800ms） ──
           if (life < p1) {
-            // 蓄光：核心从 0 显现
-            const tt = life / p1;
-            coreScale = tt;
-            coreAlpha = tt;
-          } else if (life < p2) {
-            // 斩击：核心满显
-            coreScale = 1;
-            coreAlpha = 1;
-          } else {
-            // 余光：核心缓慢放大消散
-            const tt = (life - p2) / (T - p2);
-            coreScale = 1 + 0.3 * tt;
-            coreAlpha = 1 - 0.6 * tt;
-          }
-          this.drawOpticalCore(
-            g,
-            x,
-            y,
-            radius * 0.35 * coreScale,
-            optPalette,
-            coreAlpha,
-          );
+            const floatT = life / p1;
+            const rotation = floatT * Math.PI * 0.5;
+            const fadeIn = Math.min(floatT / 0.25, 1);
 
-          // ── 6 道扇形刀光（阶段 2 爆发扩散 easeOutCubic，阶段 3 消散） ──
-          if (life >= p1) {
-            let bladeReachT: number, bladeAlpha: number;
-            if (life < p2) {
-              const tt = (life - p1) / (p2 - p1);
-              bladeReachT = this.easeOutCubic(tt);
-              bladeAlpha = tt;
-            } else {
-              const tt = (life - p2) / (T - p2);
-              bladeReachT = 1;
-              bladeAlpha = 1 - tt;
-            }
-            const bladeReach = radius * (0.2 + 0.8 * bladeReachT);
-            const bow = (config?.arcBow ?? 28) * s * 1.4;
-            const halfW = (config?.bladeHalfWidth ?? 20) * s * 0.9;
+            this.drawOpticalCore(g, x, y, radius * 0.35 * fadeIn, optPalette, fadeIn);
+
             for (let i = 0; i < 6; i++) {
-              const a = (i / 6) * Math.PI * 2;
-              const bx = x + Math.cos(a) * bladeReach;
-              const by = y + Math.sin(a) * bladeReach;
-              this.drawArcCrescent(g, bx, by, a, bow, halfW, optPalette, bladeAlpha * 0.85, s);
+              const a = floatAngles[i] + rotation;
+              const floatY = Math.sin(life / 80 + i) * 4 * s;
+              const bx = x + Math.cos(a) * floatR;
+              const by = y + Math.sin(a) * floatR + floatY;
+              const bow = (config?.arcBow ?? 36) * s * 1.2;
+              const halfW = (config?.bladeHalfWidth ?? 32) * s * 0.85;
+              this.drawArcCrescent(g, bx, by, a, bow, halfW, optPalette, fadeIn * 0.9, s);
             }
+
+            const coreR = 6 * s * fadeIn;
+            g.circle(x, y, coreR + 4 * s);
+            g.fill({ color: optPalette.light, alpha: 0.5 * fadeIn });
+            g.circle(x, y, coreR);
+            g.fill({ color: optPalette.white, alpha: 0.95 * fadeIn });
           }
 
-          // ── 十字准星（4 条线 + 刻度分段，阶段 2 显现，阶段 3 淡出） ──
-          let crossAlpha = 0;
-          if (life >= p1) {
-            if (life < p2) crossAlpha = (life - p1) / (p2 - p1);
-            else crossAlpha = 1 - (life - p2) / (T - p2);
-          }
-          if (crossAlpha > 0.01) {
-            this.drawCrosshair(g, x, y, radius * 1.1, crossAlpha, s, screenDiag, optPalette);
-          }
+          // ── 阶段 2 + 3：锁定 + 突进追踪（800ms - 1200ms） ──
+          if (life >= p1 && blades.length > 0) {
+            const dashT = Math.min((life - p1) / (p2 - p1), 1);
+            const easeT = this.easeOutCubic(dashT);
+            const bladeAlpha = 1 - dashT;
 
-          // ── 光学粒子飞溅（阶段 2 大量 emit） ──
-          if (life >= p1 && life < p2 && this.particlePool) {
-            particleAcc += dt;
-            const interval = 20;
-            while (particleAcc > interval) {
-              particleAcc -= interval;
-              for (let i = 0; i < 3; i++) {
-                const a = Math.random() * Math.PI * 2;
-                const spd = (60 + Math.random() * 120) * s;
+            for (let i = 0; i < 6 && i < blades.length; i++) {
+              const blade = blades[i];
+              const sx = blade.startX * s;
+              const sy = blade.startY * s;
+              let ex = sx, ey = sy;
+              const targetContainer = this.cyberFish?.getPlayerRenderer(blade.targetId)?.getContainer();
+              if (targetContainer) {
+                ex = targetContainer.x;
+                ey = targetContainer.y;
+              }
+              const cx = sx + (ex - sx) * easeT;
+              const cy = sy + (ey - sy) * easeT;
+              const flyAngle = Math.atan2(ey - sy, ex - sx);
+              const bow = (config?.arcBow ?? 36) * s * 1.4;
+              const halfW = (config?.bladeHalfWidth ?? 32) * s * 0.9;
+              this.drawArcCrescent(g, cx, cy, flyAngle, bow, halfW, optPalette, bladeAlpha * 0.95, s);
+
+              // 拖尾粒子
+              if (this.particlePool && ef.life - particleAcc > 16 && dashT < 0.95) {
+                particleAcc = ef.life;
                 this.particlePool.emit({
-                  x,
-                  y,
-                  vx: Math.cos(a) * spd,
-                  vy: Math.sin(a) * spd,
-                  life: 500 + Math.random() * 400,
-                  scaleStart: 1.2,
+                  x: cx,
+                  y: cy,
+                  vx: -Math.cos(flyAngle) * 30 * s + (Math.random() - 0.5) * 20,
+                  vy: -Math.sin(flyAngle) * 30 * s + (Math.random() - 0.5) * 20,
+                  life: 300 + Math.random() * 200,
+                  scaleStart: 1,
                   scaleEnd: 0,
-                  alphaStart: 0.9,
+                  alphaStart: 0.7,
                   alphaEnd: 0,
-                  tint: Math.random() < 0.4 ? optPalette.white : optPalette.light,
-                  radius: (1.5 + Math.random() * 1.5) * s,
+                  tint: Math.random() < 0.3 ? optPalette.white : optPalette.light,
+                  radius: (1.2 + Math.random() * 1.5) * s,
                 });
               }
+
+              // 到达命中闪光
+              if (dashT >= 0.95) {
+                const flashAlpha = Math.max(0, (1 - dashT) / 0.05);
+                g.circle(ex, ey, 16 * s);
+                g.fill({ color: optPalette.gold, alpha: flashAlpha * 0.6 });
+                g.circle(ex, ey, 8 * s);
+                g.fill({ color: optPalette.white, alpha: flashAlpha * 0.9 });
+              }
             }
-          }
 
-          // ── 中心光核（白色高亮 + 光蓝外晕） ──
-          if (life < p2) {
-            const tt = life < p1 ? life / p1 : 1;
-            const coreR = 6 * s * tt;
-            g.circle(x, y, coreR + 4 * s);
-            g.fill({ color: optPalette.light, alpha: 0.5 * tt });
-            g.circle(x, y, coreR);
-            g.fill({ color: optPalette.white, alpha: 0.95 });
-          } else {
-            const tt = (life - p2) / (T - p2);
-            g.circle(x, y, 6 * s * (1 - tt));
-            g.fill({ color: optPalette.white, alpha: 0.95 * (1 - tt) });
-          }
+            // 中心光学核心（消散）
+            const coreFade = 1 - dashT;
+            this.drawOpticalCore(g, x, y, radius * 0.35 * (1 + 0.3 * dashT), optPalette, coreFade * 0.6);
 
-          // ── 金色锁定环（阶段 3 扩散，标记感） ──
-          if (life >= p2) {
-            const tt = (life - p2) / (T - p2);
-            const ringR = radius * (0.5 + 0.8 * this.easeOutCubic(tt));
+            // 金色锁定环（扩散）
+            const ringR = radius * (0.5 + 0.8 * easeT);
             g.circle(x, y, ringR);
-            g.stroke({ color: optPalette.gold, width: 2.5 * s, alpha: (1 - tt) * 0.85 });
+            g.stroke({ color: optPalette.gold, width: 2.5 * s, alpha: coreFade * 0.85 });
             g.circle(x, y, ringR * 0.92);
-            g.stroke({ color: optPalette.gold, width: 1 * s, alpha: (1 - tt) * 0.5 });
+            g.stroke({ color: optPalette.gold, width: 1 * s, alpha: coreFade * 0.5 });
+          }
+
+          // ── 阶段 2 锁定瞬间金色准星闪烁（800ms - 1000ms） ──
+          if (life >= p1 && life < p1 + 200 && blades.length > 0) {
+            const lockT = (life - p1) / 200;
+            const lockAlpha = Math.sin(lockT * Math.PI);
+            for (let i = 0; i < blades.length; i++) {
+              const targetContainer = this.cyberFish?.getPlayerRenderer(blades[i].targetId)?.getContainer();
+              if (targetContainer) {
+                this.drawTargetMarker(g, targetContainer.x, targetContainer.y, 16 * s, lockAlpha, s, optPalette.gold);
+              }
+            }
           }
         },
         onDecay: () => {

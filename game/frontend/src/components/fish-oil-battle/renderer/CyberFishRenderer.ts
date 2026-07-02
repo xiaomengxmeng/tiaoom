@@ -583,11 +583,14 @@ export class CyberFishRenderer {
           const isBurst = config.isBurst ?? false;
           const sourceId = config.playerId ?? '';
           const targetId = config.targetId ?? '';
+          // 使用类型断言读取 damageTimings（后端动态添加的字段）
+          const damageTimings = (config as any).damageTimings ?? [];
           if (sourceId && targetId) {
             this.effectRenderer.triggerDischargeArc(
               sourceId, targetId, isBurst,
               themeColor,
               getWeaponPalette(WeaponId.DISCHARGE_CAT),
+              damageTimings,
             );
           }
         }

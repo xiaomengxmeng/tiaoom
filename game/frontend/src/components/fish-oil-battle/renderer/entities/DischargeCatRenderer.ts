@@ -244,6 +244,7 @@ export class DischargeCatRenderer {
    * @param targetId 对手的playerId
    * @param isBurst 是否爆发态（影响宽度）
    * @param themeColor 主题色（默认电系金）
+   * @param damageTimings 伤害时间点（秒，用于脉冲效果）
    * @returns ActiveEffect 由 EffectRenderer 统一 update(dt) 驱动
    */
   triggerArc(
@@ -252,6 +253,7 @@ export class DischargeCatRenderer {
     isBurst: boolean,
     themeColor = DEFAULT_THEME,
     palette?: Palette,
+    damageTimings?: number[],
   ): { effect: ActiveEffect | null } {
     if (!sourceId || !targetId) return { effect: null };
 
@@ -284,6 +286,12 @@ export class DischargeCatRenderer {
       });
     }
 
+    // 脉冲效果状态
+    let pulseAlpha = 0;
+    
+    // 使用传入的伤害时间点（如果有的话）
+    const timings = damageTimings ?? [];
+
     const ef: ActiveEffect = {
       type: 'discharge_cat_arc',
       container: g as unknown as PIXI.Container,
@@ -292,6 +300,18 @@ export class DischargeCatRenderer {
       onUpdate: (_ef, dt) => {
         const t = _ef.life / _ef.maxLife;
         g.clear();
+
+        // ── 检查是否到达伤害时间点（触发电弧脉冲） ──
+        for (const timing of timings) {
+          const timingT = timing / (durationMs / 1000); // 转换为 0-1 进度
+          if (Math.abs(t - timingT) < 0.02) { // 容差 20ms
+            // 触发电弧脉冲：宽度 +20%，透明度闪烁
+            pulseAlpha = 1.5; // 持续 100ms
+          }
+        }
+        
+        // 脉冲效果衰减
+        pulseAlpha = Math.max(0, pulseAlpha - dt / 100);
 
         // ── 实时查询双方坐标 ──
         const fromContainer = this.cyberFish?.getPlayerRenderer(sourceId)?.getContainer();
@@ -310,18 +330,22 @@ export class DischargeCatRenderer {
         else alpha = 1 - (t - 0.75) / 0.25;
         alpha = Math.max(0, Math.min(1, alpha));
 
+        // ── 应用脉冲效果（宽度 +20%，透明度闪烁） ──
+        const currentAlpha = alpha * (pulseAlpha > 0 ? pulseAlpha : 1);
+        const currentWidth = baseWidth * (pulseAlpha > 0 ? 1.2 : 1);
+
         // ── 两端电场环（始终绘制，即使重叠） ──
-        this.drawEndpointHalo(g, from, ELECTRIC_GOLD, t, alpha, s);
-        this.drawEndpointHalo(g, to, ELECTRIC_MAIN, t, alpha * 1.2, s);
+        this.drawEndpointHalo(g, from, ELECTRIC_GOLD, t, currentAlpha, s);
+        this.drawEndpointHalo(g, to, ELECTRIC_MAIN, t, currentAlpha * 1.2, s);
 
         // ── 主闪电（仅在两球不重叠时绘制） ──
         if (dist > 1) {
-          this.drawLinkedLightning(g, from, to, baseWidth, alpha, pal.primary, s);
+          this.drawLinkedLightning(g, from, to, currentWidth, currentAlpha, pal.primary, s);
         }
 
         // ── 能量颗粒（沿主线单向流动） ──
         if (dist > 1) {
-          this.updateAndDrawEnergyParticles(g, particles, from, to, dt, alpha, s);
+          this.updateAndDrawEnergyParticles(g, particles, from, to, dt, currentAlpha, s);
         }
       },
       onDecay: () => {

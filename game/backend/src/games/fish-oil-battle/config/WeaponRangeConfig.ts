@@ -150,6 +150,10 @@ export interface WeaponRangeConfig {
   maxEnergy?: number;
   /** 爆发持续时间（秒） */
   burstDurationSec?: number;
+  /** 电弧链接持续时长（秒，放电猫猫专用） */
+  arcDurationSec?: number;
+  /** 伤害间隔时间（秒，放电猫猫专用） */
+  damageIntervalSec?: number;
   /** 爆发波数（冲击波） */
   burstWaves?: number;
   /** 单波最大命中数（冲击波） */
@@ -357,11 +361,13 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
 
   // ── 小金喵 - 放电猫猫 ──────────────────────────
   [WeaponId.DISCHARGE_CAT]: {
-    damage: 4,                 // 电弧基础伤害
-    burstDamage: 8,            // 爆发电弧伤害
-    maxEnergy: 6,              // 弹射次数上限（爆发阈值）
+    damage: 4,                 // 电弧总伤害（分 3 次造成：1 + 1 + 2）
+    burstDamage: 8,            // 爆发电弧总伤害（分 3 次造成：2 + 2 + 4）
+    maxEnergy: 6,              // 充能次数上限（爆发阈值）
     damageRadius: 120,         // 电弧判定范围
     visualRadius: 30,          // 放电猫虚影半径
+    arcDurationSec: 1.5,      // 电弧链接持续时长（秒）
+    damageIntervalSec: 0.5,   // 伤害间隔时间（秒）
     visualDurationMs: 4000,    // 爆发持续 4 秒
     burstDurationSec: 4,
     field: {

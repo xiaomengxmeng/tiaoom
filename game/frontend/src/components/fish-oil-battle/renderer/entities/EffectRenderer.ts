@@ -805,8 +805,11 @@ export class EffectRenderer {
     isBurst: boolean,
     themeColor?: number,
     palette?: Palette,
+    damageTimings?: number[],
   ): void {
-    const ef = this.dischargeCatRenderer.triggerArc(sourceId, targetId, isBurst, themeColor, palette);
+    const ef = this.dischargeCatRenderer.triggerArc(
+      sourceId, targetId, isBurst, themeColor, palette, damageTimings,
+    );
     if (ef.effect) this.activeEffects.push(ef.effect);
   }
 

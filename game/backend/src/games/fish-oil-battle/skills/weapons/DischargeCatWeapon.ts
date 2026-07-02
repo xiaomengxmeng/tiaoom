@@ -54,6 +54,16 @@ export class DischargeCatWeapon implements IWeapon {
   private catY = 0;
   private catInited = false;
 
+  // ── 电弧链接持续伤害状态 ──────────────────────────────────────
+  /** 当前电弧链接的目标（null 表示无链接） */
+  private arcTargetId: string | null = null;
+
+  /** 电弧链接开始的时间（tick） */
+  private arcStartTick: number = 0;
+
+  /** 已造成的伤害次数（0-3） */
+  private arcDamageCount: number = 0;
+
   // ── 生命周期 ──────────────────────────────────────
 
   onTick(state: IBattleState, physics: IPhysicsQuery): WeaponEffect[] {
@@ -87,6 +97,62 @@ export class DischargeCatWeapon implements IWeapon {
       this.burstTicksLeft--;
       if (this.burstTicksLeft <= 0) {
         this.isBurstActive = false;
+      }
+    }
+
+    // ── 电弧链接持续伤害检查 ──
+    if (this.arcTargetId) {
+      const CFG = WEAPON_RANGE_CONFIG[this.id];
+      if (!CFG) return effects;
+      
+      const elapsedTicks = this.tickCounter - this.arcStartTick;
+      const arcDurationSec = CFG.arcDurationSec ?? 1.5;
+      const damageIntervalSec = CFG.damageIntervalSec ?? 0.5;
+      
+      // 计算电弧持续时间（tick）
+      const arcDurationTicks = Math.round(arcDurationSec * TICKS_PER_SEC);
+      
+      // 动态计算伤害时间点（根据 damageIntervalSec）
+      // 伤害次数 = floor(arcDurationSec / damageIntervalSec) + 1
+      const damageCount = Math.floor(arcDurationSec / damageIntervalSec) + 1;
+      const damageTicks = Array.from({ length: damageCount }, (_, i) => 
+        Math.round(i * damageIntervalSec * TICKS_PER_SEC)
+      );
+      
+      // 检查是否到达伤害时间点
+      if (this.arcDamageCount < damageTicks.length) {
+        const nextDamageTick = damageTicks[this.arcDamageCount];
+        if (elapsedTicks >= nextDamageTick) {
+          // 造成一次伤害
+          const damage = this.getDamageAtCount(this.arcDamageCount, CFG);
+          
+          // 检查目标是否还存活
+          const targetOpponent = physics.getAllAliveOpponents(this.playerId)
+            .find(opp => opp.id === this.arcTargetId);
+          
+          if (targetOpponent) {
+            effects.push({
+              type: WeaponEffectType.DAMAGE,
+              sourceId: this.playerId,
+              targetId: this.arcTargetId,
+              value: damage,
+              metadata: { desc: `放电猫电弧（第 ${this.arcDamageCount + 1} 次）` },
+            });
+          }
+          
+          this.arcDamageCount++;
+          
+          // 第一次伤害时记录 CD（从第一次伤害开始计算）
+          if (this.arcDamageCount === 1 && !this.isBurstActive) {
+            this.cooldowns['fireArc'] = this.tickCounter;
+          }
+        }
+      }
+      
+      // 检查电弧是否结束
+      if (elapsedTicks >= arcDurationTicks) {
+        this.arcTargetId = null;
+        this.arcDamageCount = 0;
       }
     }
 
@@ -131,11 +197,11 @@ export class DischargeCatWeapon implements IWeapon {
     const CFG = WEAPON_RANGE_CONFIG[this.id];
     if (!CFG) return effects;
 
-    const baseDamage = this.isBurstActive ? (CFG.burstDamage ?? 8) : (CFG.damage ?? 4);
     const arcRange = CFG.damageRadius ?? 120;
 
     // ── CD 检查（爆发期间无视 CD） ──
     // 设计要求：正常模式电弧触发限频 0.5 秒
+    // 注意：CD 从第一次伤害开始计算，因此在造成第一次伤害时设置 cooldowns
     if (!this.isBurstActive) {
       const cdSec = CFG.triggerCooldowns?.hitTargetSec ?? 0.5;
       const cdTicks = Math.max(1, Math.round(cdSec * TICKS_PER_SEC));
@@ -143,7 +209,7 @@ export class DischargeCatWeapon implements IWeapon {
       if (this.tickCounter - lastFire < cdTicks) {
         return effects; // CD 未到，跳过本次电弧
       }
-      this.cooldowns['fireArc'] = this.tickCounter;
+      // 注意：不在这里设置 CD，而是在造成第一次伤害时设置
     }
 
     const opponents = physics.getAllAliveOpponents(this.playerId);
@@ -170,20 +236,16 @@ export class DischargeCatWeapon implements IWeapon {
       return effects;
     }
 
+    // ── 启动电弧链接（持续 1.5 秒，分 3 次造成伤害） ──
+    this.arcTargetId = target.id;
+    this.arcStartTick = this.tickCounter;
+    this.arcDamageCount = 0;
+
     // 电弧节点：小金喵 → 对手球（单段链接，不再弹射）
     const arcNodes: ArcNode[] = [
       { x: this.catX, y: this.catY },
       { x: target.x, y: target.y, targetId: target.id },
     ];
-
-    // 单次伤害
-    effects.push({
-      type: WeaponEffectType.DAMAGE,
-      sourceId: this.playerId,
-      targetId: target.id,
-      value: baseDamage,
-      metadata: { desc: '放电猫电弧' },
-    });
 
     // 积攒能量（命中次数）
     if (!this.isBurstActive) {
@@ -191,6 +253,16 @@ export class DischargeCatWeapon implements IWeapon {
     }
 
     // 电弧视觉事件（小金喵 → 对手球）
+    // 添加伤害时间点信息，让前端知道何时显示伤害数字
+    const arcDurationSec = CFG.arcDurationSec ?? 1.5;
+    const damageIntervalSec = CFG.damageIntervalSec ?? 0.5;
+    const damageTimings = [0, damageIntervalSec, 2 * damageIntervalSec];
+    const damageValues = [
+      this.getDamageAtCount(0, CFG),
+      this.getDamageAtCount(1, CFG),
+      this.getDamageAtCount(2, CFG),
+    ];
+    
     effects.push({
       type: WeaponEffectType.VISUAL_ONLY,
       sourceId: this.playerId,
@@ -204,10 +276,33 @@ export class DischargeCatWeapon implements IWeapon {
         targetId: target.id,
         bounceCount: 0,
         arcNodes: arcNodes.map(n => ({ x: n.x, y: n.y, targetId: n.targetId })),
+        // 伤害时间点（相对开始时间的秒数）
+        damageTimings,
+        // 每次伤害的值
+        damageValues,
       },
     });
 
     return effects;
+  }
+
+  /** 根据伤害次数获取伤害值（1+1+2=4） */
+  private getDamageAtCount(count: number, CFG: any): number {
+    const baseDamage = CFG.damage ?? 4; // 总伤害
+    const burstDamage = CFG.burstDamage ?? 8; // 爆发总伤害
+    
+    // 计算伤害分配（总伤害分 3 次造成）
+    const totalDamage = this.isBurstActive ? burstDamage : baseDamage;
+    const damageCount = 3; // 固定 3 次伤害
+    
+    // 伤害分配：1/4, 1/4, 1/2
+    const damages = [
+      Math.floor(totalDamage / 4),
+      Math.floor(totalDamage / 4),
+      totalDamage - 2 * Math.floor(totalDamage / 4),
+    ];
+    
+    return damages[count] ?? 0;
   }
 
   // ── 能量爆发 ──────────────────────────────────────
@@ -281,5 +376,9 @@ export class DischargeCatWeapon implements IWeapon {
     this.catX = 0;
     this.catY = 0;
     this.catInited = false;
+    // 重置电弧链接状态
+    this.arcTargetId = null;
+    this.arcStartTick = 0;
+    this.arcDamageCount = 0;
   }
 }

@@ -82,6 +82,11 @@ export class OpticalSlashEffectRenderer {
     this.canvasH = h;
   }
 
+  /** 返回当前活跃的特效数量（用于调试和性能监控） */
+  getActiveCount(): number {
+    return this.active.size;
+  }
+
   /** 延迟注入 CyberFishRenderer 引用（测试页 stub 注入用） */
   setCyberFishRenderer(cyberFish: CyberFishRenderer | null): void {
     this.cyberFish = cyberFish;
@@ -191,6 +196,7 @@ export class OpticalSlashEffectRenderer {
       life: 0,
       maxLife,
       onUpdate: (ef, _dt) => {
+        const slashUpdateStart = performance.now();
         const t = Math.min(ef.life / ef.maxLife, 1);
         // 飞行进度 0→1，超过后停在终点
         const flightT = Math.min(ef.life / flightDurMs, 1);
@@ -260,6 +266,12 @@ export class OpticalSlashEffectRenderer {
             alpha * 0.22,
             s,
           );
+        }
+
+        const slashUpdateEnd = performance.now();
+        const slashUpdateDuration = slashUpdateEnd - slashUpdateStart;
+        if (slashUpdateDuration > 2) {
+          console.warn(`[OpticalSlash.triggerSlash] Slow update: ${slashUpdateDuration.toFixed(2)}ms`);
         }
 
         // ── 目标标记彩蛋「目标已标记」──
@@ -444,12 +456,20 @@ export class OpticalSlashEffectRenderer {
     config?: OpticalSlashVisualConfig,
     durationMs?: number,
     palette?: Palette,
-    burstBlades?: Array<{ targetId: string; startX: number; startY: number }>,
+    burstBlades?: Array<{ targetId: string; startX: number; startY: number; endX?: number; endY?: number }>,
     sourceId?: string,
   ): ActiveEffect[] {
-    const g = this.acquire();
-    if (!g) return [];
-
+    // 详细日志：打印传入的 burstBlades 数据
+    console.error(`[OpticalSlash] triggerBurst received burstBlades:`, burstBlades?.map((b, i) => ({
+      index: i,
+      targetId: b?.targetId,
+      startX: b?.startX,
+      startY: b?.startY,
+      endX: b?.endX,
+      endY: b?.endY,
+      keys: b ? Object.keys(b) : []
+    })));
+    
     const s = this.scale;
     const pal: Palette = palette ?? {
       primary: themeColor,
@@ -470,155 +490,305 @@ export class OpticalSlashEffectRenderer {
         }
       : this.buildPalette(themeColor);
     const radius = (config?.maxRadius ?? 120) * s;
-    const T = durationMs ?? 1200;
-    const floatDur = 800;
-    const screenDiag = Math.sqrt(this.canvasW ** 2 + this.canvasH ** 2);
 
+    // ════════════════════════════════════════════════
+    //  时间轴设计
+    // ════════════════════════════════════════════════
+    // Phase 1 (浮动蓄势)     0 - 1000ms   6 把刀环绕公转 + sin 上下浮动
+    // Lock moment            ~1000ms      所有刀转向目标 + 金色准星闪烁
+    // Phase 2 (逐个突进)     1000-2067ms  每刀以 133ms 间隔逐个飞向目标（400ms 飞行）
+    //   Blade 0 发射 @1000, 到达 @1400
+    //   Blade 1 发射 @1133, 到达 @1533
+    //   Blade 2 发射 @1267, 到达 @1667
+    //   Blade 3 发射 @1400, 到达 @1800
+    //   Blade 4 发射 @1533, 到达 @1933
+    //   Blade 5 发射 @1667, 到达 @2067
+    // Afterglow              2067-2267ms  金环扩散消散 + 命中闪光淡出
+    // ════════════════════════════════════════════════
+    const floatDur = 1000;
+    const staggerGap = 133;
+    const dashDur = 400;
+    const afterglowDur = 200;
+    const T = durationMs ?? (floatDur + 5 * staggerGap + dashDur + afterglowDur);
+
+    // 6 把刀环绕 60° 均匀分布
     const floatAngles = [0, Math.PI / 3, (2 * Math.PI) / 3, Math.PI, (4 * Math.PI) / 3, (5 * Math.PI) / 3];
-    // blades 是引用类型，外部通过 updateBurstBlades 更新数组成员时闭包能读取
-    const blades: Array<{ targetId: string; startX: number; startY: number }> = burstBlades ?? [];
     const floatR = 60 * s;
 
-    let particleAcc = 0;
+    // ── 共享状态 ──
+    // lockPositions[i]: 第 i 把刀在 lock moment 时的世界坐标（由 orbiting 位置快照）
+    const lockPositions: Array<{ x: number; y: number } | null> = new Array(6).fill(null);
+    // hitTimestamps[i]: 第 i 把刀命中时的 life 值（-1 = 尚未命中）
+    const hitTimestamps: number[] = new Array(6).fill(-1);
 
-    return [
-      {
-        type: 'optical_slash_burst',
-        container: g as unknown as PIXI.Container,
+    const effects: ActiveEffect[] = [];
+
+    // ════════════════════════════════════════════════════════
+    //  1. Core Effect — 光学核心 + 金色锁定环 + 目标准星 + 命中波纹
+    // ════════════════════════════════════════════════════════
+    const coreG = this.acquire();
+    if (coreG) {
+      effects.push({
+        type: 'optical_slash_burst_core',
+        container: coreG as unknown as PIXI.Container,
         life: 0,
         maxLife: T,
-        onUpdate: (ef, dt) => {
+        onUpdate: (ef) => {
           const life = ef.life;
-          const p1 = floatDur;
-          const p2 = T;
-          g.clear();
+          coreG.clear();
 
-          // ── 阶段 1：浮动蓄势（0 - 800ms） ──
-          if (life < p1) {
-            const floatT = life / p1;
-            const rotation = floatT * Math.PI * 0.5;
+          // 实时查询施法者位置
+          let centerX = x; let centerY = y;
+          if (sourceId) {
+            const selfContainer = this.cyberFish?.getPlayerRenderer(sourceId)?.getContainer();
+            if (selfContainer) { centerX = selfContainer.x; centerY = selfContainer.y; }
+          }
+
+          if (life < floatDur) {
+            // ── Phase 1: 光学核心显现 + 金环脉冲 ──
+            const floatT = life / floatDur;
             const fadeIn = Math.min(floatT / 0.25, 1);
 
-            // 实时查询施法者位置（浮动跟随玩家）
-            let cx = x, cy = y;
-            if (sourceId) {
-              const selfContainer = this.cyberFish?.getPlayerRenderer(sourceId)?.getContainer();
-              if (selfContainer) {
-                cx = selfContainer.x;
-                cy = selfContainer.y;
-              }
-            }
+            this.drawOpticalCore(coreG, centerX, centerY, radius * 0.35 * fadeIn, optPalette, fadeIn);
 
-            this.drawOpticalCore(g, cx, cy, radius * 0.35 * fadeIn, optPalette, fadeIn);
+            // 内环脉冲
+            const ringPulse = 0.3 + 0.7 * Math.sin(life / 60);
+            coreG.circle(centerX, centerY, radius * 0.3 * fadeIn * ringPulse);
+            coreG.stroke({ color: optPalette.gold, width: 1.5 * s, alpha: fadeIn * 0.4 });
 
-            for (let i = 0; i < 6; i++) {
-              const a = floatAngles[i] + rotation;
-              const floatY = Math.sin(life / 80 + i) * 4 * s;
-              const bx = cx + Math.cos(a) * floatR;
-              const by = cy + Math.sin(a) * floatR + floatY;
-              const bow = (config?.arcBow ?? 36) * s * 1.2;
-              const halfW = (config?.bladeHalfWidth ?? 32) * s * 0.85;
-              this.drawArcCrescent(g, bx, by, a, bow, halfW, optPalette, fadeIn * 0.9, s);
-            }
-
+            // 中心光球
             const coreR = 6 * s * fadeIn;
-            g.circle(cx, cy, coreR + 4 * s);
-            g.fill({ color: optPalette.light, alpha: 0.5 * fadeIn });
-            g.circle(cx, cy, coreR);
-            g.fill({ color: optPalette.white, alpha: 0.95 * fadeIn });
-          }
+            coreG.circle(centerX, centerY, coreR + 4 * s);
+            coreG.fill({ color: optPalette.light, alpha: 0.5 * fadeIn });
+            coreG.circle(centerX, centerY, coreR);
+            coreG.fill({ color: optPalette.white, alpha: 0.95 * fadeIn });
+          } else {
+            // ── Phase 2/3: 核心渐隐 + 金环扩散 + 目标准星 + 命中波纹 ──
+            const elapsed = (life - floatDur) / (T - floatDur);
+            const coreFade = Math.max(0, 1 - elapsed / 0.5); // 前 50% 内消散
 
-          // ── 阶段 2 + 3：锁定 + 突进追踪（800ms - 1200ms） ──
-          if (life >= p1 && blades.length > 0) {
-            const dashT = Math.min((life - p1) / (p2 - p1), 1);
-            const easeT = this.easeOutCubic(dashT);
-            const bladeAlpha = 1 - dashT;
+            this.drawOpticalCore(coreG, centerX, centerY, radius * 0.35 * (1 + 0.3 * Math.min(elapsed, 1)), optPalette, coreFade * 0.6);
 
-            // 实时查询施法者位置（中心跟随玩家）
-            let centerX = x, centerY = y;
-            if (sourceId) {
-              const selfContainer = this.cyberFish?.getPlayerRenderer(sourceId)?.getContainer();
-              if (selfContainer) {
-                centerX = selfContainer.x;
-                centerY = selfContainer.y;
+            // 金色锁定环（持续扩散）
+            const ringR = radius * (0.5 + 0.8 * Math.min(elapsed, 1));
+            const ringAlpha = Math.max(0, 1 - elapsed * 0.7);
+            coreG.circle(centerX, centerY, ringR);
+            coreG.stroke({ color: optPalette.gold, width: 2.5 * s, alpha: ringAlpha * 0.85 });
+            coreG.circle(centerX, centerY, ringR * 0.92);
+            coreG.stroke({ color: optPalette.gold, width: 1 * s, alpha: ringAlpha * 0.5 });
+
+            // 锁定瞬间金色准星闪烁（仅 200ms）
+            if (life < floatDur + 200) {
+              const lockT = (life - floatDur) / 200;
+              const lockAlpha = Math.sin(lockT * Math.PI);
+              for (let i = 0; i < (burstBlades?.length ?? 0); i++) {
+                const targetContainer = this.cyberFish?.getPlayerRenderer(burstBlades![i].targetId)?.getContainer();
+                if (targetContainer) {
+                  this.drawTargetMarker(coreG, targetContainer.x, targetContainer.y, 16 * s, lockAlpha, s, optPalette.gold);
+                }
               }
             }
 
-            for (let i = 0; i < 6 && i < blades.length; i++) {
-              const blade = blades[i];
-              // blade.startX/Y 已是画布坐标（CyberFishRenderer 已 mapX/mapY 转换），不再乘 s
-              const sx = blade.startX;
-              const sy = blade.startY;
-              let ex = sx, ey = sy;
-              const targetContainer = this.cyberFish?.getPlayerRenderer(blade.targetId)?.getContainer();
-              if (targetContainer) {
-                ex = targetContainer.x;
-                ey = targetContainer.y;
-              }
-              const cx = sx + (ex - sx) * easeT;
-              const cy = sy + (ey - sy) * easeT;
-              const flyAngle = Math.atan2(ey - sy, ex - sx);
-              const bow = (config?.arcBow ?? 36) * s * 1.4;
-              const halfW = (config?.bladeHalfWidth ?? 32) * s * 0.9;
-              this.drawArcCrescent(g, cx, cy, flyAngle, bow, halfW, optPalette, bladeAlpha * 0.95, s);
-
-              // 拖尾粒子
-              if (this.particlePool && ef.life - particleAcc > 16 && dashT < 0.95) {
-                particleAcc = ef.life;
-                this.particlePool.emit({
-                  x: cx,
-                  y: cy,
-                  vx: -Math.cos(flyAngle) * 30 * s + (Math.random() - 0.5) * 20,
-                  vy: -Math.sin(flyAngle) * 30 * s + (Math.random() - 0.5) * 20,
-                  life: 300 + Math.random() * 200,
-                  scaleStart: 1,
-                  scaleEnd: 0,
-                  alphaStart: 0.7,
-                  alphaEnd: 0,
-                  tint: Math.random() < 0.3 ? optPalette.white : optPalette.light,
-                  radius: (1.2 + Math.random() * 1.5) * s,
-                });
-              }
-
-              // 到达命中闪光
-              if (dashT >= 0.95) {
-                const flashAlpha = Math.max(0, (1 - dashT) / 0.05);
-                g.circle(ex, ey, 16 * s);
-                g.fill({ color: optPalette.gold, alpha: flashAlpha * 0.6 });
-                g.circle(ex, ey, 8 * s);
-                g.fill({ color: optPalette.white, alpha: flashAlpha * 0.9 });
-              }
-            }
-
-            // 中心光学核心（消散）
-            const coreFade = 1 - dashT;
-            this.drawOpticalCore(g, centerX, centerY, radius * 0.35 * (1 + 0.3 * dashT), optPalette, coreFade * 0.6);
-
-            // 金色锁定环（扩散）
-            const ringR = radius * (0.5 + 0.8 * easeT);
-            g.circle(centerX, centerY, ringR);
-            g.stroke({ color: optPalette.gold, width: 2.5 * s, alpha: coreFade * 0.85 });
-            g.circle(centerX, centerY, ringR * 0.92);
-            g.stroke({ color: optPalette.gold, width: 1 * s, alpha: coreFade * 0.5 });
-          }
-
-          // ── 阶段 2 锁定瞬间金色准星闪烁（800ms - 1000ms） ──
-          if (life >= p1 && life < p1 + 200 && blades.length > 0) {
-            const lockT = (life - p1) / 200;
-            const lockAlpha = Math.sin(lockT * Math.PI);
-            for (let i = 0; i < blades.length; i++) {
-              const targetContainer = this.cyberFish?.getPlayerRenderer(blades[i].targetId)?.getContainer();
-              if (targetContainer) {
-                this.drawTargetMarker(g, targetContainer.x, targetContainer.y, 16 * s, lockAlpha, s, optPalette.gold);
+            // 逐刀命中波纹（金环在命中位置扩散）
+            for (let i = 0; i < 6; i++) {
+              if (hitTimestamps[i] >= 0) {
+                const pulseAge = life - hitTimestamps[i];
+                if (pulseAge < 300) {
+                  const pulseT = pulseAge / 300;
+                  const pulseR = 20 * s * (1 + 3 * pulseT);
+                  const pulseAlpha = Math.max(0, (1 - pulseT) * 0.7);
+                  const targetContainer = this.cyberFish?.getPlayerRenderer(burstBlades?.[i]?.targetId ?? '')?.getContainer();
+                  if (targetContainer) {
+                    coreG.circle(targetContainer.x, targetContainer.y, pulseR);
+                    coreG.stroke({ color: optPalette.gold, width: 2 * s * (1 - pulseT * 0.5), alpha: pulseAlpha });
+                  }
+                }
               }
             }
           }
         },
-        onDecay: () => {
-          this.release(g);
+        onDecay: () => { this.release(coreG); },
+      } as ActiveEffect);
+    }
+
+    // ════════════════════════════════════════════════════════
+    //  2. Blade Effects — 6 把刀各自独立 Graphics + 独立时间轴
+    // ════════════════════════════════════════════════════════
+    for (let i = 0; i < 6; i++) {
+      const bg = this.acquire();
+      if (!bg) continue;
+
+      // 该刀发射时刻（相对全局 life）
+      const launchTime = floatDur + i * staggerGap;
+      const playerIndex = i;
+
+      effects.push({
+        type: 'optical_slash_burst_blade',
+        container: bg as unknown as PIXI.Container,
+        life: 0,
+        maxLife: T,
+        onUpdate: (ef) => {
+          const life = ef.life;
+          bg.clear();
+
+          // 实时查询施法者位置（刀剑跟随）
+          let sourceX = x; let sourceY = y;
+          if (sourceId) {
+            const selfContainer = this.cyberFish?.getPlayerRenderer(sourceId)?.getContainer();
+            if (selfContainer) { sourceX = selfContainer.x; sourceY = selfContainer.y; }
+          }
+
+          // 实时查询目标位置
+          const targetId = burstBlades?.[playerIndex]?.targetId ?? '';
+          if (playerIndex === 0 && life < 5) {
+            console.error(`[OpticalSlash] EffectRenderer burstBlades:`, burstBlades?.map(b => b.targetId));
+          }
+          let targetX = sourceX; let targetY = sourceY;
+          
+          // 调试日志：帮助诊断目标追踪问题
+          if (life < 100) {
+            console.log(`[OpticalSlash] blade ${playerIndex}: targetId="${targetId}", sourceId="${sourceId}", idsMatch=${targetId === sourceId}`);
+          }
+          
+          // 验证目标 ID 有效且不是自己，才追踪目标
+          if (targetId && targetId !== sourceId) {
+            const targetContainer = this.cyberFish?.getPlayerRenderer(targetId)?.getContainer();
+            if (targetContainer) { 
+              targetX = targetContainer.x; 
+              targetY = targetContainer.y; 
+            } else {
+              // 目标容器未找到，可能是目标已死亡或 ID 错误
+              if (life < 100) {
+                console.warn(`[OpticalSlash] Target container not found for targetId="${targetId}"`);
+              }
+            }
+          } else {
+            // targetId 为空或与 sourceId 相同，不追踪
+            if (life < 100) {
+              console.warn(`[OpticalSlash] blade ${playerIndex} not tracking: targetId="${targetId}", sourceId="${sourceId}"`);
+            }
+          }
+
+          // 月牙尺寸（由 config 驱动）
+          const bow = (config?.arcBow ?? 36) * s;
+          const halfW = (config?.bladeHalfWidth ?? 32) * s;
+
+          // ═══ Phase 1: 浮动蓄势（0 - 1000ms）═══
+          if (life < floatDur) {
+            const floatT = life / floatDur;
+            const rotation = floatT * Math.PI * 0.5;
+            const a = floatAngles[playerIndex] + rotation;
+            const floatYOffset = Math.sin(life / 80 + playerIndex * 2) * 4 * s;
+            const bx = sourceX + Math.cos(a) * floatR;
+            const by = sourceY + Math.sin(a) * floatR + floatYOffset;
+            const fadeIn = Math.min(floatT / 0.25, 1);
+
+            // 刀尖方向：沿公转切线方向，逐刀倾斜
+            const bladeAngle = a + Math.PI / 2 + (playerIndex - 2.5) * 0.25;
+
+            // 每帧记录锁定位置（取最后一帧的轨道位置作为 lock 快照）
+            lockPositions[playerIndex] = { x: bx, y: by };
+
+            this.drawArcCrescent(bg, bx, by, bladeAngle, bow * 1.2, halfW * 0.85, optPalette, fadeIn * 0.9, s);
+            return;
+          }
+
+          // ═══ Phase 2: 锁定蓄力（1000ms ~ launchTime）═══
+          if (life < launchTime) {
+            const lockPos = lockPositions[playerIndex];
+            if (!lockPos) return;
+
+            const lockDuration = launchTime - floatDur;
+            const waitT = Math.min((life - floatDur) / Math.max(lockDuration, 1), 1);
+
+            // 刀从公转切线方向逐渐转向攻击方向（从锁定位指向目标）
+            const angleToSource = Math.atan2(lockPos.y - sourceY, lockPos.x - sourceX);
+            const floatAngle = angleToSource + Math.PI / 2 + (playerIndex - 2.5) * 0.25;
+            const attackAngle = Math.atan2(targetY - lockPos.y, targetX - lockPos.x);
+            const turnProgress = Math.min(waitT * 2, 1); // 前半段完成转向
+            const currentAngle = floatAngle + (attackAngle - floatAngle) * turnProgress;
+
+            // 蓄能脉冲
+            const pulseAlpha = 0.85 + 0.15 * Math.sin(life / 40);
+            const charge = 1 + 0.04 * Math.sin(waitT * Math.PI * 4);
+
+            this.drawArcCrescent(bg, lockPos.x, lockPos.y, currentAngle, bow * 1.2 * charge, halfW * 0.85 * charge, optPalette, pulseAlpha, s);
+
+            // 蓄能粒子（刀尖周围释放金色光粒）
+            if (this.particlePool && (life % 50 < 16)) {
+              const sprayAngle = currentAngle + Math.PI + (Math.random() - 0.5) * 0.8;
+              this.particlePool.emit({
+                x: lockPos.x + Math.cos(currentAngle) * bow * 0.5,
+                y: lockPos.y + Math.sin(currentAngle) * bow * 0.5,
+                vx: Math.cos(sprayAngle) * (20 + Math.random() * 30),
+                vy: Math.sin(sprayAngle) * (20 + Math.random() * 30),
+                life: 200 + Math.random() * 150,
+                scaleStart: 1,
+                scaleEnd: 0,
+                alphaStart: 0.6,
+                alphaEnd: 0,
+                tint: optPalette.gold,
+                radius: (1 + Math.random()) * s,
+              });
+            }
+            return;
+          }
+
+          // ═══ Phase 3: 突进追踪（launchTime ~ launchTime + dashDur）═══
+          const lockPos = lockPositions[playerIndex];
+          if (!lockPos) return;
+
+          const dashLocal = life - launchTime;
+          const dashT = Math.min(dashLocal / dashDur, 1);
+          const easeT = this.easeOutCubic(dashT);
+
+          // 从锁定位置飞向目标（终点实时追踪）
+          const cx = lockPos.x + (targetX - lockPos.x) * easeT;
+          const cy = lockPos.y + (targetY - lockPos.y) * easeT;
+          const flyAngle = Math.atan2(targetY - lockPos.y, targetX - lockPos.x);
+
+          // 速度感：加速时稍缩小，接近时复原
+          const speedShrink = 0.85 + 0.15 * (1 - Math.abs(easeT - 0.5) * 2);
+
+          this.drawArcCrescent(bg, cx, cy, flyAngle, bow * 1.4 * speedShrink, halfW * 0.9 * speedShrink, optPalette, 0.95, s);
+
+          // 拖尾粒子
+          if (this.particlePool && dashT < 0.95 && life % 16 < 8) {
+            this.particlePool.emit({
+              x: cx - Math.cos(flyAngle) * 10 * s,
+              y: cy - Math.sin(flyAngle) * 10 * s,
+              vx: -Math.cos(flyAngle) * 30 * s + (Math.random() - 0.5) * 20,
+              vy: -Math.sin(flyAngle) * 30 * s + (Math.random() - 0.5) * 20,
+              life: 300 + Math.random() * 200,
+              scaleStart: 1,
+              scaleEnd: 0,
+              alphaStart: 0.7,
+              alphaEnd: 0,
+              tint: Math.random() < 0.3 ? optPalette.white : optPalette.light,
+              radius: (1.2 + Math.random() * 1.5) * s,
+            });
+          }
+
+          // 命中爆发（抵达目标瞬间）
+          if (dashT >= 0.95) {
+            if (hitTimestamps[playerIndex] < 0) {
+              hitTimestamps[playerIndex] = life;
+            }
+            const hitAge = life - hitTimestamps[playerIndex];
+            if (hitAge < 200) {
+              const flashAlpha = Math.max(0, 1 - hitAge / 200);
+              bg.circle(targetX, targetY, 16 * s);
+              bg.fill({ color: optPalette.gold, alpha: flashAlpha * 0.6 });
+              bg.circle(targetX, targetY, 8 * s);
+              bg.fill({ color: optPalette.white, alpha: flashAlpha * 0.9 });
+            }
+          }
         },
-      } as ActiveEffect,
-    ];
+        onDecay: () => { this.release(bg); },
+      } as ActiveEffect);
+    }
+
+    return effects;
   }
 
   /**

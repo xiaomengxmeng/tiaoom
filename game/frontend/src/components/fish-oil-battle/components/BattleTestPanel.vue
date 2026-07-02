@@ -706,11 +706,20 @@ function handleVisualEvent(data: any): void {
       break;
       case VisualEventType.OPTICAL_SLASH_BURST:
         if (data.x !== undefined && data.y !== undefined) {
+          // 构造模拟的 burstBlades 数据（用于测试目标追踪）
+          const mockBurstBlades = [
+            { targetId: 'player2', startX: data.x, startY: data.y, endX: data.x + 150, endY: data.y - 80, angle: -0.5, length: 150, phase: 2 },
+            { targetId: 'player3', startX: data.x, startY: data.y, endX: data.x - 120, endY: data.y + 100, angle: 0.8, length: 150, phase: 2 },
+            { targetId: 'player4', startX: data.x, startY: data.y, endX: data.x + 50, endY: data.y + 150, angle: 1.2, length: 150, phase: 2 }
+          ];
+          console.error(`[TestPanel] Sending mock burstBlades:`, mockBurstBlades.map(b => ({ targetId: b.targetId, endX: b.endX, endY: b.endY })));
           rendererRef.value.triggerSkillEffect({
             type: data.type,
             x: data.x, y: data.y,
             radius: data.length ?? 150,
             playerId: data.playerId,
+            burstPhase: data.burstPhase ?? 2,
+            burstBlades: data.burstBlades ?? mockBurstBlades,
           });
         }
         break;

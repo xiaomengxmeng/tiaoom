@@ -383,12 +383,23 @@ export function useFishOilBattle(
         }
         break;
       case VisualEventType.OPTICAL_SLASH_BURST:
+        // 详细打印原始数据，定位 targetId 丢失问题
+        console.error(`[OpticalSlash] Frontend RAW data:`, JSON.stringify(data, null, 2));
+        console.error(`[OpticalSlash] Frontend burstBlades detail:`, data.burstBlades?.map((b, i) => ({
+          index: i,
+          targetId: b.targetId,
+          endX: b.endX,
+          endY: b.endY,
+          allKeys: Object.keys(b)
+        })));
         if (data.x !== undefined && data.y !== undefined) {
           rendererRef.value.triggerSkillEffect({
             type: data.type,
             x: data.x, y: data.y,
             radius: data.length ?? 150,
             playerId: data.playerId,
+            burstPhase: data.burstPhase,
+            burstBlades: data.burstBlades,
           });
         }
         break;

@@ -782,6 +782,9 @@ export default class FishOilRoom extends GameRoom {
         hitDamage: evt.metadata?.damage,
         hitSourceWeaponId: evt.metadata?.weaponId,
         hitSourceId: evt.metadata?.sourceId,
+        // 光学斩击爆发（无限剑制）
+        burstPhase: evt.metadata?.phase,
+        burstBlades: evt.metadata?.burstBlades,
       });
     }
     return result;

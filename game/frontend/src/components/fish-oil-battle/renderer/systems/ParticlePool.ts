@@ -247,6 +247,7 @@ export class ParticlePool {
    * @param dt 帧间隔（ms）
    */
   update(dt: number): void {
+    const startTime = performance.now();
     const dtSec = dt / 1000;
     for (let i = 0; i < this.capacity; i++) {
       const p = this.pool[i];
@@ -295,6 +296,14 @@ export class ParticlePool {
         const b = Math.round(this.lerp(p.tintStart & 0xff, p.tintEnd & 0xff, t));
         p.sprite.tint = (r << 16) | (g << 8) | b;
       }
+    }
+
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+
+    // 如果更新超过 2ms，打印警告
+    if (duration > 2) {
+      console.warn(`[ParticlePool.update] Slow update: ${duration.toFixed(2)}ms`);
     }
   }
 

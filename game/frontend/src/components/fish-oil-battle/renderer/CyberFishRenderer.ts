@@ -281,6 +281,10 @@ export class CyberFishRenderer {
     hunterY?: number;
     /** KE：书生愤怒态（hp<30% 时触发，色系切换为深红） */
     isAngry?: boolean;
+    /** 光学斩击爆发阶段（float / lock / hit） */
+    burstPhase?: string;
+    /** 光学斩击爆发锁定刀刃信息 */
+    burstBlades?: Array<{ targetId: string; startX: number; startY: number; endX: number; endY: number }>;
   }): void {
     // 映射所有坐标参数
     const mapCfg: typeof config & Record<string, any> = { ...config };
@@ -383,23 +387,38 @@ export class CyberFishRenderer {
       case VisualEventType.OPTICAL_SLASH_BURST:
         // 无限剑制三阶段：浮动 → 锁定 → 突进追踪
         {
-          const phase = (mapCfg.metadata?.phase as string) ?? 'float';
+          const phase = (config.burstPhase as string) ?? 'float';
           if (phase === 'float') {
             // 浮动阶段：启动动画，传入 sourceId 用于实时跟随玩家
+            // 同时传递 burstBlades（后端现在随 float 事件发送了）
             if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
+              // 提取 burstBlades（如果有）
+              const rawBlades = (config.burstBlades as Array<{
+                targetId: string; startX: number; startY: number;
+                endX: number; endY: number;
+              }>) ?? [];
+              const blades = rawBlades.map(b => ({
+                targetId: b.targetId,
+                startX: this.mapX(b.startX),
+                startY: this.mapY(b.startY),
+                endX: b.endX !== undefined ? this.mapX(b.endX) : undefined,
+                endY: b.endY !== undefined ? this.mapY(b.endY) : undefined,
+              }));
+              console.error(`[OpticalSlash] CyberFishRenderer blades:`, blades.map(b => ({ targetId: b.targetId })));
+
               this.effectRenderer.triggerOpticalBurst(
                 mapCfg.x, mapCfg.y,
                 themeColor ?? config.factionColor ?? 0x00BFFF,
                 config.radius,
                 undefined,
                 getWeaponPalette(WeaponId.OPTICAL_SLASH),
-                undefined,
+                blades.length > 0 ? blades : undefined,
                 config.playerId,
               );
             }
           } else if (phase === 'lock') {
             // 锁定阶段：更新刀刃信息（转换逻辑坐标为画布坐标）
-            const rawBlades = (mapCfg.metadata?.burstBlades as Array<{
+            const rawBlades = (config.burstBlades as Array<{
               targetId: string; startX: number; startY: number;
               endX: number; endY: number;
             }>) ?? [];
@@ -407,6 +426,8 @@ export class CyberFishRenderer {
               targetId: b.targetId,
               startX: this.mapX(b.startX),
               startY: this.mapY(b.startY),
+              endX: b.endX !== undefined ? this.mapX(b.endX) : undefined,
+              endY: b.endY !== undefined ? this.mapY(b.endY) : undefined,
             }));
             this.effectRenderer.updateOpticalBurstBlades(blades);
           }
@@ -1267,6 +1288,8 @@ export class CyberFishRenderer {
   }
 
   private renderFrame(dt: number): void {
+    const frameStart = performance.now();
+
     if (this.battleActive) {
       // 1. 推进物理插值时间
       this.physics.advanceRenderTime(dt);
@@ -1334,6 +1357,14 @@ export class CyberFishRenderer {
 
     // 5. 更新全局彩蛋特效（闪白/马赛克/牵引线）
     this.globalEffectRenderer.update(dt * 1000); // 转为毫秒
+
+    const frameEnd = performance.now();
+    const frameDuration = frameEnd - frameStart;
+
+    // 如果一帧超过 16ms (60fps)，打印警告
+    if (frameDuration > 16) {
+      console.warn(`[CyberFishRenderer.renderFrame] Slow frame: ${frameDuration.toFixed(2)}ms`);
+    }
   }
 
   private applyPostProcessing(): void {

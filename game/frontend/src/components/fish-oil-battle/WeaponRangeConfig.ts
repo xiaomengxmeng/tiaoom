@@ -75,6 +75,16 @@ export interface WeaponRangeConfig {
   maxHitsPerWave?: number;
   /** 触发冷却配置（数据驱动，防止极端连击） */
   triggerCooldowns?: WeaponTriggerCooldowns;
+  /** 爆发浮动环绕半径（光学斩击专用） */
+  burstFloatRadius?: number;
+  /** 爆发浮动持续时间（毫秒，光学斩击专用） */
+  burstFloatDurationMs?: number;
+  /** 爆发突进飞行时间（毫秒，光学斩击专用） */
+  burstDashDurationMs?: number;
+  /** 爆发逐刀发射间隔（毫秒，光学斩击专用） */
+  burstStaggerGapMs?: number;
+  /** 爆发同敌人多刀衰减系数（光学斩击专用） */
+  burstDecayPerHit?: number;
 }
 
 // ══════════════════════════════════════════════════════
@@ -134,6 +144,11 @@ export const LOCAL_WEAPON_CONFIG: Record<string, WeaponRangeConfig> = {
     damageRadius: 100,
     visualRadius: 150,
     visualDurationMs: 800,
+    burstFloatRadius: 60,        // 浮动环绕半径
+    burstFloatDurationMs: 800,   // 浮动持续时间
+    burstDashDurationMs: 400,    // 突进飞行时间
+    burstStaggerGapMs: 133,     // 逐刀发射间隔
+    burstDecayPerHit: 0.5,       // 同敌人多刀衰减系数
     projectile: {
       speed: 0,
       maxBounces: 0,

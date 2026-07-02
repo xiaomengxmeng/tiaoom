@@ -169,6 +169,8 @@ export interface WeaponRangeConfig {
   burstFloatDurationMs?: number;
   /** 爆发突进飞行时间（毫秒，光学斩击专用） */
   burstDashDurationMs?: number;
+  /** 爆发逐刀发射间隔（毫秒，光学斩击专用） */
+  burstStaggerGapMs?: number;
   /** 爆发同敌人多刀衰减系数（光学斩击专用） */
   burstDecayPerHit?: number;
 }
@@ -311,10 +313,11 @@ export const WEAPON_RANGE_CONFIG: Record<string, WeaponRangeConfig> = {
     damageRadius: 160,
     visualRadius: 120,
     visualDurationMs: 1200,
-    burstFloatRadius: 60,        // 新增：浮动环绕半径
-    burstFloatDurationMs: 800,   // 新增：浮动持续时间
-    burstDashDurationMs: 400,    // 新增：突进飞行时间
-    burstDecayPerHit: 0.5,       // 新增：同敌人多刀衰减系数
+    burstFloatRadius: 60,        // 浮动环绕半径
+    burstFloatDurationMs: 800,   // 浮动持续时间
+    burstDashDurationMs: 400,    // 突进飞行时间
+    burstStaggerGapMs: 133,     // 逐刀发射间隔
+    burstDecayPerHit: 0.5,       // 同敌人多刀衰减系数
     projectile: {
       speed: 0,
       maxBounces: 0,

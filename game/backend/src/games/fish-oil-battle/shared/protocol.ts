@@ -240,6 +240,16 @@ export interface VisualEventData {
   hitSourceWeaponId?: WeaponId;
   /** 命中来源玩家 ID（HIT_FEEDBACK 事件专用，用于获取攻击者主题色） */
   hitSourceId?: string;
+  /** 光学斩击爆发阶段（float / lock / hit） */
+  burstPhase?: string;
+  /** 光学斩击爆发锁定刀刃信息 */
+  burstBlades?: Array<{
+    targetId: string;
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+  }>;
 }
 
 // ─── 游戏统计（game_end 用）───────────────

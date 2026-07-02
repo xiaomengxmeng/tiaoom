@@ -62,6 +62,7 @@ export class OpticalSlashWeapon implements IWeapon {
   private burstFloatEndTime = 0;      // 浮动结束时间戳（Date.now()）
   private burstDashEndTime = 0;       // 突进结束时间戳（Date.now()）
   private burstBlades: BurstBlade[] = [];
+  private burstBladeHitTimes: number[] = []; // 每把刀的计划命中时间戳
   private burstHitCount: Map<string, number> = new Map();
 
   // 斩击残留实体（可碰撞）
@@ -91,12 +92,48 @@ export class OpticalSlashWeapon implements IWeapon {
       this.burstFloatEndTime = 0;
     }
 
-    // 阶段 3：追踪 + 伤害结算（突进结束时触发）
-    if (this.burstDashEndTime > 0 && now >= this.burstDashEndTime) {
-      this.executeBurstDamage(state, physics, effects);
-      this.burstDashEndTime = 0;
-      this.energy = 0;
-      this.hitCount = 0;
+    // 阶段 3：逐刀延迟伤害（在 onTick 中按时间逐个结算）
+    if (this.burstBlades.length > 0 && this.burstBladeHitTimes.length > 0) {
+      const CFG = WEAPON_RANGE_CONFIG[this.id];
+      const baseDamage = CFG.burstDamage ?? 10;
+      const decay = CFG.burstDecayPerHit ?? 0.5;
+
+      for (let i = 0; i < this.burstBlades.length; i++) {
+        if (this.burstBlades[i].hit) continue;
+        if (this.burstBladeHitTimes[i] === undefined) continue;
+        if (now < this.burstBladeHitTimes[i]) continue;
+
+        // 应用伤害
+        this.burstBlades[i].hit = true;
+        const target = state.getPlayer(this.burstBlades[i].targetId);
+        if (target && target.hp > 0) {
+          const hitCount = this.burstHitCount.get(this.burstBlades[i].targetId) ?? 0;
+          const damage = Math.max(1, Math.floor(baseDamage * Math.pow(decay, hitCount)));
+          this.burstHitCount.set(this.burstBlades[i].targetId, hitCount + 1);
+
+          effects.push({
+            type: WeaponEffectType.DAMAGE,
+            sourceId: this.playerId,
+            targetId: this.burstBlades[i].targetId,
+            value: damage,
+            metadata: {
+              desc: '无限剑制·追踪斩',
+              visualType: VisualEventType.OPTICAL_SLASH_BURST,
+              phase: 'hit',
+              hitOrder: i,
+            },
+          });
+        }
+      }
+
+      // 全部命中后清理
+      if (this.burstBlades.every(b => b.hit)) {
+        this.burstBlades = [];
+        this.burstBladeHitTimes = [];
+        this.burstHitCount.clear();
+        this.energy = 0;
+        this.hitCount = 0;
+      }
     }
 
     // 移速加成衰减
@@ -341,17 +378,69 @@ export class OpticalSlashWeapon implements IWeapon {
     const effects: WeaponEffect[] = [];
     const CFG = WEAPON_RANGE_CONFIG[this.id];
 
-    // ── 阶段 1：启动浮动（0.8s） ──
-    // 不立即造成伤害，仅发送视觉事件
-    const now = Date.now();
-    const floatDur = CFG.burstFloatDurationMs ?? 800;
+    // ── 预先确定 6 把刀的目标 ──
+    const opponents = physics.getAllAliveOpponents(this.playerId);
+
+    // 没有对手时不触发爆发，避免飞刀飞向自己
+    if (opponents.length === 0) {
+      this.burstReady = false;
+      return [];
+    }
+
+    const floatR = CFG.burstFloatRadius ?? 60;
+    const staggerGap = CFG.burstStaggerGapMs ?? 133;
     const dashDur = CFG.burstDashDurationMs ?? 400;
-    this.burstFloatEndTime = now + floatDur;
-    this.burstDashEndTime = now + floatDur + dashDur;
+
+    // 分配目标（优先均分 + 随机）
+    const targets: string[] = [];
+    for (let i = 0; i < Math.min(6, opponents.length); i++) {
+      console.error(`[OpticalSlash] opponents[${i}].id = "${opponents[i].id}"`);
+      targets.push(opponents[i].id);
+    }
+    while (targets.length < 6 && opponents.length > 0) {
+      const randIdx = Math.floor(Math.random() * opponents.length);
+      console.error(`[OpticalSlash] random opponent[${randIdx}].id = "${opponents[randIdx].id}"`);
+      targets.push(opponents[randIdx].id);
+    }
+    console.error(`[OpticalSlash] targets array:`, JSON.stringify(targets));
+
+    // 创建初始 burstBlades（位置在锁定阶段再精确更新）
     this.burstBlades = [];
+    // 防御性：确保 opponents 不为空
+    if (opponents.length === 0) {
+      console.warn('[OpticalSlash] No opponents found for burst targets!');
+    }
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const target = opponents.find(o => o.id === targets[i]);
+      // 防御性检查：如果 target 查找失败，使用第一个对手作为回退（避免飞向自己）
+      const fallbackTarget = target ?? opponents[0];
+      // 如果连 opponents[0] 都没有，使用默认值（但不应该是 self）
+      const endX = fallbackTarget?.x ?? (self.position.x + Math.cos(angle) * 300);
+      const endY = fallbackTarget?.y ?? (self.position.y + Math.sin(angle) * 300);
+      console.error(`[OpticalSlash] burstBlades[${i}].targetId = "${targets[i]}" (target found: ${!!target})`);
+      this.burstBlades.push({
+        targetId: targets[i],
+        startX: self.position.x + Math.cos(angle) * floatR,
+        startY: self.position.y + Math.sin(angle) * floatR,
+        endX,
+        endY,
+        locked: false,
+        hit: false,
+      });
+    }
+    console.error(`[OpticalSlash] burstBlades created:`, JSON.stringify(this.burstBlades.map(b => b.targetId)));
+    this.burstBladeHitTimes = [];
     this.burstHitCount.clear();
 
-    // 发送浮动阶段视觉事件
+    // ── 阶段 1：启动浮动（0.8s） ──
+    const now = Date.now();
+    const floatDur = CFG.burstFloatDurationMs ?? 800;
+    this.burstFloatEndTime = now + floatDur;
+    this.burstDashEndTime = now + floatDur + dashDur + (5 * staggerGap);
+
+    // 发送浮动阶段视觉事件（携带 burstBlades，让前端提前知道目标）
+    console.error(`[OpticalSlash] SENDING burstBlades:`, JSON.stringify(this.burstBlades.map(b => ({ targetId: b.targetId, endX: b.endX, endY: b.endY }))));
     effects.push({
       type: WeaponEffectType.VISUAL_ONLY,
       sourceId: this.playerId,
@@ -361,9 +450,17 @@ export class OpticalSlashWeapon implements IWeapon {
         visualType: VisualEventType.OPTICAL_SLASH_BURST,
         isBurst: true,
         phase: 'float',
-        floatRadius: CFG.burstFloatRadius ?? 60,
+        burstBlades: this.burstBlades.map(b => ({
+          targetId: b.targetId,
+          startX: b.startX,
+          startY: b.startY,
+          endX: b.endX,
+          endY: b.endY,
+        })),
+        floatRadius: floatR,
         floatDuration: floatDur,
         dashDuration: dashDur,
+        staggerGapMs: staggerGap,
       },
     });
 
@@ -372,7 +469,7 @@ export class OpticalSlashWeapon implements IWeapon {
     return effects;
   }
 
-  /** 爆发阶段 2：锁定目标 + 分配 6 把刀 */
+  /** 爆发阶段 2：锁定目标 + 分配 6 把刀 + 记录命中时间 */
   private executeBurstLock(
     state: IBattleState,
     physics: IPhysicsQuery,
@@ -386,32 +483,33 @@ export class OpticalSlashWeapon implements IWeapon {
 
     const CFG = WEAPON_RANGE_CONFIG[this.id];
     const floatR = CFG.burstFloatRadius ?? 60;
+    const staggerGap = CFG.burstStaggerGapMs ?? 133;
+    const dashDur = CFG.burstDashDurationMs ?? 400;
 
-    // ── 分配 6 把刀的目标（优先均分 + 随机） ──
-    const targets: string[] = [];
-    // 第 1 轮：每个敌人分配 1 把（最多 6 个）
-    for (let i = 0; i < Math.min(6, opponents.length); i++) {
-      targets.push(opponents[i].id);
-    }
-    // 第 2 轮：剩余的刀随机分配
-    while (targets.length < 6 && opponents.length > 0) {
-      targets.push(opponents[Math.floor(Math.random() * opponents.length)].id);
+    // ── 更新现有 burstBlades 的精确位置 ──
+    for (let i = 0; i < this.burstBlades.length; i++) {
+      const blade = this.burstBlades[i];
+      const target = opponents.find(o => o.id === blade.targetId);
+      if (target) {
+        // 目标仍然有效，更新位置
+        blade.endX = target.x;
+        blade.endY = target.y;
+      } else {
+        // 目标已失效（死亡/离开），重新分配随机对手
+        const newTarget = opponents[Math.floor(Math.random() * opponents.length)];
+        blade.targetId = newTarget.id;
+        blade.endX = newTarget.x;
+        blade.endY = newTarget.y;
+      }
+      blade.locked = true;
     }
 
-    // ── 创建 6 把刀 ──
-    this.burstBlades = [];
-    for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI * 2;
-      const target = opponents.find(o => o.id === targets[i]);
-      this.burstBlades.push({
-        targetId: targets[i],
-        startX: self.position.x + Math.cos(angle) * floatR,
-        startY: self.position.y + Math.sin(angle) * floatR,
-        endX: target?.x ?? self.position.x,
-        endY: target?.y ?? self.position.y,
-        locked: true,
-        hit: false,
-      });
+    // ── 记录每把刀的计划命中时间 ──
+    // 第 i 把刀的命中时间 = 现在 + i*间隔 + 飞行时间
+    const now = Date.now();
+    this.burstBladeHitTimes = [];
+    for (let i = 0; i < this.burstBlades.length; i++) {
+      this.burstBladeHitTimes.push(now + i * staggerGap + dashDur);
     }
 
     // 发送锁定视觉事件（携带 burstBlades 数组）
@@ -433,59 +531,6 @@ export class OpticalSlashWeapon implements IWeapon {
         })),
       },
     });
-  }
-
-  /** 爆发阶段 3：追踪更新 + 伤害结算（同敌人多刀衰减） */
-  private executeBurstDamage(
-    state: IBattleState,
-    physics: IPhysicsQuery,
-    effects: WeaponEffect[],
-  ): void {
-    // ── 追踪：最后再更新一次目标位置 ──
-    const opponents = physics.getAllAliveOpponents(this.playerId);
-    for (const blade of this.burstBlades) {
-      if (blade.hit) continue;
-      const target = opponents.find(o => o.id === blade.targetId);
-      if (target) {
-        blade.endX = target.x;
-        blade.endY = target.y;
-      }
-    }
-
-    // ── 伤害结算（按刀序，同敌人衰减） ──
-    const CFG = WEAPON_RANGE_CONFIG[this.id];
-    const baseDamage = CFG.burstDamage ?? 10;
-    const decay = CFG.burstDecayPerHit ?? 0.5;
-
-    for (const blade of this.burstBlades) {
-      if (blade.hit) continue;
-      blade.hit = true;
-
-      // 目标已死则跳过伤害（刀光仍飞行但不造成伤害）
-      const targetAlive = opponents.find(o => o.id === blade.targetId);
-      if (!targetAlive) continue;
-
-      const hitCount = this.burstHitCount.get(blade.targetId) ?? 0;
-      const damage = Math.max(1, Math.floor(baseDamage * Math.pow(decay, hitCount)));
-      this.burstHitCount.set(blade.targetId, hitCount + 1);
-
-      effects.push({
-        type: WeaponEffectType.BURST_DAMAGE,
-        sourceId: this.playerId,
-        targetId: blade.targetId,
-        value: damage,
-        metadata: {
-          desc: '无限剑制·追踪斩',
-          visualType: VisualEventType.OPTICAL_SLASH_BURST,
-          phase: 'hit',
-          hitOrder: hitCount,
-        },
-      });
-    }
-
-    // 清理
-    this.burstBlades = [];
-    this.burstHitCount.clear();
   }
 
   // ── 运行时状态 ────────────────────────────────────────
@@ -514,6 +559,7 @@ export class OpticalSlashWeapon implements IWeapon {
     this.burstFloatEndTime = 0;
     this.burstDashEndTime = 0;
     this.burstBlades = [];
+    this.burstBladeHitTimes = [];
     this.burstHitCount.clear();
   }
 }

@@ -133,7 +133,7 @@ export class EffectRenderer {
   private hiveRenderer: HiveEffectRenderer;
   private opticalSlashRenderer: OpticalSlashEffectRenderer;
   /** 光学斩击爆发刀刃引用 holder（闭包通过 holder.blades 读取最新值） */
-  private opticalBurstBladesHolder: { blades: Array<{ targetId: string; startX: number; startY: number }> } = { blades: [] };
+  private opticalBurstBladesHolder: { blades: Array<{ targetId: string; startX: number; startY: number; endX?: number; endY?: number }> } = { blades: [] };
   private airRepulsionFieldRenderer: AirRepulsionFieldRenderer;
   private entropicTouchRenderer: EntropicTouchRenderer;
   private drawingManifestRenderer: DrawingManifestRenderer;
@@ -171,6 +171,8 @@ export class EffectRenderer {
 
   /** 防重复销毁 */
   private _destroyed = false;
+  /** 定时器 ID（用于清理调试打印 interval） */
+  private _statsTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     entityContainer: PIXI.Container,
@@ -191,7 +193,7 @@ export class EffectRenderer {
 
     // 光学斩击渲染器（注入 particlePool 用于飞行拖尾 / 爆发光学粒子飞溅）
     this.opticalSlashRenderer = new OpticalSlashEffectRenderer(
-      fieldContainer, hologramContainer, 20, particlePool,
+      fieldContainer, hologramContainer, 20, particlePool, cyberFishRenderer,
     );
 
     // 空气斥力场渲染器（注入 particlePool 用于懒散/扬尘粒子）
@@ -238,6 +240,11 @@ export class EffectRenderer {
 
     // 初始化形状特效池
     this.shapeEffectPool = new ShapeEffectPool(fieldContainer, 20);
+
+    // 添加定时器：每 2 秒打印一次 activeEffects 大小和性能统计
+    this._statsTimer = setInterval(() => {
+      console.log(`[EffectRenderer Stats] activeEffects: ${this.activeEffects.length}, opticalSlash.active: ${this.opticalSlashRenderer.getActiveCount?.() ?? 'N/A'}`);
+    }, 2000);
   }
 
   /**
@@ -463,7 +470,7 @@ export class EffectRenderer {
     radius?: number,
     visualCfg?: OpticalSlashVisualConfig,
     palette?: Palette,
-    burstBlades?: Array<{ targetId: string; startX: number; startY: number }>,
+    burstBlades?: Array<{ targetId: string; startX: number; startY: number; endX?: number; endY?: number }>,
     sourceId?: string,
   ): void {
     // 清空后 push（保持数组引用不变，让 onUpdate 闭包能读取最新值）
@@ -484,7 +491,7 @@ export class EffectRenderer {
    * 更新正在运行的光学斩击爆发刀刃信息（锁定阶段调用）
    * 清空原数组后 push 新元素，保持引用不变让 onUpdate 闭包能读取最新值
    */
-  updateOpticalBurstBlades(blades: Array<{ targetId: string; startX: number; startY: number }>): void {
+  updateOpticalBurstBlades(blades: Array<{ targetId: string; startX: number; startY: number; endX?: number; endY?: number }>): void {
     this.opticalBurstBladesHolder.blades.length = 0;
     this.opticalBurstBladesHolder.blades.push(...blades);
   }
@@ -1509,6 +1516,8 @@ export class EffectRenderer {
   // ══════════════════════════════════════════════════════
 
   update(dt: number): void {
+    const updateStart = performance.now();
+
     // 更新熵寂之触渲染器
     this.entropicTouchRenderer.update(dt);
 
@@ -1558,6 +1567,14 @@ export class EffectRenderer {
         ef.onUpdate(ef, dt);
       }
     }
+
+    const updateEnd = performance.now();
+    const duration = updateEnd - updateStart;
+
+    // 如果更新超过 5ms，打印警告
+    if (duration > 5) {
+      console.warn(`[EffectRenderer.update] Slow update: ${duration.toFixed(2)}ms, activeEffects: ${this.activeEffects.length}`);
+    }
   }
 
   clear(): void {
@@ -1580,6 +1597,8 @@ export class EffectRenderer {
     this.memoryCorridorRenderer.clear();
     this.infiniteFoldRenderer.clear();
     this.botanicalPartyRenderer.clear();
+    // 清理光学斩击渲染器（爆发刀刃/普攻刀光 Graphics 对象池）
+    this.opticalSlashRenderer.clear();
     // 清理基础武器渲染器
     this.nanoRipperRenderer.clear();
     this.pursuitProtocolRenderer.clear();
@@ -1597,6 +1616,11 @@ export class EffectRenderer {
   destroy(): void {
     if (this._destroyed) return;
     this._destroyed = true;
+    // 清理调试定时器，防止旧实例的 interval 闭包引用阻止 GC
+    if (this._statsTimer !== null) {
+      clearInterval(this._statsTimer);
+      this._statsTimer = null;
+    }
     this.clear();
 
     this.shockwaveRenderer.destroy();

@@ -434,7 +434,8 @@ export class OpticalSlashEffectRenderer {
    * @param config 视觉配置（数据驱动）
    * @param durationMs 总持续时间（ms），默认 1200
    * @param palette 调色板
-   * @param burstBlades 锁定阶段的 6 把刀信息（含 targetId + startX/Y）
+   * @param burstBlades 锁定阶段的 6 把刀信息（含 targetId + startX/Y，startX/Y 为画布坐标）
+   * @param sourceId 施法者 playerId，用于浮动阶段实时跟随玩家位置
    */
   triggerBurst(
     x: number,
@@ -444,6 +445,7 @@ export class OpticalSlashEffectRenderer {
     durationMs?: number,
     palette?: Palette,
     burstBlades?: Array<{ targetId: string; startX: number; startY: number }>,
+    sourceId?: string,
   ): ActiveEffect[] {
     const g = this.acquire();
     if (!g) return [];
@@ -497,22 +499,32 @@ export class OpticalSlashEffectRenderer {
             const rotation = floatT * Math.PI * 0.5;
             const fadeIn = Math.min(floatT / 0.25, 1);
 
-            this.drawOpticalCore(g, x, y, radius * 0.35 * fadeIn, optPalette, fadeIn);
+            // 实时查询施法者位置（浮动跟随玩家）
+            let cx = x, cy = y;
+            if (sourceId) {
+              const selfContainer = this.cyberFish?.getPlayerRenderer(sourceId)?.getContainer();
+              if (selfContainer) {
+                cx = selfContainer.x;
+                cy = selfContainer.y;
+              }
+            }
+
+            this.drawOpticalCore(g, cx, cy, radius * 0.35 * fadeIn, optPalette, fadeIn);
 
             for (let i = 0; i < 6; i++) {
               const a = floatAngles[i] + rotation;
               const floatY = Math.sin(life / 80 + i) * 4 * s;
-              const bx = x + Math.cos(a) * floatR;
-              const by = y + Math.sin(a) * floatR + floatY;
+              const bx = cx + Math.cos(a) * floatR;
+              const by = cy + Math.sin(a) * floatR + floatY;
               const bow = (config?.arcBow ?? 36) * s * 1.2;
               const halfW = (config?.bladeHalfWidth ?? 32) * s * 0.85;
               this.drawArcCrescent(g, bx, by, a, bow, halfW, optPalette, fadeIn * 0.9, s);
             }
 
             const coreR = 6 * s * fadeIn;
-            g.circle(x, y, coreR + 4 * s);
+            g.circle(cx, cy, coreR + 4 * s);
             g.fill({ color: optPalette.light, alpha: 0.5 * fadeIn });
-            g.circle(x, y, coreR);
+            g.circle(cx, cy, coreR);
             g.fill({ color: optPalette.white, alpha: 0.95 * fadeIn });
           }
 
@@ -522,10 +534,21 @@ export class OpticalSlashEffectRenderer {
             const easeT = this.easeOutCubic(dashT);
             const bladeAlpha = 1 - dashT;
 
+            // 实时查询施法者位置（中心跟随玩家）
+            let centerX = x, centerY = y;
+            if (sourceId) {
+              const selfContainer = this.cyberFish?.getPlayerRenderer(sourceId)?.getContainer();
+              if (selfContainer) {
+                centerX = selfContainer.x;
+                centerY = selfContainer.y;
+              }
+            }
+
             for (let i = 0; i < 6 && i < blades.length; i++) {
               const blade = blades[i];
-              const sx = blade.startX * s;
-              const sy = blade.startY * s;
+              // blade.startX/Y 已是画布坐标（CyberFishRenderer 已 mapX/mapY 转换），不再乘 s
+              const sx = blade.startX;
+              const sy = blade.startY;
               let ex = sx, ey = sy;
               const targetContainer = this.cyberFish?.getPlayerRenderer(blade.targetId)?.getContainer();
               if (targetContainer) {
@@ -569,13 +592,13 @@ export class OpticalSlashEffectRenderer {
 
             // 中心光学核心（消散）
             const coreFade = 1 - dashT;
-            this.drawOpticalCore(g, x, y, radius * 0.35 * (1 + 0.3 * dashT), optPalette, coreFade * 0.6);
+            this.drawOpticalCore(g, centerX, centerY, radius * 0.35 * (1 + 0.3 * dashT), optPalette, coreFade * 0.6);
 
             // 金色锁定环（扩散）
             const ringR = radius * (0.5 + 0.8 * easeT);
-            g.circle(x, y, ringR);
+            g.circle(centerX, centerY, ringR);
             g.stroke({ color: optPalette.gold, width: 2.5 * s, alpha: coreFade * 0.85 });
-            g.circle(x, y, ringR * 0.92);
+            g.circle(centerX, centerY, ringR * 0.92);
             g.stroke({ color: optPalette.gold, width: 1 * s, alpha: coreFade * 0.5 });
           }
 

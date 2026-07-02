@@ -464,23 +464,29 @@ export class EffectRenderer {
     visualCfg?: OpticalSlashVisualConfig,
     palette?: Palette,
     burstBlades?: Array<{ targetId: string; startX: number; startY: number }>,
+    sourceId?: string,
   ): void {
-    this.opticalBurstBladesHolder.blades = burstBlades ?? [];
+    // 清空后 push（保持数组引用不变，让 onUpdate 闭包能读取最新值）
+    this.opticalBurstBladesHolder.blades.length = 0;
+    if (burstBlades) {
+      this.opticalBurstBladesHolder.blades.push(...burstBlades);
+    }
     const dataCfg = this.buildOpticalSlashVisualCfg();
     const cfg: OpticalSlashVisualConfig = { ...dataCfg, ...visualCfg };
     if (radius !== undefined) cfg.maxRadius = radius;
     const effects = this.opticalSlashRenderer.triggerBurst(
-      x, y, themeColor, cfg, undefined, palette, this.opticalBurstBladesHolder.blades,
+      x, y, themeColor, cfg, undefined, palette, this.opticalBurstBladesHolder.blades, sourceId,
     );
     for (const ef of effects) this.activeEffects.push(ef);
   }
 
   /**
    * 更新正在运行的光学斩击爆发刀刃信息（锁定阶段调用）
-   * 通过 holder 对象让 onUpdate 闭包能读取最新值
+   * 清空原数组后 push 新元素，保持引用不变让 onUpdate 闭包能读取最新值
    */
   updateOpticalBurstBlades(blades: Array<{ targetId: string; startX: number; startY: number }>): void {
-    this.opticalBurstBladesHolder.blades = blades;
+    this.opticalBurstBladesHolder.blades.length = 0;
+    this.opticalBurstBladesHolder.blades.push(...blades);
   }
 
   // ══════════════════════════════════════════════════════

@@ -385,7 +385,7 @@ export class CyberFishRenderer {
         {
           const phase = (mapCfg.metadata?.phase as string) ?? 'float';
           if (phase === 'float') {
-            // 浮动阶段：启动动画
+            // 浮动阶段：启动动画，传入 sourceId 用于实时跟随玩家
             if (mapCfg.x !== undefined && mapCfg.y !== undefined) {
               this.effectRenderer.triggerOpticalBurst(
                 mapCfg.x, mapCfg.y,
@@ -393,6 +393,8 @@ export class CyberFishRenderer {
                 config.radius,
                 undefined,
                 getWeaponPalette(WeaponId.OPTICAL_SLASH),
+                undefined,
+                config.playerId,
               );
             }
           } else if (phase === 'lock') {
